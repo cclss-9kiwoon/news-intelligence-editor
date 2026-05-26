@@ -3,6 +3,7 @@ import type { BreakingAlert } from '../types';
 import { detect, generateMockBreaking } from '../lib/breakingDetector';
 import { useSettings } from './SettingsContext';
 import { useArticles } from './ArticlesContext';
+import { useClusters } from './ClustersContext';
 
 type Ctx = {
   alerts: BreakingAlert[];
@@ -14,7 +15,8 @@ const BreakingCtx = createContext<Ctx | null>(null);
 
 export function BreakingProvider({ children }: { children: ReactNode }) {
   const { settings } = useSettings();
-  const { articles, selectArticle } = useArticles();
+  const { articles } = useArticles();
+  const { clusters, selectCluster } = useClusters();
   const [alerts, setAlerts] = useState<BreakingAlert[]>([]);
   const seenIdsRef = useRef<Set<string>>(new Set());
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -47,9 +49,10 @@ export function BreakingProvider({ children }: { children: ReactNode }) {
   }, [playSound, settings.browserNotificationsEnabled, dismissAlert]);
 
   const jumpToAlert = useCallback((alert: BreakingAlert) => {
-    selectArticle(alert.article);
+    const owning = clusters.find(c => c.articleIds.includes(alert.article.id));
+    if (owning) selectCluster(owning.id);
     dismissAlert(alert.article.id);
-  }, [dismissAlert, selectArticle]);
+  }, [dismissAlert, selectCluster, clusters]);
 
   useEffect(() => {
     for (const article of articles) {

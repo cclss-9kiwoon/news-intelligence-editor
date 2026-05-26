@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { SettingsProvider, useSettings } from './state/SettingsContext';
 import { HistoryProvider } from './state/HistoryContext';
 import { ArticlesProvider } from './state/ArticlesContext';
+import { ClustersProvider } from './state/ClustersContext';
 import { BreakingProvider } from './state/BreakingContext';
 import { ConversionProvider } from './state/ConversionContext';
 import { Header } from './components/Header';
 import { AlertBanner } from './components/AlertBanner';
-import { ArticlePicker } from './components/ArticlePicker';
+import { ClusterPicker } from './components/ClusterPicker';
 import { Workbench } from './components/Workbench';
 import { FactCheckLog } from './components/FactCheckLog';
 import { OutputTabs } from './components/OutputTabs';
@@ -33,10 +34,10 @@ function AppShell() {
           <button onClick={() => setSettingsOpen(true)} className="ml-2 underline">설정 열기</button>
         </div>
       )}
-      <div className="grid flex-1 grid-cols-[320px_1fr] overflow-hidden">
-        <ArticlePicker />
-        <div className="flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-hidden">
+      <div className="grid flex-1 min-h-0 grid-cols-[340px_1fr] overflow-hidden">
+        <ClusterPicker />
+        <div className="flex min-h-0 flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <Workbench onMissingKey={handleMissingKey} />
           </div>
           <FactCheckLog />
@@ -54,11 +55,13 @@ export default function App() {
     <SettingsProvider>
       <HistoryProvider>
         <ArticlesProvider>
-          <ConversionProvider>
-            <BreakingProvider>
-              <AppShell />
-            </BreakingProvider>
-          </ConversionProvider>
+          <ClustersProvider>
+            <ConversionProvider>
+              <BreakingProvider>
+                <AppShell />
+              </BreakingProvider>
+            </ConversionProvider>
+          </ClustersProvider>
         </ArticlesProvider>
       </HistoryProvider>
     </SettingsProvider>
