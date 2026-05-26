@@ -1,68 +1,60 @@
 # News Intelligence Editor
 
-비개발자 에디터가 한국 뉴스를 자동 수집하고, AI 말투/할루시네이션이 제거된 영문 콘텐츠로 변환해 3개 채널(본 사이트 / X 스레드 / Medium)에 원클릭 복사할 수 있는 무설치형 브라우저 대시보드입니다.
+비개발자 에디터가 한국 뉴스를 자동 수집하고, **여러 매체를 한 사건으로 묶어 교차검증**한 뒤, 종합 드래프트(한국어 → 영문)를 만들어 **본 사이트 / X / Medium 3개 채널**에 맞게 변환·복사할 수 있는 단일 페이지 브라우저 앱입니다.
 
-## 빠른 시작 (로컬)
+- **백엔드 없음** — 모든 처리가 브라우저 단독. API 키는 localStorage에만 저장
+- **다중 Provider** — OpenAI / Google Gemini / OpenAI 호환 커스텀
+- **자동 클러스터링** — 사이트 무관하게 같은 사건 묶음 + 수동 보정
+- **사람 검수 우선** — LLM이 만든 모든 결과를 textarea에서 직접 편집 가능
+- **클립보드 발행** — 외부 발행 자동화는 의도적 제외 (검수 단계 강조)
+
+## 빠른 시작
 
 ```bash
 npm install
 npm run dev
+# http://localhost:5173
 ```
 
-`http://localhost:5173` 접속 후 ⚙ 설정에서 OpenAI API 키 입력.
+⚙ 설정 열고:
+1. **AI Provider** 선택 (Gemini 무료 권장)
+2. **API 키** 입력 (https://aistudio.google.com 에서 무료 발급)
+3. **모델** 선택 (`gemini-2.5-flash` 권장)
 
-## Bolt.new에서 실행
+## 핵심 흐름
 
-1. 이 리포지토리 전체를 Bolt.new에 업로드 또는 붙여넣기
-2. Bolt이 자동으로 `npm install` + `npm run dev` 실행
-3. 미리보기에서 ⚙ 설정 → API 키 입력
+```
+RSS 자동 수집 ─→ 자동 클러스터링 ─→ 수동 보정 (선택)
+   ↓
+[가치 평가] → 한국어 종합 드래프트
+   ↓
+검수·편집 → [EN 토글] → 영문 번역 → 검수·편집
+   ↓
+[채널 생성] → KO 또는 EN의 본사이트/X/Medium → 복사 → 외부 발행
+```
 
-## 주요 기능
+LLM 호출은 사건 하나당 최대 4번 (가치평가 1 + 번역 1 + KO 채널 1 + EN 채널 1). Gemini 무료 한도 안에서 하루 수백 건 처리 가능.
 
-- **자동 수집**: 한국 RSS 다소스 (연합/조선/한겨레/스포츠서울 등) 30초 폴링
-- **속보 알림**: 키워드 기반 감지 + 시뮬레이터 (붉은 배너 + 알림음)
-- **2콜 LLM 체인**: 가치 평가 & 영문 변환 → 채널별 포맷팅
-- **금지어 자동 차단**: delve, in conclusion, furthermore 등 LLM 상투구
-- **규칙 기반 팩트 체크**: 사람/숫자/장소/날짜 누락 시 🚨 경고
-- **3채널 원클릭 복사**: 본 사이트 / X 스레드 / Medium
-- **변환 이력**: localStorage 최근 20건
+## 인수자 문서
 
-## 스타일 프리셋
+상세 개발/운영 문서는 [`docs/`](./docs/README.md) 폴더 참조. 처음 인수받았다면 이 순서로:
 
-⚙ 설정 → 글 스타일에서 선택:
-- **K-pop / 연예 / 가십** (기본) — Soompi / Allkpop 스타일
-- **AP / Reuters 통신사**
-- **Bloomberg / FT 경제지**
-- **TechCrunch / Verge 테크**
-- **커스텀** (직접 지침 입력)
+1. [`docs/01-overview.md`](./docs/01-overview.md) — 프로젝트 무엇·왜
+2. [`docs/02-getting-started.md`](./docs/02-getting-started.md) — 환경 세팅·키 발급
+3. [`docs/03-architecture.md`](./docs/03-architecture.md) — 시스템 구조
+4. [`docs/07-screens.md`](./docs/07-screens.md) — 화면별 기능
+5. [`docs/13-roadmap.md`](./docs/13-roadmap.md) — 다음 작업 후보
 
-## 비용 안내
-
-- 기본 모델 `gpt-4o-mini`: 기사 1건 처리 ≈ $0.001~0.002
-- 상위 모델 `gpt-4o`: ≈ $0.01~0.02
-- RSS는 rss2json 무료 티어 (10 req/h 한도)
-
-## 테스트
+## 명령어
 
 ```bash
-npm test          # 1회 실행
-npm run test:watch # 감시 모드
+npm run dev          # 개발 서버
+npm run build        # 프로덕션 빌드 (dist/)
+npm run preview      # 빌드 결과 미리보기
+npm test             # 단위 테스트 1회
+npm run test:watch   # 테스트 watch 모드
 ```
 
-## 폴더 구조
+## 라이선스 / 저작권
 
-```
-src/
-├── components/   # 화면 컴포넌트
-├── state/        # Context 기반 전역 상태
-├── lib/          # 순수 함수 라이브러리
-├── types.ts
-├── App.tsx
-└── main.tsx
-```
-
-## 알려진 제한
-
-- 일부 한국 매체는 rss2json 무료 한도/CORS로 실패할 수 있음 → 설정에서 비활성화
-- RSS 본문은 요약만 포함되므로 긴 분석이 필요한 경우 URL/텍스트 수동 입력 권장
-- 클립보드 API는 HTTPS 또는 localhost에서만 동작 (Bolt.new 미리보기 OK)
+내부 프로젝트. 외부 공개 전 LICENSE 추가 필요.
