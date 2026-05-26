@@ -5,7 +5,7 @@ import type { ConvertedResult } from '../types';
 
 function make(id: string): ConvertedResult {
   return {
-    id, sourceArticleId: 'a', sourceTitle: 't', createdAt: parseInt(id), valueScore: 5,
+    id, sourceArticleIds: ['a'], sourceTitle: 't', createdAt: parseInt(id), valueScore: 5,
     valueReason: '', facts: { people: [], numbers: [], places: [], dates: [] },
     englishDraft: '', channels: { site: '', x: '', medium: '' },
     factReport: { ok: true, missing: [] },

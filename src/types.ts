@@ -43,15 +43,24 @@ export type FactReport = {
 export type StylePresetKey = 'kpop' | 'ap' | 'bloomberg' | 'techcrunch' | 'custom';
 export type ModelId = 'gpt-4o-mini' | 'gpt-4o';
 
+export type Cluster = {
+  id: string;
+  articleIds: string[];
+  representativeTitle: string;
+  entities: string[];
+  createdAt: number;
+};
+
 export type ConvertedResult = {
   id: string;
-  sourceArticleId: string;
+  sourceArticleIds: string[];
   sourceTitle: string;
   createdAt: number;
   valueScore: number;
   valueReason: string;
   facts: Facts;
   englishDraft: string;
+  editedDraft?: string;
   channels: {
     site: string;
     x: string;
