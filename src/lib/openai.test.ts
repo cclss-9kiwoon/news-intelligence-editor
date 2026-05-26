@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { chatJson, OpenAIError } from './openai';
+import { chatJson } from './openai';
 
 beforeEach(() => {
   vi.restoreAllMocks();
