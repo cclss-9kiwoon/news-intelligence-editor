@@ -13,10 +13,14 @@ import { FactCheckLog } from './components/FactCheckLog';
 import { OutputTabs } from './components/OutputTabs';
 import { SettingsModal } from './components/SettingsModal';
 import { HistoryPanel } from './components/HistoryPanel';
+import { GuideModal } from './components/GuideModal';
+import { TutorialOverlay } from './components/TutorialOverlay';
 
 function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
   const { settings } = useSettings();
 
   const handleMissingKey = () => setSettingsOpen(true);
@@ -26,6 +30,8 @@ function AppShell() {
       <Header
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHistory={() => setHistoryOpen(true)}
+        onOpenGuide={() => setGuideOpen(true)}
+        onOpenTutorial={() => setTutorialOpen(true)}
       />
       <AlertBanner />
       {!settings.apiKey && (
@@ -46,6 +52,12 @@ function AppShell() {
       </div>
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <HistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} />
+      <GuideModal open={guideOpen} onClose={() => setGuideOpen(false)} />
+      <TutorialOverlay
+        open={tutorialOpen}
+        onClose={() => setTutorialOpen(false)}
+        onOpenGuide={() => setGuideOpen(true)}
+      />
     </div>
   );
 }

@@ -48,7 +48,7 @@ export function OutputTabs() {
   };
 
   return (
-    <div className="border-t border-slate-200 bg-white">
+    <div data-tutorial="output-tabs" className="border-t border-slate-200 bg-white">
       <div className="flex items-center border-b border-slate-200">
         {(Object.keys(TAB_LABELS) as Tab[]).map(t => (
           <button

@@ -56,7 +56,7 @@ export function Workbench({ onMissingKey }: Props) {
 
   return (
     <section className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-2">
+      <div data-tutorial="workbench-header" className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-2">
         <h2 className="min-w-0 truncate text-sm font-semibold">
           {selectedCluster
             ? `📝 ${selectedCluster.representativeTitle} · ${totalSources}개 소스`
@@ -144,7 +144,7 @@ export function Workbench({ onMissingKey }: Props) {
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white">
+        <div data-tutorial="draft-panel" className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-1.5">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               종합 드래프트 · 가치 {currentResult?.valueScore ?? '—'}/10
