@@ -26,6 +26,9 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
   const sourcesRef = useRef(settings.rssSources);
   useEffect(() => { sourcesRef.current = settings.rssSources; }, [settings.rssSources]);
 
+  const rss2jsonKeyRef = useRef(settings.rss2jsonApiKey);
+  useEffect(() => { rss2jsonKeyRef.current = settings.rss2jsonApiKey; }, [settings.rss2jsonApiKey]);
+
   const pollMsRef = useRef(Math.max(MIN_POLL_MS, settings.rssPollMinutes * 60_000));
   useEffect(() => {
     pollMsRef.current = Math.max(MIN_POLL_MS, settings.rssPollMinutes * 60_000);
@@ -36,7 +39,7 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
     inFlightRef.current = true;
     try {
       const enabled = sourcesRef.current.filter(s => s.enabled);
-      const results = await Promise.all(enabled.map(s => fetchRss(s)));
+      const results = await Promise.all(enabled.map(s => fetchRss(s, rss2jsonKeyRef.current)));
       const incoming = results.flat();
       setArticles(prev => dedupeAndMerge(prev, incoming, MAX_ARTICLES));
     } finally {

@@ -9,13 +9,14 @@ type Props = { open: boolean; onClose: () => void };
 
 export function SettingsModal({ open, onClose }: Props) {
   const {
-    settings, setApiKey, setModel, setStylePreset, setCustomStyleInstruction,
+    settings, setApiKey, setRss2jsonApiKey, setModel, setStylePreset, setCustomStyleInstruction,
     setRssSources, toggleRssSource, setRssPollMinutes,
     setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled,
   } = useSettings();
   const { clear } = useHistory();
   const [showKey, setShowKey] = useState(false);
+  const [showRssKey, setShowRssKey] = useState(false);
   const [newRssName, setNewRssName] = useState('');
   const [newRssUrl, setNewRssUrl] = useState('');
 
@@ -73,6 +74,31 @@ export function SettingsModal({ open, onClose }: Props) {
               </button>
             </div>
             <p className="mt-1 text-xs text-slate-500">키는 이 브라우저의 localStorage에만 저장됩니다.</p>
+          </section>
+
+          <section>
+            <h3 className="mb-2 font-semibold">rss2json API 키 (선택)</h3>
+            <div className="flex gap-2">
+              <input
+                type={showRssKey ? 'text' : 'password'}
+                value={settings.rss2jsonApiKey}
+                onChange={e => setRss2jsonApiKey(e.target.value)}
+                placeholder="rss2json.com 회원가입 후 발급 (없어도 무료 한도로 동작)"
+                className="flex-1 rounded border border-slate-300 px-3 py-2 text-sm font-mono"
+              />
+              <button
+                onClick={() => setShowRssKey(v => !v)}
+                className="rounded border border-slate-300 px-2 hover:bg-slate-50"
+                aria-label="토글"
+              >
+                {showRssKey ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              미입력 시 익명 한도 (분당 10건 / 일 10,000건). 키 등록 시 한도 상향.
+              <br />rss2json 사이트에서 키 생성 시 <b>API restrictions: HTTP Referrers</b> 선택 +
+              <span className="ml-1 font-mono">http://localhost:5173/*</span> 등록.
+            </p>
           </section>
 
           <section>

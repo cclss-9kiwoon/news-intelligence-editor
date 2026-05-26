@@ -92,6 +92,7 @@ export type ConvertedResult = {
 
 export type Settings = {
   apiKey: string;
+  rss2jsonApiKey: string;
   model: ModelId;
   stylePreset: StylePresetKey;
   customStyleInstruction: string;

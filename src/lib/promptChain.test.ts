@@ -5,6 +5,7 @@ import type { Settings, Article } from '../types';
 
 const SETTINGS: Settings = {
   apiKey: 'sk-test',
+  rss2jsonApiKey: '',
   model: 'gpt-4o-mini',
   stylePreset: 'kpop',
   customStyleInstruction: '',

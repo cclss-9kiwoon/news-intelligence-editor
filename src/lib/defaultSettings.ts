@@ -12,6 +12,7 @@ export const DEFAULT_RSS_SOURCES: RssSource[] = [
 
 export const DEFAULT_SETTINGS: Settings = {
   apiKey: '',
+  rss2jsonApiKey: '',
   model: 'gpt-4o-mini',
   stylePreset: 'kpop',
   customStyleInstruction: '',

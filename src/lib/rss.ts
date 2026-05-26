@@ -100,7 +100,7 @@ function setBackoff(sourceId: string) {
   try { localStorage.setItem(BACKOFF_PREFIX + sourceId, String(Date.now())); } catch { /* ignore */ }
 }
 
-export async function fetchRss(source: RssSource): Promise<Article[]> {
+export async function fetchRss(source: RssSource, apiKey?: string): Promise<Article[]> {
   const cached = readCache(source.id);
   if (cached) return cached;
 
@@ -109,7 +109,10 @@ export async function fetchRss(source: RssSource): Promise<Article[]> {
     return [];
   }
 
-  const url = `${RSS2JSON_ENDPOINT}?rss_url=${encodeURIComponent(source.url)}`;
+  let url = `${RSS2JSON_ENDPOINT}?rss_url=${encodeURIComponent(source.url)}`;
+  if (apiKey && apiKey.trim()) {
+    url += `&api_key=${encodeURIComponent(apiKey.trim())}`;
+  }
   try {
     const res = await fetch(url);
     if (res.status === 429) {
