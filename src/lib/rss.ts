@@ -60,15 +60,68 @@ type Rss2JsonResponse = {
   message?: string;
 };
 
+const CACHE_TTL_MS = 5 * 60_000;
+const BACKOFF_MS = 30 * 60_000;
+const CACHE_PREFIX = 'nie:rss-cache:';
+const BACKOFF_PREFIX = 'nie:rss-backoff:';
+
+type CachedFeed = { ts: number; articles: Article[] };
+
+function readCache(sourceId: string): Article[] | null {
+  try {
+    const raw = localStorage.getItem(CACHE_PREFIX + sourceId);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedFeed;
+    if (Date.now() - parsed.ts > CACHE_TTL_MS) return null;
+    return parsed.articles;
+  } catch { return null; }
+}
+
+function writeCache(sourceId: string, articles: Article[]) {
+  try {
+    localStorage.setItem(CACHE_PREFIX + sourceId, JSON.stringify({ ts: Date.now(), articles }));
+  } catch { /* quota */ }
+}
+
+function isBackedOff(sourceId: string): boolean {
+  try {
+    const raw = localStorage.getItem(BACKOFF_PREFIX + sourceId);
+    if (!raw) return false;
+    const ts = parseInt(raw, 10);
+    if (!ts || Date.now() - ts > BACKOFF_MS) {
+      localStorage.removeItem(BACKOFF_PREFIX + sourceId);
+      return false;
+    }
+    return true;
+  } catch { return false; }
+}
+
+function setBackoff(sourceId: string) {
+  try { localStorage.setItem(BACKOFF_PREFIX + sourceId, String(Date.now())); } catch { /* ignore */ }
+}
+
 export async function fetchRss(source: RssSource): Promise<Article[]> {
+  const cached = readCache(source.id);
+  if (cached) return cached;
+
+  if (isBackedOff(source.id)) {
+    console.warn('[rss] backed off (429 within last 30min), skipping:', source.name);
+    return [];
+  }
+
   const url = `${RSS2JSON_ENDPOINT}?rss_url=${encodeURIComponent(source.url)}`;
   try {
     const res = await fetch(url);
+    if (res.status === 429) {
+      setBackoff(source.id);
+      console.warn('[rss] 429 rate-limit, backing off 30min:', source.name);
+      return [];
+    }
     if (!res.ok) return [];
     const data = (await res.json()) as Rss2JsonResponse;
     if (data.status !== 'ok' || !data.items) return [];
     const now = Date.now();
-    return data.items.map((it): Article => ({
+    const articles = data.items.map((it): Article => ({
       id: makeArticleId(it.link),
       title: stripHtml(it.title || ''),
       description: stripHtml(it.description || it.content || ''),
@@ -80,6 +133,8 @@ export async function fetchRss(source: RssSource): Promise<Article[]> {
       thumbnail: it.thumbnail || undefined,
       fetchedAt: now,
     }));
+    writeCache(source.id, articles);
+    return articles;
   } catch (err) {
     console.warn('[rss] fetch failed', source.name, err);
     return [];

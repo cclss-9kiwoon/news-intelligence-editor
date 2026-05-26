@@ -10,7 +10,8 @@ type Props = { open: boolean; onClose: () => void };
 export function SettingsModal({ open, onClose }: Props) {
   const {
     settings, setApiKey, setModel, setStylePreset, setCustomStyleInstruction,
-    setRssSources, toggleRssSource, setSimulatorEnabled, setSimulatorIntervalSec,
+    setRssSources, toggleRssSource, setRssPollMinutes,
+    setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled,
   } = useSettings();
   const { clear } = useHistory();
@@ -173,6 +174,25 @@ export function SettingsModal({ open, onClose }: Props) {
                 <Plus size={14} /> 추가
               </button>
             </div>
+            <div className="mt-3 flex items-center gap-2 text-sm">
+              <span>폴링 간격:</span>
+              <select
+                value={settings.rssPollMinutes}
+                onChange={e => setRssPollMinutes(Number(e.target.value))}
+                className="rounded border border-slate-300 px-2 py-0.5 text-sm"
+              >
+                <option value={5}>5분 (권장)</option>
+                <option value={10}>10분</option>
+                <option value={15}>15분</option>
+                <option value={30}>30분</option>
+                <option value={60}>60분</option>
+              </select>
+            </div>
+            <p className="mt-2 text-xs text-amber-700">
+              💡 rss2json 무료 한도: <b>분당 10건</b>. 활성 소스가 많거나 폴링이 잦으면 429 발생.
+              429 발생 시 해당 소스는 자동으로 30분간 호출 중단됩니다.
+              응답은 5분 캐시됩니다.
+            </p>
           </section>
 
           <section>

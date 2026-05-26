@@ -3,8 +3,8 @@ import type { Article } from '../types';
 import { fetchRss, dedupeAndMerge, makeArticleId } from '../lib/rss';
 import { useSettings } from './SettingsContext';
 
-const POLL_INTERVAL_MS = 30_000;
-const HIDDEN_POLL_INTERVAL_MS = 5 * 60_000;
+const HIDDEN_MULTIPLIER = 3;
+const MIN_POLL_MS = 60_000;
 const MAX_ARTICLES = 200;
 
 type Ctx = {
@@ -26,6 +26,11 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
   const sourcesRef = useRef(settings.rssSources);
   useEffect(() => { sourcesRef.current = settings.rssSources; }, [settings.rssSources]);
 
+  const pollMsRef = useRef(Math.max(MIN_POLL_MS, settings.rssPollMinutes * 60_000));
+  useEffect(() => {
+    pollMsRef.current = Math.max(MIN_POLL_MS, settings.rssPollMinutes * 60_000);
+  }, [settings.rssPollMinutes]);
+
   const pollOnce = useCallback(async () => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
@@ -43,7 +48,8 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
     let timer: ReturnType<typeof setInterval>;
     const start = () => {
       pollOnce();
-      timer = setInterval(pollOnce, document.hidden ? HIDDEN_POLL_INTERVAL_MS : POLL_INTERVAL_MS);
+      const ms = document.hidden ? pollMsRef.current * HIDDEN_MULTIPLIER : pollMsRef.current;
+      timer = setInterval(pollOnce, ms);
     };
     const stop = () => clearInterval(timer);
     const onVisibility = () => { stop(); start(); };

@@ -96,6 +96,7 @@ export type Settings = {
   stylePreset: StylePresetKey;
   customStyleInstruction: string;
   rssSources: RssSource[];
+  rssPollMinutes: number;
   simulatorEnabled: boolean;
   simulatorIntervalSec: number;
   alertSoundEnabled: boolean;

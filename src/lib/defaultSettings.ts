@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: Settings = {
   stylePreset: 'kpop',
   customStyleInstruction: '',
   rssSources: DEFAULT_RSS_SOURCES,
+  rssPollMinutes: 5,
   simulatorEnabled: true,
   simulatorIntervalSec: 30,
   alertSoundEnabled: true,

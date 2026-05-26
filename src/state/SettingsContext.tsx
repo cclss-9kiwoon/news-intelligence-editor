@@ -11,6 +11,7 @@ type Ctx = {
   setCustomStyleInstruction: (s: string) => void;
   setRssSources: (s: RssSource[]) => void;
   toggleRssSource: (id: string) => void;
+  setRssPollMinutes: (n: number) => void;
   setSimulatorEnabled: (b: boolean) => void;
   setSimulatorIntervalSec: (n: number) => void;
   setAlertSoundEnabled: (b: boolean) => void;
@@ -37,6 +38,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const setRssSources = useCallback((rs: RssSource[]) => setSettings(s => ({ ...s, rssSources: rs })), []);
   const toggleRssSource = useCallback((id: string) =>
     setSettings(s => ({ ...s, rssSources: s.rssSources.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r) })), []);
+  const setRssPollMinutes = useCallback((n: number) => setSettings(s => ({ ...s, rssPollMinutes: n })), []);
   const setSimulatorEnabled = useCallback((b: boolean) => setSettings(s => ({ ...s, simulatorEnabled: b })), []);
   const setSimulatorIntervalSec = useCallback((n: number) => setSettings(s => ({ ...s, simulatorIntervalSec: n })), []);
   const setAlertSoundEnabled = useCallback((b: boolean) => setSettings(s => ({ ...s, alertSoundEnabled: b })), []);
@@ -45,7 +47,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const value: Ctx = {
     settings, setApiKey, setModel, setStylePreset, setCustomStyleInstruction,
-    setRssSources, toggleRssSource, setSimulatorEnabled, setSimulatorIntervalSec,
+    setRssSources, toggleRssSource, setRssPollMinutes, setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled, resetSettings,
   };
   return <SettingsCtx.Provider value={value}>{children}</SettingsCtx.Provider>;

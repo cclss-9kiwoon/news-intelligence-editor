@@ -20,6 +20,7 @@ const fakeResponse = {
 describe('rss.fetchRss', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    localStorage.clear();
   });
 
   it('calls rss2json with the encoded RSS URL', async () => {
@@ -67,5 +68,23 @@ describe('rss.fetchRss', () => {
     }));
     const source: RssSource = { id: 's1', name: 'x', url: 'https://x', enabled: true };
     expect(await fetchRss(source)).toEqual([]);
+  });
+
+  it('caches successful responses and avoids second network call within 5min', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => fakeResponse });
+    vi.stubGlobal('fetch', fetchMock);
+    const source: RssSource = { id: 'cached-source', name: 'x', url: 'https://x', enabled: true };
+    await fetchRss(source);
+    await fetchRss(source);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('backs off the source after a 429 and skips the network on next call', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 429 });
+    vi.stubGlobal('fetch', fetchMock);
+    const source: RssSource = { id: 'rate-limited', name: 'x', url: 'https://x', enabled: true };
+    await fetchRss(source);
+    await fetchRss(source);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

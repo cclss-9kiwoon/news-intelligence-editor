@@ -9,6 +9,7 @@ const SETTINGS: Settings = {
   stylePreset: 'kpop',
   customStyleInstruction: '',
   rssSources: [],
+  rssPollMinutes: 5,
   simulatorEnabled: false,
   simulatorIntervalSec: 30,
   alertSoundEnabled: true,
