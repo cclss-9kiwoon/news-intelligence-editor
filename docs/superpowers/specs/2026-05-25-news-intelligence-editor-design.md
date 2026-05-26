@@ -26,8 +26,34 @@
 
 - 자체 DB / 백엔드 서버 / n8n / 외부 서비스 가입
 - 사용자 다중 계정 / 권한 관리
-- 자동 게시 (publishing)
+- 자동 게시 (publishing) — 발행은 클립보드 복사 후 수동 (X / Medium / 본 사이트 CMS 직접 붙여넣기)
 - 다국어 인터페이스 (UI는 한국어 고정)
+
+## 3-A. v2 Addendum (2026-05-26): 클러스터링 + 편집
+
+초기 spec은 "기사 1건 → 영문 변환" 단방향이었으나, 실사용 시
+"한 사건을 다룬 여러 매체 기사를 묶어 종합·편집한 뒤 발행"이
+에디터의 실제 워크플로우와 맞는 것으로 확인되어 다음 사항이 추가됨.
+
+| 추가 결정 | 값 |
+|---|---|
+| 1차 입력 단위 | **클러스터(이벤트)** — 동일 사건을 다룬 N개 매체 기사를 묶은 그룹 |
+| 클러스터링 방식 | 클라이언트 로컬 — 인물/엔티티 가중치 0.6 + 제목 토큰 Jaccard 0.4, threshold 0.35, 24h 윈도우, greedy 단일 할당 |
+| 클러스터 수동 보정 | 잘못 묶인 기사를 "다른 사건으로 빼기" 가능 (override → 별도 cluster) |
+| LLM 입력 | 클러스터 내 모든 소스 기사 (Call 1 system prompt가 cross-verification 지시) |
+| 영문 드래프트 편집 | textarea로 사용자 직접 수정 후 "채널 재생성" 트리거 (Call 2만 다시 실행) |
+| 위법/명예훼손 자동 체크 | **미포함** — 사용자가 직접 편집 단계에서 확인 (후속 검토 항목) |
+
+영향받는 데이터 모델:
+- `Cluster { id, articleIds[], representativeTitle, entities[], createdAt }` 신규
+- `ConvertedResult.sourceArticleId` (단수) → `sourceArticleIds[]` (복수)
+- `ConvertedResult.editedDraft?` 추가 (편집된 영문 보존)
+- `runChain(article, settings)` → `runChain(articles[], settings)`
+- `formatChannels({ editedDraft, facts, settings })` 신규 export (편집 후 채널 재생성용)
+
+영향받는 컴포넌트:
+- `ArticlePicker` 제거 → `ClusterPicker` (펼치면 소속 기사 목록)
+- `Workbench` 원문 carousel + editable textarea + 채널 재생성 버튼
 
 ## 4. Architecture
 

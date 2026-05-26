@@ -3493,6 +3493,54 @@ If any failure: open a follow-up task, do not mark this complete.
 
 ---
 
-## Done
+## Done (v1: 단일 기사 변환)
 
 All 30 tasks complete. Bolt.new-ready single-page React + TypeScript dashboard with RSS polling, LLM chain, banned-word filtering, rule-based fact check, breaking alerts, and 3-channel output with clipboard copy.
+
+---
+
+## v2 Addendum (2026-05-26): 클러스터링 + 편집
+
+사용자 실제 워크플로우 확인 결과 단일 기사 입력은 부족, 다중 소스 종합 + 사람 편집이 필요해 추가됨.
+
+### Task 31 — clustering.ts (TDD)
+- `extractEntities`, `tokenize`, `jaccard`, `similarity`, `groupIntoClusters`
+- 16 tests, 모두 passing
+
+### Task 32 — ClustersContext
+- `useArticles().articles` → `groupIntoClusters` → 자동 클러스터
+- 수동 split override + selectedCluster + selectedArticles
+
+### Task 33 — promptChain Article → Article[]
+- Call 1 system: cross-verification 지시 추가
+- Call 1 user: 모든 소스 enumerate
+- `formatChannels({ editedDraft, facts, settings })` 신규 export
+
+### Task 34 — ClusterPicker
+- ArticlePicker 삭제, ClusterPicker로 대체
+- chevron으로 펼침/접기, 멤버 기사 목록, "다른 사건으로 빼기" 버튼
+
+### Task 35 — Workbench multi-source + editable draft
+- 좌측: 원문 carousel (1/N 페이지네이션)
+- 우측: editable textarea + 가치 점수 + "채널 재생성" 버튼
+
+### Task 36 — ConversionContext.regenerateChannels(editedDraft)
+- runChain은 전체 (Call 1 + Call 2)
+- regenerateChannels는 Call 2만 (편집된 드래프트 기반)
+- status: 'idle' | 'converting' | 'regenerating' | 'error'
+
+### Task 37 — Type updates
+- `Cluster` 신규
+- `ConvertedResult.sourceArticleId` → `sourceArticleIds: string[]`
+- `ConvertedResult.editedDraft?: string`
+
+### v2 Non-features (이번에 안 한 것)
+- 위법/명예훼손 자동 플래그 (후속 — 키워드 매칭으로 가능)
+- 발행 API 자동화 (Bolt.new SPA 제약상 클립보드만 유지)
+- LLM 기반 클러스터링 (현재는 클라이언트 로컬 키워드 매칭)
+
+### 후속 검토 후보
+- 명예훼손 위험 패턴 사전 (실명+의혹/혐의/사생활) → Workbench 위에 워닝 배너
+- 클러스터 임계값 (threshold) 사용자 조절 가능하게 ⚙ 설정에 노출
+- 같은 사건인데 클러스터링이 못 묶은 케이스 — 수동 "이 기사를 X 클러스터에 추가" 기능
+
