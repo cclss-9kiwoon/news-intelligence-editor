@@ -23,18 +23,21 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
   const [selectedArticle, setSelected] = useState<Article | null>(null);
   const inFlightRef = useRef(false);
 
+  const sourcesRef = useRef(settings.rssSources);
+  useEffect(() => { sourcesRef.current = settings.rssSources; }, [settings.rssSources]);
+
   const pollOnce = useCallback(async () => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
     try {
-      const enabled = settings.rssSources.filter(s => s.enabled);
+      const enabled = sourcesRef.current.filter(s => s.enabled);
       const results = await Promise.all(enabled.map(s => fetchRss(s)));
       const incoming = results.flat();
       setArticles(prev => dedupeAndMerge(prev, incoming, MAX_ARTICLES));
     } finally {
       inFlightRef.current = false;
     }
-  }, [settings.rssSources]);
+  }, []);
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval>;

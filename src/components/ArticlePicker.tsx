@@ -21,7 +21,7 @@ export function ArticlePicker() {
   };
 
   return (
-    <aside className="flex h-full flex-col border-r border-slate-200 bg-white">
+    <aside className="flex h-full min-h-0 flex-col overflow-hidden border-r border-slate-200 bg-white">
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
         <h2 className="text-sm font-semibold">📰 기사 ({articles.length})</h2>
         <div className="flex gap-1">
@@ -74,7 +74,7 @@ export function ArticlePicker() {
         </div>
       )}
 
-      <ul className="flex-1 overflow-y-auto">
+      <ul className="flex-1 min-h-0 overflow-y-auto">
         {articles.length === 0 && (
           <li className="px-4 py-6 text-center text-sm text-slate-400">
             아직 수집된 기사가 없습니다. 30초 대기 또는 ＋ 버튼으로 직접 입력.

@@ -61,7 +61,7 @@ type Rss2JsonResponse = {
 };
 
 export async function fetchRss(source: RssSource): Promise<Article[]> {
-  const url = `${RSS2JSON_ENDPOINT}?rss_url=${encodeURIComponent(source.url)}&count=20`;
+  const url = `${RSS2JSON_ENDPOINT}?rss_url=${encodeURIComponent(source.url)}`;
   try {
     const res = await fetch(url);
     if (!res.ok) return [];
