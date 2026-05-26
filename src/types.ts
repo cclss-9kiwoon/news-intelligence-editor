@@ -142,6 +142,7 @@ export type Settings = {
   customStyleInstruction: string;
   rssSources: RssSource[];
   rssPollMinutes: number;
+  clusterThreshold: number;
   simulatorEnabled: boolean;
   simulatorIntervalSec: number;
   alertSoundEnabled: boolean;

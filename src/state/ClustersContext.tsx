@@ -2,10 +2,7 @@ import { createContext, useContext, useMemo, useState, useCallback, useEffect, R
 import type { Article, Cluster } from '../types';
 import { groupIntoClusters } from '../lib/clustering';
 import { useArticles } from './ArticlesContext';
-
-type Override = {
-  splitOut: Set<string>;
-};
+import { useSettings } from './SettingsContext';
 
 type Ctx = {
   clusters: Cluster[];
@@ -13,32 +10,45 @@ type Ctx = {
   selectCluster: (id: string | null) => void;
   selectedCluster: Cluster | null;
   selectedArticles: Article[];
+
   splitArticleOut: (articleId: string) => void;
   resetSplits: () => void;
+
+  mergeModeSourceId: string | null;
+  startMergeMode: (articleId: string) => void;
+  cancelMergeMode: () => void;
+  mergeIntoCluster: (targetClusterId: string) => void;
+  resetMerges: () => void;
 };
 
 const ClustersCtx = createContext<Ctx | null>(null);
 
+function clusterAnchorOf(clusterId: string, clusters: Cluster[]): string | undefined {
+  const c = clusters.find(x => x.id === clusterId);
+  if (!c) return undefined;
+  return c.articleIds[0];
+}
+
 export function ClustersProvider({ children }: { children: ReactNode }) {
   const { articles } = useArticles();
+  const { settings } = useSettings();
   const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
-  const [override, setOverride] = useState<Override>({ splitOut: new Set() });
+  const [splitOut, setSplitOut] = useState<Set<string>>(new Set());
+  const [manualMerges, setManualMerges] = useState<Record<string, string>>({});
+  const [mergeModeSourceId, setMergeModeSourceId] = useState<string | null>(null);
 
   const clusters = useMemo(() => {
-    const auto = groupIntoClusters(articles);
-    if (override.splitOut.size === 0) return auto;
+    const auto = groupIntoClusters(articles, { threshold: settings.clusterThreshold });
 
-    const out: Cluster[] = [];
+    let withSplits: Cluster[] = [];
     for (const c of auto) {
-      const stayed = c.articleIds.filter(id => !override.splitOut.has(id));
-      const removed = c.articleIds.filter(id => override.splitOut.has(id));
-      if (stayed.length > 0) {
-        out.push({ ...c, articleIds: stayed });
-      }
+      const stayed = c.articleIds.filter(id => !splitOut.has(id));
+      const removed = c.articleIds.filter(id => splitOut.has(id));
+      if (stayed.length > 0) withSplits.push({ ...c, articleIds: stayed });
       for (const id of removed) {
         const art = articles.find(a => a.id === id);
         if (!art) continue;
-        out.push({
+        withSplits.push({
           id: `solo-${id}`,
           articleIds: [id],
           representativeTitle: art.title,
@@ -47,8 +57,36 @@ export function ClustersProvider({ children }: { children: ReactNode }) {
         });
       }
     }
-    return out;
-  }, [articles, override.splitOut]);
+
+    if (Object.keys(manualMerges).length > 0) {
+      for (const [moverId, anchorId] of Object.entries(manualMerges)) {
+        const moverArticle = articles.find(a => a.id === moverId);
+        if (!moverArticle) continue;
+
+        withSplits = withSplits
+          .map(c => ({ ...c, articleIds: c.articleIds.filter(id => id !== moverId) }))
+          .filter(c => c.articleIds.length > 0);
+
+        const targetCluster = withSplits.find(c => c.articleIds.includes(anchorId));
+        if (targetCluster) {
+          targetCluster.articleIds.push(moverId);
+          targetCluster.representativeTitle =
+            articles.find(a => a.id === targetCluster.articleIds[0])?.title ?? targetCluster.representativeTitle;
+        } else {
+          withSplits.push({
+            id: `manual-${anchorId}`,
+            articleIds: [anchorId, moverId],
+            representativeTitle: moverArticle.title,
+            entities: [],
+            createdAt: moverArticle.fetchedAt,
+          });
+        }
+      }
+    }
+
+    withSplits.sort((a, b) => b.createdAt - a.createdAt);
+    return withSplits;
+  }, [articles, settings.clusterThreshold, splitOut, manualMerges]);
 
   useEffect(() => {
     if (selectedClusterId && !clusters.some(c => c.id === selectedClusterId)) {
@@ -59,14 +97,43 @@ export function ClustersProvider({ children }: { children: ReactNode }) {
   const selectCluster = useCallback((id: string | null) => setSelectedClusterId(id), []);
 
   const splitArticleOut = useCallback((articleId: string) => {
-    setOverride(prev => {
-      const next = new Set(prev.splitOut);
+    setSplitOut(prev => {
+      const next = new Set(prev);
       next.add(articleId);
-      return { splitOut: next };
+      return next;
+    });
+    setManualMerges(prev => {
+      if (!(articleId in prev)) return prev;
+      const { [articleId]: _, ...rest } = prev;
+      return rest;
     });
   }, []);
 
-  const resetSplits = useCallback(() => setOverride({ splitOut: new Set() }), []);
+  const resetSplits = useCallback(() => setSplitOut(new Set()), []);
+
+  const startMergeMode = useCallback((articleId: string) => {
+    setMergeModeSourceId(articleId);
+  }, []);
+
+  const cancelMergeMode = useCallback(() => setMergeModeSourceId(null), []);
+
+  const mergeIntoCluster = useCallback((targetClusterId: string) => {
+    setMergeModeSourceId(current => {
+      if (!current) return null;
+      const anchor = clusterAnchorOf(targetClusterId, clusters);
+      if (!anchor || anchor === current) return null;
+      setManualMerges(prev => ({ ...prev, [current]: anchor }));
+      setSplitOut(prev => {
+        if (!prev.has(current)) return prev;
+        const next = new Set(prev);
+        next.delete(current);
+        return next;
+      });
+      return null;
+    });
+  }, [articles, clusters]);
+
+  const resetMerges = useCallback(() => setManualMerges({}), []);
 
   const selectedCluster = useMemo(
     () => clusters.find(c => c.id === selectedClusterId) || null,
@@ -82,13 +149,9 @@ export function ClustersProvider({ children }: { children: ReactNode }) {
 
   return (
     <ClustersCtx.Provider value={{
-      clusters,
-      selectedClusterId,
-      selectCluster,
-      selectedCluster,
-      selectedArticles,
-      splitArticleOut,
-      resetSplits,
+      clusters, selectedClusterId, selectCluster, selectedCluster, selectedArticles,
+      splitArticleOut, resetSplits,
+      mergeModeSourceId, startMergeMode, cancelMergeMode, mergeIntoCluster, resetMerges,
     }}>
       {children}
     </ClustersCtx.Provider>

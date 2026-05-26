@@ -11,7 +11,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
     setModel, setStylePreset, setCustomStyleInstruction,
-    setRssSources, toggleRssSource, setRssPollMinutes,
+    setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold,
     setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled,
   } = useSettings();
@@ -244,6 +244,30 @@ export function SettingsModal({ open, onClose }: Props) {
               💡 rss2json 무료 한도: <b>분당 10건</b>. 활성 소스가 많거나 폴링이 잦으면 429 발생.
               429 발생 시 해당 소스는 자동으로 30분간 호출 중단됩니다.
               응답은 5분 캐시됩니다.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="mb-2 font-semibold">사건 묶기(클러스터링) 민감도</h3>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-slate-500 w-16">느슨 0.20</span>
+              <input
+                type="range"
+                min="0.20"
+                max="0.60"
+                step="0.05"
+                value={settings.clusterThreshold}
+                onChange={e => setClusterThreshold(Number(e.target.value))}
+                className="flex-1"
+              />
+              <span className="text-xs text-slate-500 w-16 text-right">0.60 엄격</span>
+              <span className="rounded bg-slate-100 px-2 py-0.5 text-sm font-mono w-14 text-center">
+                {settings.clusterThreshold.toFixed(2)}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              낮을수록 더 많은 기사가 한 사건으로 묶임 (포용적). 높을수록 엄격히 분리.
+              기본 0.35.
             </p>
           </section>
 

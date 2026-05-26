@@ -13,6 +13,7 @@ const SETTINGS: Settings = {
   customStyleInstruction: '',
   rssSources: [],
   rssPollMinutes: 5,
+  clusterThreshold: 0.35,
   simulatorEnabled: false,
   simulatorIntervalSec: 30,
   alertSoundEnabled: true,

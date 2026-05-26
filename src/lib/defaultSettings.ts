@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
   customStyleInstruction: '',
   rssSources: DEFAULT_RSS_SOURCES,
   rssPollMinutes: 5,
+  clusterThreshold: 0.35,
   simulatorEnabled: true,
   simulatorIntervalSec: 30,
   alertSoundEnabled: true,

@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { RefreshCw, Plus, ChevronDown, ChevronRight, Split } from 'lucide-react';
+import { RefreshCw, Plus, ChevronDown, ChevronRight, Split, Move, X, ArrowDownToLine } from 'lucide-react';
 import { useArticles } from '../state/ArticlesContext';
 import { useClusters } from '../state/ClustersContext';
 
 export function ClusterPicker() {
   const { articles, addManualArticle, refreshNow } = useArticles();
-  const { clusters, selectedClusterId, selectCluster, splitArticleOut, resetSplits } = useClusters();
+  const {
+    clusters, selectedClusterId, selectCluster,
+    splitArticleOut, resetSplits, resetMerges,
+    mergeModeSourceId, startMergeMode, cancelMergeMode, mergeIntoCluster,
+  } = useClusters();
 
   const [showManual, setShowManual] = useState(false);
   const [manualTitle, setManualTitle] = useState('');
@@ -14,6 +18,7 @@ export function ClusterPicker() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const totalArticles = articles.length;
+  const movingArticle = mergeModeSourceId ? articles.find(a => a.id === mergeModeSourceId) : null;
 
   const toggleExpanded = (id: string) => {
     setExpanded(prev => {
@@ -43,9 +48,9 @@ export function ClusterPicker() {
         </h2>
         <div className="flex gap-1">
           <button
-            onClick={resetSplits}
+            onClick={() => { resetSplits(); resetMerges(); }}
             className="rounded p-1 hover:bg-slate-100 text-slate-500"
-            title="수동 분리 모두 되돌리기"
+            title="수동 분리·합치기 모두 되돌리기"
           >
             <Split size={14} />
           </button>
@@ -65,6 +70,24 @@ export function ClusterPicker() {
           </button>
         </div>
       </div>
+
+      {movingArticle && (
+        <div className="flex items-start gap-2 border-b border-indigo-200 bg-indigo-50 px-4 py-2 text-xs text-indigo-900">
+          <Move size={14} className="mt-0.5 flex-none" />
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold">이동 중</div>
+            <div className="truncate">"{movingArticle.title}"</div>
+            <div className="mt-0.5 text-indigo-700">옮길 클러스터의 <ArrowDownToLine size={12} className="inline" /> 버튼을 누르세요.</div>
+          </div>
+          <button
+            onClick={cancelMergeMode}
+            className="rounded p-0.5 hover:bg-indigo-100"
+            aria-label="취소"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {showManual && (
         <div className="border-b border-slate-100 bg-slate-50 p-3 space-y-2">
@@ -110,13 +133,15 @@ export function ClusterPicker() {
             .filter((a): a is NonNullable<typeof a> => !!a);
           const sources = [...new Set(memberArticles.map(a => a.source))];
           const hasBreaking = memberArticles.some(a => a.isBreaking);
+          const isMergeTarget = !!movingArticle && !cluster.articleIds.includes(movingArticle.id);
 
           return (
             <li
               key={cluster.id}
               className={
                 'border-b border-slate-100 ' +
-                (isSelected ? 'bg-indigo-50' : '')
+                (isSelected ? 'bg-indigo-50' : '') +
+                (isMergeTarget ? ' ring-1 ring-indigo-300' : '')
               }
             >
               <div
@@ -145,6 +170,16 @@ export function ClusterPicker() {
                     </div>
                   )}
                 </div>
+                {isMergeTarget && (
+                  <button
+                    onClick={e => { e.stopPropagation(); mergeIntoCluster(cluster.id); }}
+                    className="mt-0.5 flex items-center gap-1 rounded-md bg-indigo-600 px-2 py-1 text-xs font-semibold text-white hover:bg-indigo-700"
+                    title="이 클러스터로 이동"
+                  >
+                    <ArrowDownToLine size={12} />
+                    여기로
+                  </button>
+                )}
               </div>
 
               {isOpen && (
@@ -173,15 +208,29 @@ export function ClusterPicker() {
                             </a>
                           )}
                         </div>
-                        {cluster.articleIds.length > 1 && (
+                        <div className="flex items-center gap-1">
                           <button
-                            onClick={e => { e.stopPropagation(); splitArticleOut(a.id); }}
-                            className="rounded p-1 text-slate-400 hover:bg-amber-100 hover:text-amber-700"
-                            title="다른 사건으로 빼기"
+                            onClick={e => { e.stopPropagation(); startMergeMode(a.id); }}
+                            className={
+                              'rounded p-1 ' +
+                              (mergeModeSourceId === a.id
+                                ? 'bg-indigo-600 text-white'
+                                : 'text-slate-400 hover:bg-indigo-100 hover:text-indigo-700')
+                            }
+                            title="다른 사건으로 이동"
                           >
-                            <Split size={12} />
+                            <Move size={12} />
                           </button>
-                        )}
+                          {cluster.articleIds.length > 1 && (
+                            <button
+                              onClick={e => { e.stopPropagation(); splitArticleOut(a.id); }}
+                              className="rounded p-1 text-slate-400 hover:bg-amber-100 hover:text-amber-700"
+                              title="단독 사건으로 분리"
+                            >
+                              <Split size={12} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </li>
                   ))}
