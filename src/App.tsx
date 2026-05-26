@@ -15,15 +15,27 @@ import { SettingsModal } from './components/SettingsModal';
 import { HistoryPanel } from './components/HistoryPanel';
 import { GuideModal } from './components/GuideModal';
 import { TutorialOverlay } from './components/TutorialOverlay';
+import { VerticalSplitter } from './components/VerticalSplitter';
+import { loadJson, saveJson } from './lib/storage';
+
+const COLLAPSE_KEY = 'nie:workbench-collapsed';
 
 function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [workbenchCollapsed, setWorkbenchCollapsed] = useState(() => loadJson<boolean>(COLLAPSE_KEY, false));
   const { settings } = useSettings();
 
   const handleMissingKey = () => setSettingsOpen(true);
+  const toggleCollapsed = () => {
+    setWorkbenchCollapsed(prev => {
+      const next = !prev;
+      saveJson(COLLAPSE_KEY, next);
+      return next;
+    });
+  };
 
   return (
     <div className="flex h-screen flex-col bg-slate-50">
@@ -43,11 +55,28 @@ function AppShell() {
       <div className="grid flex-1 min-h-0 grid-cols-[340px_1fr] overflow-hidden">
         <ClusterPicker />
         <div className="flex min-h-0 flex-col overflow-hidden">
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <Workbench onMissingKey={handleMissingKey} />
-          </div>
-          <FactCheckLog />
-          <OutputTabs />
+          <VerticalSplitter
+            storageKey="nie:workbench-split"
+            defaultTopFraction={0.62}
+            minTopPx={140}
+            minBottomPx={160}
+            topCollapsed={workbenchCollapsed}
+            top={
+              <Workbench
+                onMissingKey={handleMissingKey}
+                collapsed={workbenchCollapsed}
+                onToggleCollapsed={toggleCollapsed}
+              />
+            }
+            bottom={
+              <div className="flex h-full min-h-0 flex-col overflow-hidden">
+                <FactCheckLog />
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <OutputTabs />
+                </div>
+              </div>
+            }
+          />
         </div>
       </div>
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />

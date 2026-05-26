@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Sparkles, AlertOctagon, ChevronLeft, ChevronRight, RotateCw, Languages } from 'lucide-react';
+import { Loader2, Sparkles, AlertOctagon, ChevronLeft, ChevronRight, RotateCw, Languages, ChevronUp, ChevronDown } from 'lucide-react';
 import { useClusters } from '../state/ClustersContext';
 import { useConversion } from '../state/ConversionContext';
 import { useSettings } from '../state/SettingsContext';
@@ -7,9 +7,11 @@ import { PROVIDERS, type DraftLanguage } from '../types';
 
 type Props = {
   onMissingKey: () => void;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 };
 
-export function Workbench({ onMissingKey }: Props) {
+export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }: Props) {
   const { selectedCluster, selectedArticles } = useClusters();
   const { settings, setModel } = useSettings();
   const {
@@ -57,11 +59,23 @@ export function Workbench({ onMissingKey }: Props) {
   return (
     <section className="flex h-full min-h-0 flex-col">
       <div data-tutorial="workbench-header" className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-2">
-        <h2 className="min-w-0 truncate text-sm font-semibold">
-          {selectedCluster
-            ? `📝 ${selectedCluster.representativeTitle} · ${totalSources}개 소스`
-            : '👈 왼쪽에서 사건을 선택하세요'}
-        </h2>
+        <div className="flex min-w-0 items-center gap-1">
+          {onToggleCollapsed && (
+            <button
+              onClick={onToggleCollapsed}
+              className="rounded p-1 text-slate-500 hover:bg-slate-100"
+              title={collapsed ? '원문/드래프트 펼치기' : '원문/드래프트 접고 채널 출력 크게 보기'}
+              aria-label={collapsed ? '펼치기' : '접기'}
+            >
+              {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+            </button>
+          )}
+          <h2 className="min-w-0 truncate text-sm font-semibold">
+            {selectedCluster
+              ? `📝 ${selectedCluster.representativeTitle} · ${totalSources}개 소스`
+              : '👈 왼쪽에서 사건을 선택하세요'}
+          </h2>
+        </div>
         <div className="flex items-center gap-2 flex-none">
           <label className="flex items-center gap-1 text-xs text-slate-500">
             <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold">{PROVIDERS[settings.provider].name}</span>
@@ -98,7 +112,13 @@ export function Workbench({ onMissingKey }: Props) {
         </div>
       )}
 
-      <div className="grid flex-1 min-h-0 grid-cols-2 gap-2 overflow-hidden p-3">
+      {collapsed && (
+        <div className="bg-slate-50 px-4 py-2 text-xs text-slate-500">
+          원문/드래프트 영역이 접혀있습니다. 위 ⌄ 버튼을 눌러 펼치세요.
+        </div>
+      )}
+
+      <div className={(collapsed ? 'hidden ' : '') + 'grid flex-1 min-h-0 grid-cols-2 gap-2 overflow-hidden p-3'}>
         <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-1.5">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">

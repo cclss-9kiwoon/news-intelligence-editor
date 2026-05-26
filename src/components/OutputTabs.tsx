@@ -56,7 +56,7 @@ export function OutputTabs() {
   };
 
   return (
-    <div data-tutorial="output-tabs" className="flex max-h-[40vh] flex-col border-t border-slate-200 bg-white">
+    <div data-tutorial="output-tabs" className="flex h-full min-h-0 flex-col border-t border-slate-200 bg-white">
       <div className="flex flex-wrap items-center border-b border-slate-200">
         {(Object.keys(TAB_LABELS) as ChannelKey[]).map(t => (
           <button
