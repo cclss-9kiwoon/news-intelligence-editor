@@ -22,7 +22,7 @@ export function BreakingProvider({ children }: { children: ReactNode }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    audioRef.current = new Audio('/ping.mp3');
+    audioRef.current = new Audio(import.meta.env.BASE_URL + 'ping.mp3');
     audioRef.current.volume = 0.5;
   }, []);
 
