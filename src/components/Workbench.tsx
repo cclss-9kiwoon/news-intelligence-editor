@@ -177,10 +177,10 @@ export function Workbench({ onMissingKey }: Props) {
                 onClick={triggerRegenerate}
                 disabled={!currentResult || isBusy}
                 className="flex items-center gap-1 rounded-md bg-amber-600 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-                title="현재 드래프트로 3채널 출력 (재)생성"
+                title="현재 언어 드래프트로 3채널 출력 (재)생성"
               >
                 {status === 'generating' ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
-                {currentResult?.channelsGenerated ? '채널 재생성' : '채널 생성'}
+                {currentResult?.channelsGenerated[activeLang] ? `${activeLang.toUpperCase()} 채널 재생성` : `${activeLang.toUpperCase()} 채널 생성`}
               </button>
             </div>
           </div>

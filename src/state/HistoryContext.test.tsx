@@ -8,9 +8,12 @@ function make(id: string): ConvertedResult {
     id, sourceArticleIds: ['a'], sourceTitle: 't', createdAt: parseInt(id), valueScore: 5,
     valueReason: '', facts: { people: [], numbers: [], places: [], dates: [] },
     drafts: { ko: '', en: '' }, activeLanguage: 'ko',
-    channels: { site: '', x: '', medium: '' }, channelsGenerated: false,
-    factReport: { ok: true, missing: [] },
-    bannedHits: { site: [], x: [], medium: [] },
+    channels: { ko: { site: '', x: '', medium: '' }, en: { site: '', x: '', medium: '' } },
+    channelsGenerated: { ko: false, en: false },
+    bannedHits: {
+      ko: { site: [], x: [], medium: [] },
+      en: { site: [], x: [], medium: [] },
+    },
     stylePreset: 'kpop', model: 'gpt-4o-mini',
   };
 }

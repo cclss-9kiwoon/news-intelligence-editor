@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import type { Article, ConvertedResult, DraftLanguage } from '../types';
+import type { Article, ConvertedResult, DraftLanguage, ChannelKey } from '../types';
 import { analyzeKorean, translateDraft, formatChannels, buildInitialResult } from '../lib/promptChain';
 import { OpenAIError } from '../lib/openai';
 import { useSettings } from './SettingsContext';
@@ -13,6 +13,7 @@ type Ctx = {
   currentResult: ConvertedResult | null;
   analyze: (articles: Article[]) => Promise<void>;
   setDraftText: (text: string) => void;
+  setChannelText: (channel: ChannelKey, text: string) => void;
   switchLanguage: (target: DraftLanguage) => Promise<void>;
   regenerateChannels: () => Promise<void>;
   loadResult: (result: ConvertedResult) => void;
@@ -69,6 +70,20 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setChannelText = useCallback((channel: ChannelKey, text: string) => {
+    setCurrentResult(prev => {
+      if (!prev) return prev;
+      const lang = prev.activeLanguage;
+      return {
+        ...prev,
+        channels: {
+          ...prev.channels,
+          [lang]: { ...prev.channels[lang], [channel]: text },
+        },
+      };
+    });
+  }, []);
+
   const switchLanguage = useCallback(async (target: DraftLanguage) => {
     if (!currentResult) return;
     if (!settings.apiKey) { setError('NO_API_KEY'); return; }
@@ -105,44 +120,24 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
   const regenerateChannels = useCallback(async () => {
     if (!currentResult) return;
     if (!settings.apiKey) { setError('NO_API_KEY'); return; }
-
-    let englishDraft = currentResult.drafts.en;
-    let workingResult = currentResult;
-
-    if (!englishDraft.trim()) {
-      if (!currentResult.drafts.ko.trim()) { setError('드래프트가 비어있습니다.'); return; }
-      setStatus('translating');
-      setError(null);
-      try {
-        englishDraft = await translateDraft({
-          text: currentResult.drafts.ko, from: 'ko', to: 'en', settings,
-        });
-        workingResult = {
-          ...currentResult,
-          drafts: { ...currentResult.drafts, en: englishDraft },
-        };
-        setCurrentResult(workingResult);
-      } catch (err) {
-        setError(toErrorMessage(err));
-        setStatus('error');
-        return;
-      }
+    const lang = currentResult.activeLanguage;
+    const draft = currentResult.drafts[lang];
+    if (!draft.trim()) {
+      setError(`${lang === 'ko' ? '한국어' : '영문'} 드래프트가 비어있습니다.`);
+      return;
     }
 
     setStatus('generating');
     setError(null);
     try {
-      const { channels, bannedHits, factReport } = await formatChannels({
-        englishDraft,
-        facts: workingResult.facts,
-        settings,
+      const { channels, bannedHits } = await formatChannels({
+        draft, language: lang, facts: currentResult.facts, settings,
       });
       const updated: ConvertedResult = {
-        ...workingResult,
-        channels,
-        channelsGenerated: true,
-        bannedHits,
-        factReport,
+        ...currentResult,
+        channels: { ...currentResult.channels, [lang]: channels },
+        channelsGenerated: { ...currentResult.channelsGenerated, [lang]: true },
+        bannedHits: { ...currentResult.bannedHits, [lang]: bannedHits },
       };
       setCurrentResult(updated);
       addEntry(updated);
@@ -159,7 +154,7 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
   return (
     <ConversionCtx.Provider value={{
       status, error, currentResult,
-      analyze, setDraftText, switchLanguage, regenerateChannels,
+      analyze, setDraftText, setChannelText, switchLanguage, regenerateChannels,
       loadResult, clearError,
     }}>
       {children}

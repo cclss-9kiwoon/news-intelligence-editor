@@ -107,6 +107,16 @@ export type Cluster = {
   createdAt: number;
 };
 
+export type ChannelKey = 'site' | 'x' | 'medium';
+
+export type ChannelSet = {
+  site: string;
+  x: string;
+  medium: string;
+};
+
+export type ChannelBannedHits = Record<ChannelKey, string[]>;
+
 export type ConvertedResult = {
   id: string;
   sourceArticleIds: string[];
@@ -121,13 +131,17 @@ export type ConvertedResult = {
   };
   activeLanguage: DraftLanguage;
   channels: {
-    site: string;
-    x: string;
-    medium: string;
+    ko: ChannelSet;
+    en: ChannelSet;
   };
-  channelsGenerated: boolean;
-  factReport: FactReport;
-  bannedHits: Record<'site' | 'x' | 'medium', string[]>;
+  channelsGenerated: {
+    ko: boolean;
+    en: boolean;
+  };
+  bannedHits: {
+    ko: ChannelBannedHits;
+    en: ChannelBannedHits;
+  };
   stylePreset: StylePresetKey;
   model: ModelId;
 };

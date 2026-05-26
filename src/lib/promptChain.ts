@@ -1,9 +1,8 @@
 import type {
-  Article, Settings, ConvertedResult, AnalyzeKoreanOutput, ChannelOutput, Facts, FactReport, DraftLanguage,
+  Article, Settings, ConvertedResult, AnalyzeKoreanOutput, ChannelOutput, Facts, DraftLanguage, ChannelSet, ChannelBannedHits,
 } from '../types';
 import { chatJson } from './openai';
 import { scan } from './bannedWords';
-import { verify } from './factCheck';
 import { getStyleInstruction, STYLE_PRESETS } from './styles';
 
 const BANNED_LIST_FOR_PROMPT =
@@ -96,9 +95,25 @@ export async function translateDraft(args: TranslateArgs): Promise<string> {
   return result.translated;
 }
 
-function buildChannelsSystem(settings: Settings, facts: Facts): string {
+function buildChannelsSystem(settings: Settings, facts: Facts, lang: DraftLanguage): string {
   const styleInstruction = getStyleInstruction(settings.stylePreset, settings.customStyleInstruction);
   const factSummary = JSON.stringify(facts);
+
+  if (lang === 'ko') {
+    return [
+      '당신은 다채널 뉴스 포맷터입니다. 주어진 한국어 드래프트를 3개 채널에 맞게 변환하세요.',
+      `다음 핵심 팩트(인물/숫자/장소/날짜)는 가능한 한 본문에 포함시키세요: ${factSummary}`,
+      `톤/스타일: ${styleInstruction}`,
+      '',
+      '채널 규칙:',
+      '1. site: 독립형 한국어 기사. 800-1200자. 헤드라인 + 리드 + 본문 + 마무리. 마크다운 없음.',
+      '2. x: X(트위터) 스레드, 5-8개 트윗, 각 280자 이내. 첫 트윗은 hook. "1/", "2/" 번호. 이모지 1-2개.',
+      '3. medium: 롱폼 블로그. 마크다운. H1 제목 + 이탤릭 부제 + H2 섹션(도입/본문/결론). 1500-2500자.',
+      '',
+      '오직 valid JSON만 출력: { "site": string, "x": string, "medium": string }',
+    ].join('\n');
+  }
+
   return [
     'You are a multi-channel news formatter. Convert the given English draft into three channel-ready outputs.',
     `You MUST preserve ALL of these extracted facts: ${factSummary}`,
@@ -115,15 +130,15 @@ function buildChannelsSystem(settings: Settings, facts: Facts): string {
 }
 
 export type FormatChannelsArgs = {
-  englishDraft: string;
+  draft: string;
+  language: DraftLanguage;
   facts: Facts;
   settings: Settings;
 };
 
 export type FormatChannelsResult = {
-  channels: ChannelOutput;
-  factReport: FactReport;
-  bannedHits: Record<'site' | 'x' | 'medium', string[]>;
+  channels: ChannelSet;
+  bannedHits: ChannelBannedHits;
 };
 
 export async function formatChannels(args: FormatChannelsArgs): Promise<FormatChannelsResult> {
@@ -131,17 +146,20 @@ export async function formatChannels(args: FormatChannelsArgs): Promise<FormatCh
     apiKey: args.settings.apiKey,
     baseUrl: args.settings.apiBaseUrl,
     model: args.settings.model,
-    system: buildChannelsSystem(args.settings, args.facts),
-    user: `[English draft]\n${args.englishDraft}`,
+    system: buildChannelsSystem(args.settings, args.facts, args.language),
+    user: args.language === 'ko'
+      ? `[한국어 드래프트]\n${args.draft}`
+      : `[English draft]\n${args.draft}`,
     temperature: 0.6,
   });
-  const bannedHits = {
-    site: scan(channels.site).hits,
-    x: scan(channels.x).hits,
-    medium: scan(channels.medium).hits,
-  };
-  const factReport = verify(args.facts, channels);
-  return { channels, bannedHits, factReport };
+  const bannedHits: ChannelBannedHits = args.language === 'en'
+    ? {
+        site: scan(channels.site).hits,
+        x: scan(channels.x).hits,
+        medium: scan(channels.medium).hits,
+      }
+    : { site: [], x: [], medium: [] };
+  return { channels, bannedHits };
 }
 
 export function buildInitialResult(
@@ -150,6 +168,8 @@ export function buildInitialResult(
   settings: Settings,
 ): ConvertedResult {
   const newest = articles.reduce((p, c) => c.fetchedAt > p.fetchedAt ? c : p, articles[0]);
+  const emptyChannelSet: ChannelSet = { site: '', x: '', medium: '' };
+  const emptyBanned: ChannelBannedHits = { site: [], x: [], medium: [] };
   return {
     id: `${newest.id}-${Date.now()}`,
     sourceArticleIds: articles.map(a => a.id),
@@ -160,10 +180,9 @@ export function buildInitialResult(
     facts: analyzed.facts,
     drafts: { ko: analyzed.koreanDraft, en: '' },
     activeLanguage: 'ko',
-    channels: { site: '', x: '', medium: '' },
-    channelsGenerated: false,
-    factReport: { ok: true, missing: [] },
-    bannedHits: { site: [], x: [], medium: [] },
+    channels: { ko: { ...emptyChannelSet }, en: { ...emptyChannelSet } },
+    channelsGenerated: { ko: false, en: false },
+    bannedHits: { ko: { ...emptyBanned }, en: { ...emptyBanned } },
     stylePreset: settings.stylePreset,
     model: settings.model,
   };

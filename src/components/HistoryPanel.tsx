@@ -41,9 +41,10 @@ export function HistoryPanel({ open, onClose }: Props) {
                     {new Date(h.createdAt).toLocaleString('ko-KR')} · {h.stylePreset} · 가치 {h.valueScore}/10
                   </div>
                   <div className="mt-0.5 text-sm font-medium truncate">{h.sourceTitle}</div>
-                  <div className="mt-0.5 text-xs">
-                    {!h.factReport.ok && <span className="mr-2 rounded bg-red-100 px-1.5 text-red-700">팩트 ✗</span>}
-                    {(h.bannedHits.site.length + h.bannedHits.x.length + h.bannedHits.medium.length) > 0 && (
+                  <div className="mt-0.5 flex flex-wrap gap-1 text-xs">
+                    {h.channelsGenerated.ko && <span className="rounded bg-slate-100 px-1.5 text-slate-700">KO 채널</span>}
+                    {h.channelsGenerated.en && <span className="rounded bg-slate-100 px-1.5 text-slate-700">EN 채널</span>}
+                    {(h.bannedHits.en.site.length + h.bannedHits.en.x.length + h.bannedHits.en.medium.length) > 0 && (
                       <span className="rounded bg-amber-100 px-1.5 text-amber-700">금지어</span>
                     )}
                   </div>

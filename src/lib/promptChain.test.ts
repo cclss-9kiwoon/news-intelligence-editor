@@ -84,15 +84,16 @@ describe('translateDraft', () => {
   });
 });
 
-describe('formatChannels', () => {
-  it('generates 3 channels from an English draft and flags banned words', async () => {
+describe('formatChannels (en)', () => {
+  it('generates 3 English channels and flags banned words', async () => {
     vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({
       site: 'Furthermore, the band returns.',
       x: '1/ A clean tweet.',
       medium: '# Title\n## Intro\nA clean section.',
     });
     const out = await formatChannels({
-      englishDraft: 'A clean draft about the comeback.',
+      draft: 'A clean draft about the comeback.',
+      language: 'en',
       facts: { people: [], numbers: [], places: [], dates: [] },
       settings: SETTINGS,
     });
@@ -100,24 +101,31 @@ describe('formatChannels', () => {
     expect(out.bannedHits.site.length).toBeGreaterThan(0);
     expect(out.bannedHits.x).toEqual([]);
   });
+});
 
-  it('reports fact mismatch when output omits a required number', async () => {
-    vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({
-      site: 'They sold some copies.',
-      x: '1/ A success.',
-      medium: '# Title\n## Intro\nA success.',
+describe('formatChannels (ko)', () => {
+  it('generates 3 Korean channels without banned-word checks', async () => {
+    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({
+      site: '본 사이트 한국어 기사 내용.',
+      x: '1/ 첫 트윗.',
+      medium: '# 제목\n## 도입\n본문.',
     });
     const out = await formatChannels({
-      englishDraft: 'They sold 10 million copies.',
-      facts: { people: [], numbers: ['10 million'], places: [], dates: [] },
+      draft: '한국어 드래프트 원문.',
+      language: 'ko',
+      facts: { people: ['BLACKPINK'], numbers: [], places: [], dates: [] },
       settings: SETTINGS,
     });
-    expect(out.factReport.ok).toBe(false);
+    expect(spy).toHaveBeenCalledTimes(1);
+    const call = spy.mock.calls[0][0] as { system: string };
+    expect(call.system).toMatch(/한국어/);
+    expect(out.channels.site).toContain('본 사이트');
+    expect(out.bannedHits.site).toEqual([]);
   });
 });
 
 describe('buildInitialResult', () => {
-  it('initializes ko draft, empty en, empty channels', () => {
+  it('initializes ko draft, empty en, empty channels for both languages', () => {
     const r = buildInitialResult([ARTICLE_A, ARTICLE_B], {
       valueScore: 7, valueReason: 'ok',
       facts: { people: [], numbers: [], places: [], dates: [] },
@@ -126,7 +134,10 @@ describe('buildInitialResult', () => {
     expect(r.drafts.ko).toBe('본문');
     expect(r.drafts.en).toBe('');
     expect(r.activeLanguage).toBe('ko');
-    expect(r.channelsGenerated).toBe(false);
+    expect(r.channelsGenerated.ko).toBe(false);
+    expect(r.channelsGenerated.en).toBe(false);
+    expect(r.channels.ko.site).toBe('');
+    expect(r.channels.en.site).toBe('');
     expect(r.sourceArticleIds).toEqual(['a1', 'a2']);
   });
 });
