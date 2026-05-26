@@ -1,5 +1,5 @@
 import type {
-  Article, Settings, ConvertedResult, AnalyzeAndTranslateOutput, ChannelOutput,
+  Article, Settings, ConvertedResult, AnalyzeAndTranslateOutput, ChannelOutput, Facts, FactReport,
 } from '../types';
 import { chatJson } from './openai';
 import { scan } from './bannedWords';
@@ -18,31 +18,36 @@ function buildCall1System(settings: Settings, stricter: boolean): string {
     : '';
   return [
     'You are a senior English news editor specializing in Korean entertainment and K-pop journalism.',
-    `You MUST translate the Korean source article into professional English in the "${styleLabel}" style.`,
-    `Style guidance: ${styleInstruction}`,
+    'You will receive multiple source articles covering the SAME event from different outlets.',
+    'Your task: SYNTHESIZE them into ONE professional English draft. Do NOT translate each source separately.',
+    'Cross-verify facts across sources. If sources conflict on a number/date/name, prefer the most consistent version and note disagreement at the end with "Sources disagree on: ...".',
+    'If a fact appears in only one source, include it but you may flag it inline as "(per [source name])".',
+    `Target style: "${styleLabel}". ${styleInstruction}`,
     `You MUST NEVER use these banned words/phrases: ${BANNED_LIST_FOR_PROMPT}`,
-    'You MUST extract concrete facts (people, numbers, places, dates) exactly as they appear in the source.',
-    'Respond ONLY with valid JSON matching this schema:',
+    'You MUST extract concrete facts (people, numbers, places, dates) as they appear across sources.',
+    'Respond ONLY with valid JSON matching:',
     '{',
-    '  "valueScore": number 1-10,',
-    '  "valueReason": string (short reason),',
+    '  "valueScore": number 1-10 (newsworthiness of the consolidated story),',
+    '  "valueReason": string,',
     '  "facts": { "people": string[], "numbers": string[], "places": string[], "dates": string[] },',
-    '  "englishDraft": string (300-500 words, professional tone)',
+    '  "englishDraft": string (400-600 words, professional, synthesized from all sources)',
     '}' + stricterNote,
   ].join('\n');
 }
 
-function buildCall1User(article: Article): string {
-  return [
-    `[Korean source article]`,
-    `Title: ${article.title}`,
-    `Body: ${article.fullText || article.description}`,
-    `[Source]: ${article.source}`,
-    `[Published]: ${article.pubDate}`,
-  ].join('\n');
+function buildCall1User(articles: Article[]): string {
+  const parts: string[] = [`[${articles.length} source article(s) covering the same event]`, ''];
+  articles.forEach((a, i) => {
+    parts.push(`--- Source ${i + 1}: ${a.source} ---`);
+    parts.push(`Title: ${a.title}`);
+    parts.push(`Body: ${a.fullText || a.description}`);
+    if (a.pubDate) parts.push(`Published: ${a.pubDate}`);
+    parts.push('');
+  });
+  return parts.join('\n');
 }
 
-function buildCall2System(settings: Settings, facts: AnalyzeAndTranslateOutput['facts']): string {
+function buildCall2System(settings: Settings, facts: Facts): string {
   const styleInstruction = getStyleInstruction(settings.stylePreset, settings.customStyleInstruction);
   const factSummary = JSON.stringify(facts);
   return [
@@ -64,12 +69,45 @@ function buildCall2User(draft: string): string {
   return `[English draft]\n${draft}`;
 }
 
-export async function runChain(article: Article, settings: Settings): Promise<ConvertedResult> {
+export type FormatChannelsArgs = {
+  editedDraft: string;
+  facts: Facts;
+  settings: Settings;
+};
+
+export type FormatChannelsResult = {
+  channels: ChannelOutput;
+  factReport: FactReport;
+  bannedHits: Record<'site' | 'x' | 'medium', string[]>;
+};
+
+export async function formatChannels(args: FormatChannelsArgs): Promise<FormatChannelsResult> {
+  const channels = await chatJson<ChannelOutput>({
+    apiKey: args.settings.apiKey,
+    model: args.settings.model,
+    system: buildCall2System(args.settings, args.facts),
+    user: buildCall2User(args.editedDraft),
+    temperature: 0.6,
+  });
+  const bannedHits = {
+    site: scan(channels.site).hits,
+    x: scan(channels.x).hits,
+    medium: scan(channels.medium).hits,
+  };
+  const factReport = verify(args.facts, channels);
+  return { channels, bannedHits, factReport };
+}
+
+export async function runChain(articles: Article[], settings: Settings): Promise<ConvertedResult> {
+  if (articles.length === 0) {
+    throw new Error('runChain requires at least one article');
+  }
+
   let call1 = await chatJson<AnalyzeAndTranslateOutput>({
     apiKey: settings.apiKey,
     model: settings.model,
     system: buildCall1System(settings, false),
-    user: buildCall1User(article),
+    user: buildCall1User(articles),
     temperature: 0.5,
   });
 
@@ -78,36 +116,29 @@ export async function runChain(article: Article, settings: Settings): Promise<Co
       apiKey: settings.apiKey,
       model: settings.model,
       system: buildCall1System(settings, true),
-      user: buildCall1User(article),
+      user: buildCall1User(articles),
       temperature: 0.3,
     });
   }
 
-  const call2 = await chatJson<ChannelOutput>({
-    apiKey: settings.apiKey,
-    model: settings.model,
-    system: buildCall2System(settings, call1.facts),
-    user: buildCall2User(call1.englishDraft),
-    temperature: 0.6,
+  const { channels, bannedHits, factReport } = await formatChannels({
+    editedDraft: call1.englishDraft,
+    facts: call1.facts,
+    settings,
   });
 
-  const bannedHits = {
-    site: scan(call2.site).hits,
-    x: scan(call2.x).hits,
-    medium: scan(call2.medium).hits,
-  };
-  const factReport = verify(call1.facts, call2);
+  const newest = articles.reduce((p, c) => c.fetchedAt > p.fetchedAt ? c : p, articles[0]);
 
   return {
-    id: `${article.id}-${Date.now()}`,
-    sourceArticleId: article.id,
-    sourceTitle: article.title,
+    id: `${newest.id}-${Date.now()}`,
+    sourceArticleIds: articles.map(a => a.id),
+    sourceTitle: newest.title,
     createdAt: Date.now(),
     valueScore: call1.valueScore,
     valueReason: call1.valueReason,
     facts: call1.facts,
     englishDraft: call1.englishDraft,
-    channels: call2,
+    channels,
     factReport,
     bannedHits,
     stylePreset: settings.stylePreset,

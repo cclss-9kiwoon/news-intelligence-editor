@@ -15,7 +15,7 @@ export function Workbench({ onMissingKey }: Props) {
   const trigger = () => {
     if (!selectedArticle) return;
     if (!settings.apiKey) { onMissingKey(); return; }
-    convert(selectedArticle);
+    convert([selectedArticle]);
   };
 
   return (
