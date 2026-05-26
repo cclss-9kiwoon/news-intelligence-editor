@@ -24,12 +24,15 @@ const ConversionCtx = createContext<Ctx | null>(null);
 function toErrorMessage(err: unknown): string {
   if (err instanceof OpenAIError) {
     if (err.status === 429) {
-      return `OpenAI 한도 초과 (429): ${err.message}\n→ 결제 정보 확인, 또는 ⚙ 설정 / 워크벤치 헤더에서 'gpt-3.5-turbo' 같은 더 저렴한 모델로 전환해 보세요.`;
+      return `API 한도/잔액 초과 (429): ${err.message}\n→ ⚙ 설정에서 Provider/모델 전환 또는 결제/한도 확인.`;
     }
     if (err.status === 401) {
-      return `OpenAI 인증 실패 (401): API 키가 잘못되었거나 만료. ⚙ 설정에서 다시 입력하세요.`;
+      return `인증 실패 (401): API 키가 잘못되었거나 만료. ⚙ 설정에서 다시 입력하세요.`;
     }
-    return `OpenAI 오류 (${err.status}): ${err.message}`;
+    if (err.status === 404) {
+      return `API 404: 모델 ID가 해당 provider에서 지원되지 않거나 base URL이 잘못됨. ⚙ 설정 확인.`;
+    }
+    return `API 오류 (${err.status}): ${err.message}`;
   }
   if (err instanceof Error) return err.message;
   return String(err);

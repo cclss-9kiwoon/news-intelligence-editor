@@ -42,6 +42,7 @@ export type FactReport = {
 
 export type StylePresetKey = 'kpop' | 'ap' | 'bloomberg' | 'techcrunch' | 'custom';
 export type ModelId = string;
+export type ProviderId = 'openai' | 'gemini' | 'custom';
 
 export type ModelOption = {
   id: string;
@@ -49,11 +50,52 @@ export type ModelOption = {
   note?: string;
 };
 
-export const MODEL_OPTIONS: ModelOption[] = [
-  { id: 'gpt-3.5-turbo', label: 'gpt-3.5-turbo', note: '최저가 · 무료 한도/저예산용' },
-  { id: 'gpt-4o-mini', label: 'gpt-4o-mini', note: '기본 · 권장' },
-  { id: 'gpt-4o', label: 'gpt-4o', note: '고품질 · 비용 약 10배' },
-];
+export type ProviderConfig = {
+  id: ProviderId;
+  name: string;
+  baseUrl: string;
+  models: ModelOption[];
+  keyLabel: string;
+  keyHelp: string;
+};
+
+export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
+  openai: {
+    id: 'openai',
+    name: 'OpenAI',
+    baseUrl: 'https://api.openai.com/v1',
+    keyLabel: 'OpenAI API 키',
+    keyHelp: 'platform.openai.com에서 발급. 결제 충전(prepaid) 필요.',
+    models: [
+      { id: 'gpt-3.5-turbo', label: 'gpt-3.5-turbo', note: '최저가' },
+      { id: 'gpt-4o-mini', label: 'gpt-4o-mini', note: '권장' },
+      { id: 'gpt-4o', label: 'gpt-4o', note: '고품질 · 비용 ~10배' },
+    ],
+  },
+  gemini: {
+    id: 'gemini',
+    name: 'Google Gemini',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    keyLabel: 'Gemini API 키',
+    keyHelp: 'aistudio.google.com에서 무료 발급. 분당 15건 / 일 1,500건 무료 한도.',
+    models: [
+      { id: 'gemini-2.5-flash', label: 'gemini-2.5-flash', note: '권장 · 무료' },
+      { id: 'gemini-2.0-flash', label: 'gemini-2.0-flash', note: '안정 · 무료' },
+      { id: 'gemini-1.5-flash', label: 'gemini-1.5-flash', note: '레거시' },
+      { id: 'gemini-2.5-pro', label: 'gemini-2.5-pro', note: '고품질 · 한도 더 좁음' },
+    ],
+  },
+  custom: {
+    id: 'custom',
+    name: '커스텀 (OpenAI 호환)',
+    baseUrl: '',
+    keyLabel: 'API 키',
+    keyHelp: 'Groq / OpenRouter / 자체 호스팅 등 OpenAI 호환 endpoint',
+    models: [],
+  },
+};
+
+export const DEFAULT_PROVIDER: ProviderId = 'openai';
 
 export type DraftLanguage = 'ko' | 'en';
 
@@ -91,7 +133,9 @@ export type ConvertedResult = {
 };
 
 export type Settings = {
+  provider: ProviderId;
   apiKey: string;
+  apiBaseUrl: string;
   rss2jsonApiKey: string;
   model: ModelId;
   stylePreset: StylePresetKey;

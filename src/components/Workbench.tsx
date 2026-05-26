@@ -3,7 +3,7 @@ import { Loader2, Sparkles, AlertOctagon, ChevronLeft, ChevronRight, RotateCw, L
 import { useClusters } from '../state/ClustersContext';
 import { useConversion } from '../state/ConversionContext';
 import { useSettings } from '../state/SettingsContext';
-import { MODEL_OPTIONS, type DraftLanguage } from '../types';
+import { PROVIDERS, type DraftLanguage } from '../types';
 
 type Props = {
   onMissingKey: () => void;
@@ -64,17 +64,17 @@ export function Workbench({ onMissingKey }: Props) {
         </h2>
         <div className="flex items-center gap-2 flex-none">
           <label className="flex items-center gap-1 text-xs text-slate-500">
-            모델
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold">{PROVIDERS[settings.provider].name}</span>
             <select
               value={settings.model}
               onChange={e => setModel(e.target.value)}
               className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs"
-              title="OpenAI 모델 선택"
+              title="모델 선택"
             >
-              {MODEL_OPTIONS.map(m => (
+              {PROVIDERS[settings.provider].models.map(m => (
                 <option key={m.id} value={m.id}>{m.label}</option>
               ))}
-              {!MODEL_OPTIONS.some(m => m.id === settings.model) && (
+              {!PROVIDERS[settings.provider].models.some(m => m.id === settings.model) && (
                 <option value={settings.model}>{settings.model} (custom)</option>
               )}
             </select>

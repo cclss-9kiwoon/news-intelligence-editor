@@ -4,7 +4,9 @@ import * as openai from './openai';
 import type { Settings, Article } from '../types';
 
 const SETTINGS: Settings = {
+  provider: 'openai',
   apiKey: 'sk-test',
+  apiBaseUrl: 'https://api.openai.com/v1',
   rss2jsonApiKey: '',
   model: 'gpt-4o-mini',
   stylePreset: 'kpop',

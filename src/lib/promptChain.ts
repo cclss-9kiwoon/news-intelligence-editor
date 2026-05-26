@@ -53,6 +53,7 @@ export async function analyzeKorean(articles: Article[], settings: Settings): Pr
 
   const first = await chatJson<AnalyzeKoreanOutput>({
     apiKey: settings.apiKey,
+    baseUrl: settings.apiBaseUrl,
     model: settings.model,
     system: buildAnalyzeSystem(settings, false),
     user: buildAnalyzeUser(articles),
@@ -86,6 +87,7 @@ export async function translateDraft(args: TranslateArgs): Promise<string> {
 
   const result = await chatJson<{ translated: string }>({
     apiKey: args.settings.apiKey,
+    baseUrl: args.settings.apiBaseUrl,
     model: args.settings.model,
     system,
     user: args.text,
@@ -127,6 +129,7 @@ export type FormatChannelsResult = {
 export async function formatChannels(args: FormatChannelsArgs): Promise<FormatChannelsResult> {
   const channels = await chatJson<ChannelOutput>({
     apiKey: args.settings.apiKey,
+    baseUrl: args.settings.apiBaseUrl,
     model: args.settings.model,
     system: buildChannelsSystem(args.settings, args.facts),
     user: `[English draft]\n${args.englishDraft}`,

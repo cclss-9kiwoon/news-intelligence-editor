@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import type { Settings, StylePresetKey, ModelId, RssSource } from '../types';
+import type { Settings, StylePresetKey, ModelId, RssSource, ProviderId } from '../types';
+import { PROVIDERS } from '../types';
 import { DEFAULT_SETTINGS } from '../lib/defaultSettings';
 import { loadJson, saveJson, STORAGE_KEYS } from '../lib/storage';
 
@@ -7,6 +8,8 @@ type Ctx = {
   settings: Settings;
   setApiKey: (k: string) => void;
   setRss2jsonApiKey: (k: string) => void;
+  setProvider: (p: ProviderId) => void;
+  setApiBaseUrl: (u: string) => void;
   setModel: (m: ModelId) => void;
   setStylePreset: (s: StylePresetKey) => void;
   setCustomStyleInstruction: (s: string) => void;
@@ -34,6 +37,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const setApiKey = useCallback((k: string) => setSettings(s => ({ ...s, apiKey: k })), []);
   const setRss2jsonApiKey = useCallback((k: string) => setSettings(s => ({ ...s, rss2jsonApiKey: k })), []);
+  const setProvider = useCallback((p: ProviderId) => setSettings(s => {
+    const cfg = PROVIDERS[p];
+    const firstModel = cfg.models[0]?.id ?? s.model;
+    return { ...s, provider: p, apiBaseUrl: cfg.baseUrl, model: firstModel, apiKey: '' };
+  }), []);
+  const setApiBaseUrl = useCallback((u: string) => setSettings(s => ({ ...s, apiBaseUrl: u })), []);
   const setModel = useCallback((m: ModelId) => setSettings(s => ({ ...s, model: m })), []);
   const setStylePreset = useCallback((p: StylePresetKey) => setSettings(s => ({ ...s, stylePreset: p })), []);
   const setCustomStyleInstruction = useCallback((v: string) => setSettings(s => ({ ...s, customStyleInstruction: v })), []);
@@ -48,7 +57,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const resetSettings = useCallback(() => setSettings(DEFAULT_SETTINGS), []);
 
   const value: Ctx = {
-    settings, setApiKey, setRss2jsonApiKey, setModel, setStylePreset, setCustomStyleInstruction,
+    settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
+    setModel, setStylePreset, setCustomStyleInstruction,
     setRssSources, toggleRssSource, setRssPollMinutes, setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled, resetSettings,
   };

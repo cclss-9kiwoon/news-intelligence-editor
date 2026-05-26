@@ -3,17 +3,20 @@ import { X, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 import { useSettings } from '../state/SettingsContext';
 import { STYLE_PRESETS } from '../lib/styles';
 import { useHistory } from '../state/HistoryContext';
-import { MODEL_OPTIONS, type StylePresetKey } from '../types';
+import { PROVIDERS, type StylePresetKey, type ProviderId } from '../types';
 
 type Props = { open: boolean; onClose: () => void };
 
 export function SettingsModal({ open, onClose }: Props) {
   const {
-    settings, setApiKey, setRss2jsonApiKey, setModel, setStylePreset, setCustomStyleInstruction,
+    settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
+    setModel, setStylePreset, setCustomStyleInstruction,
     setRssSources, toggleRssSource, setRssPollMinutes,
     setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled,
   } = useSettings();
+  const providerCfg = PROVIDERS[settings.provider];
+  const providerModels = providerCfg.models;
   const { clear } = useHistory();
   const [showKey, setShowKey] = useState(false);
   const [showRssKey, setShowRssKey] = useState(false);
@@ -56,13 +59,38 @@ export function SettingsModal({ open, onClose }: Props) {
 
         <div className="space-y-6 p-5">
           <section>
-            <h3 className="mb-2 font-semibold">OpenAI API 키</h3>
+            <h3 className="mb-2 font-semibold">AI Provider</h3>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {(Object.keys(PROVIDERS) as ProviderId[]).map(p => (
+                <label key={p} className="flex items-center gap-1">
+                  <input
+                    type="radio"
+                    checked={settings.provider === p}
+                    onChange={() => setProvider(p)}
+                  />
+                  {PROVIDERS[p].name}
+                </label>
+              ))}
+            </div>
+            {settings.provider === 'custom' && (
+              <input
+                type="text"
+                value={settings.apiBaseUrl}
+                onChange={e => setApiBaseUrl(e.target.value)}
+                placeholder="Base URL (예: https://api.groq.com/openai/v1)"
+                className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm font-mono"
+              />
+            )}
+          </section>
+
+          <section>
+            <h3 className="mb-2 font-semibold">{providerCfg.keyLabel}</h3>
             <div className="flex gap-2">
               <input
                 type={showKey ? 'text' : 'password'}
                 value={settings.apiKey}
                 onChange={e => setApiKey(e.target.value)}
-                placeholder="sk-..."
+                placeholder={settings.provider === 'openai' ? 'sk-...' : 'API 키 붙여넣기'}
                 className="flex-1 rounded border border-slate-300 px-3 py-2 text-sm font-mono"
               />
               <button
@@ -73,7 +101,8 @@ export function SettingsModal({ open, onClose }: Props) {
                 {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
-            <p className="mt-1 text-xs text-slate-500">키는 이 브라우저의 localStorage에만 저장됩니다.</p>
+            <p className="mt-1 text-xs text-slate-500">{providerCfg.keyHelp}</p>
+            <p className="mt-0.5 text-xs text-slate-500">키는 이 브라우저의 localStorage에만 저장됩니다.</p>
           </section>
 
           <section>
@@ -104,7 +133,7 @@ export function SettingsModal({ open, onClose }: Props) {
           <section>
             <h3 className="mb-2 font-semibold">모델</h3>
             <div className="space-y-1 text-sm">
-              {MODEL_OPTIONS.map(m => (
+              {providerModels.map(m => (
                 <label key={m.id} className="flex items-start gap-2">
                   <input
                     type="radio"
@@ -122,16 +151,13 @@ export function SettingsModal({ open, onClose }: Props) {
                 <span className="text-xs text-slate-500">커스텀:</span>
                 <input
                   type="text"
-                  placeholder="모델 ID 직접 입력 (예: gpt-4o-2024-08-06)"
-                  value={MODEL_OPTIONS.some(m => m.id === settings.model) ? '' : settings.model}
+                  placeholder="모델 ID 직접 입력"
+                  value={providerModels.some(m => m.id === settings.model) ? '' : settings.model}
                   onChange={e => setModel(e.target.value)}
                   className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs font-mono"
                 />
               </label>
             </div>
-            <p className="mt-2 text-xs text-amber-700">
-              💡 OpenAI 한도 초과 (429) 발생 시: 결제 정보 확인하거나 <span className="font-mono">gpt-3.5-turbo</span>로 전환.
-            </p>
           </section>
 
           <section>

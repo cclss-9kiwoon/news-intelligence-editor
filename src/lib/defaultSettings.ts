@@ -1,4 +1,5 @@
 import type { Settings, RssSource } from '../types';
+import { DEFAULT_PROVIDER, PROVIDERS } from '../types';
 
 export const DEFAULT_RSS_SOURCES: RssSource[] = [
   { id: 'yna-news', name: '연합뉴스 속보', url: 'https://www.yna.co.kr/rss/news.xml', enabled: true },
@@ -11,7 +12,9 @@ export const DEFAULT_RSS_SOURCES: RssSource[] = [
 ];
 
 export const DEFAULT_SETTINGS: Settings = {
+  provider: DEFAULT_PROVIDER,
   apiKey: '',
+  apiBaseUrl: PROVIDERS[DEFAULT_PROVIDER].baseUrl,
   rss2jsonApiKey: '',
   model: 'gpt-4o-mini',
   stylePreset: 'kpop',

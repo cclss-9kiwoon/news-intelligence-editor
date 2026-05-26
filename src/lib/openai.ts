@@ -1,6 +1,11 @@
 import type { ModelId } from '../types';
 
-const ENDPOINT = 'https://api.openai.com/v1/chat/completions';
+const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
+
+function buildEndpoint(baseUrl: string): string {
+  const trimmed = (baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, '');
+  return `${trimmed}/chat/completions`;
+}
 
 export class OpenAIError extends Error {
   status: number;
@@ -17,12 +22,13 @@ export type ChatJsonArgs = {
   system: string;
   user: string;
   temperature?: number;
+  baseUrl?: string;
 };
 
 export async function chatJson<T = unknown>(args: ChatJsonArgs): Promise<T> {
   if (!args.apiKey) throw new OpenAIError('API key is empty', 0);
 
-  const res = await fetch(ENDPOINT, {
+  const res = await fetch(buildEndpoint(args.baseUrl || DEFAULT_BASE_URL), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
