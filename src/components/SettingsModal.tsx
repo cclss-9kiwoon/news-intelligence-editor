@@ -1,0 +1,214 @@
+import { useState } from 'react';
+import { X, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
+import { useSettings } from '../state/SettingsContext';
+import { STYLE_PRESETS } from '../lib/styles';
+import { useHistory } from '../state/HistoryContext';
+import type { StylePresetKey, ModelId } from '../types';
+
+type Props = { open: boolean; onClose: () => void };
+
+export function SettingsModal({ open, onClose }: Props) {
+  const {
+    settings, setApiKey, setModel, setStylePreset, setCustomStyleInstruction,
+    setRssSources, toggleRssSource, setSimulatorEnabled, setSimulatorIntervalSec,
+    setAlertSoundEnabled, setBrowserNotificationsEnabled,
+  } = useSettings();
+  const { clear } = useHistory();
+  const [showKey, setShowKey] = useState(false);
+  const [newRssName, setNewRssName] = useState('');
+  const [newRssUrl, setNewRssUrl] = useState('');
+
+  if (!open) return null;
+
+  const addRss = () => {
+    if (!newRssName.trim() || !newRssUrl.trim()) return;
+    setRssSources([
+      ...settings.rssSources,
+      { id: `custom-${Date.now()}`, name: newRssName.trim(), url: newRssUrl.trim(), enabled: true },
+    ]);
+    setNewRssName(''); setNewRssUrl('');
+  };
+
+  const removeRss = (id: string) => {
+    setRssSources(settings.rssSources.filter(r => r.id !== id));
+  };
+
+  const requestNotifications = async () => {
+    if (!('Notification' in window)) { alert('브라우저가 알림을 지원하지 않습니다.'); return; }
+    const result = await Notification.requestPermission();
+    setBrowserNotificationsEnabled(result === 'granted');
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
+          <h2 className="text-lg font-semibold">⚙ 설정</h2>
+          <button onClick={onClose} className="rounded p-1 hover:bg-slate-100" aria-label="닫기">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-6 p-5">
+          <section>
+            <h3 className="mb-2 font-semibold">OpenAI API 키</h3>
+            <div className="flex gap-2">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={settings.apiKey}
+                onChange={e => setApiKey(e.target.value)}
+                placeholder="sk-..."
+                className="flex-1 rounded border border-slate-300 px-3 py-2 text-sm font-mono"
+              />
+              <button
+                onClick={() => setShowKey(v => !v)}
+                className="rounded border border-slate-300 px-2 hover:bg-slate-50"
+                aria-label="토글"
+              >
+                {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">키는 이 브라우저의 localStorage에만 저장됩니다.</p>
+          </section>
+
+          <section>
+            <h3 className="mb-2 font-semibold">모델</h3>
+            <div className="flex gap-3 text-sm">
+              {(['gpt-4o-mini', 'gpt-4o'] as ModelId[]).map(m => (
+                <label key={m} className="flex items-center gap-1">
+                  <input
+                    type="radio"
+                    checked={settings.model === m}
+                    onChange={() => setModel(m)}
+                  />
+                  {m}
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="mb-2 font-semibold">글 스타일</h3>
+            <select
+              value={settings.stylePreset}
+              onChange={e => setStylePreset(e.target.value as StylePresetKey)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+            >
+              {(Object.entries(STYLE_PRESETS) as Array<[StylePresetKey, typeof STYLE_PRESETS.kpop]>).map(([k, v]) => (
+                <option key={k} value={k}>{v.label}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              {STYLE_PRESETS[settings.stylePreset].instruction || '아래에 사용자 지침을 입력하세요.'}
+            </p>
+            {settings.stylePreset === 'custom' && (
+              <textarea
+                value={settings.customStyleInstruction}
+                onChange={e => setCustomStyleInstruction(e.target.value)}
+                placeholder="원하는 스타일 지침을 영어로 입력 (예: 'Casual TIME magazine style with strong leads')"
+                className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm h-20"
+              />
+            )}
+          </section>
+
+          <section>
+            <h3 className="mb-2 font-semibold">RSS 소스</h3>
+            <ul className="space-y-1 text-sm">
+              {settings.rssSources.map(r => (
+                <li key={r.id} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={r.enabled}
+                    onChange={() => toggleRssSource(r.id)}
+                  />
+                  <span className="flex-1 truncate">{r.name}</span>
+                  <span className="truncate text-xs text-slate-400 w-48">{r.url}</span>
+                  <button
+                    onClick={() => removeRss(r.id)}
+                    className="rounded p-1 hover:bg-red-50 text-red-600"
+                    aria-label="삭제"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex gap-2">
+              <input
+                value={newRssName}
+                onChange={e => setNewRssName(e.target.value)}
+                placeholder="이름"
+                className="w-32 rounded border border-slate-300 px-2 py-1 text-sm"
+              />
+              <input
+                value={newRssUrl}
+                onChange={e => setNewRssUrl(e.target.value)}
+                placeholder="RSS URL"
+                className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm"
+              />
+              <button
+                onClick={addRss}
+                className="flex items-center gap-1 rounded bg-slate-900 px-3 py-1 text-sm text-white"
+              >
+                <Plus size={14} /> 추가
+              </button>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="mb-2 font-semibold">알림</h3>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.simulatorEnabled}
+                onChange={e => setSimulatorEnabled(e.target.checked)}
+              />
+              속보 시뮬레이터 사용 (데모용)
+            </label>
+            <label className="mt-1 flex items-center gap-2 text-sm">
+              <span>시뮬레이터 주기:</span>
+              <select
+                value={settings.simulatorIntervalSec}
+                onChange={e => setSimulatorIntervalSec(Number(e.target.value))}
+                className="rounded border border-slate-300 px-2 py-0.5 text-sm"
+              >
+                <option value={30}>30초</option>
+                <option value={60}>60초</option>
+                <option value={90}>90초</option>
+                <option value={120}>120초</option>
+              </select>
+            </label>
+            <label className="mt-1 flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.alertSoundEnabled}
+                onChange={e => setAlertSoundEnabled(e.target.checked)}
+              />
+              알림음 재생
+            </label>
+            <button
+              onClick={requestNotifications}
+              className="mt-2 rounded border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50"
+            >
+              브라우저 알림 권한 요청
+              {settings.browserNotificationsEnabled && <span className="ml-1 text-green-600">✓</span>}
+            </button>
+          </section>
+
+          <section>
+            <h3 className="mb-2 font-semibold">이력 관리</h3>
+            <button
+              onClick={() => { if (confirm('변환 이력을 모두 삭제하시겠습니까?')) clear(); }}
+              className="rounded border border-red-300 px-3 py-1 text-sm text-red-700 hover:bg-red-50"
+            >
+              변환 이력 전체 삭제
+            </button>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
