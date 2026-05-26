@@ -1,18 +1,20 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import type { Article, ConvertedResult } from '../types';
-import { runChain, formatChannels } from '../lib/promptChain';
+import type { Article, ConvertedResult, DraftLanguage } from '../types';
+import { analyzeKorean, translateDraft, formatChannels, buildInitialResult } from '../lib/promptChain';
 import { OpenAIError } from '../lib/openai';
 import { useSettings } from './SettingsContext';
 import { useHistory } from './HistoryContext';
 
-type Status = 'idle' | 'converting' | 'regenerating' | 'error';
+type Status = 'idle' | 'analyzing' | 'translating' | 'generating' | 'error';
 
 type Ctx = {
   status: Status;
   error: string | null;
   currentResult: ConvertedResult | null;
-  convert: (articles: Article[]) => Promise<void>;
-  regenerateChannels: (editedDraft: string) => Promise<void>;
+  analyze: (articles: Article[]) => Promise<void>;
+  setDraftText: (text: string) => void;
+  switchLanguage: (target: DraftLanguage) => Promise<void>;
+  regenerateChannels: () => Promise<void>;
   loadResult: (result: ConvertedResult) => void;
   clearError: () => void;
 };
@@ -20,7 +22,15 @@ type Ctx = {
 const ConversionCtx = createContext<Ctx | null>(null);
 
 function toErrorMessage(err: unknown): string {
-  if (err instanceof OpenAIError) return `OpenAI error (${err.status}): ${err.message}`;
+  if (err instanceof OpenAIError) {
+    if (err.status === 429) {
+      return `OpenAI 한도 초과 (429): ${err.message}\n→ 결제 정보 확인, 또는 ⚙ 설정 / 워크벤치 헤더에서 'gpt-3.5-turbo' 같은 더 저렴한 모델로 전환해 보세요.`;
+    }
+    if (err.status === 401) {
+      return `OpenAI 인증 실패 (401): API 키가 잘못되었거나 만료. ⚙ 설정에서 다시 입력하세요.`;
+    }
+    return `OpenAI 오류 (${err.status}): ${err.message}`;
+  }
   if (err instanceof Error) return err.message;
   return String(err);
 }
@@ -32,13 +42,14 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [currentResult, setCurrentResult] = useState<ConvertedResult | null>(null);
 
-  const convert = useCallback(async (articles: Article[]) => {
+  const analyze = useCallback(async (articles: Article[]) => {
     if (!settings.apiKey) { setError('NO_API_KEY'); return; }
     if (articles.length === 0) { setError('변환할 기사가 없습니다.'); return; }
-    setStatus('converting');
+    setStatus('analyzing');
     setError(null);
     try {
-      const result = await runChain(articles, settings);
+      const analyzed = await analyzeKorean(articles, settings);
+      const result = buildInitialResult(articles, analyzed, settings);
       setCurrentResult(result);
       addEntry(result);
       setStatus('idle');
@@ -48,21 +59,85 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
     }
   }, [settings, addEntry]);
 
-  const regenerateChannels = useCallback(async (editedDraft: string) => {
-    if (!currentResult) { setError('재생성할 변환 결과가 없습니다.'); return; }
+  const setDraftText = useCallback((text: string) => {
+    setCurrentResult(prev => {
+      if (!prev) return prev;
+      return { ...prev, drafts: { ...prev.drafts, [prev.activeLanguage]: text } };
+    });
+  }, []);
+
+  const switchLanguage = useCallback(async (target: DraftLanguage) => {
+    if (!currentResult) return;
     if (!settings.apiKey) { setError('NO_API_KEY'); return; }
-    setStatus('regenerating');
+    if (currentResult.activeLanguage === target) return;
+
+    const existing = currentResult.drafts[target];
+    if (existing && existing.trim().length > 0) {
+      setCurrentResult({ ...currentResult, activeLanguage: target });
+      return;
+    }
+
+    const source: DraftLanguage = target === 'ko' ? 'en' : 'ko';
+    const sourceText = currentResult.drafts[source];
+    if (!sourceText.trim()) { setError(`${source === 'ko' ? '한국어' : '영문'} 드래프트가 비어있어 번역할 수 없습니다.`); return; }
+
+    setStatus('translating');
+    setError(null);
+    try {
+      const translated = await translateDraft({ text: sourceText, from: source, to: target, settings });
+      const updated: ConvertedResult = {
+        ...currentResult,
+        drafts: { ...currentResult.drafts, [target]: translated },
+        activeLanguage: target,
+      };
+      setCurrentResult(updated);
+      addEntry(updated);
+      setStatus('idle');
+    } catch (err) {
+      setError(toErrorMessage(err));
+      setStatus('error');
+    }
+  }, [currentResult, settings, addEntry]);
+
+  const regenerateChannels = useCallback(async () => {
+    if (!currentResult) return;
+    if (!settings.apiKey) { setError('NO_API_KEY'); return; }
+
+    let englishDraft = currentResult.drafts.en;
+    let workingResult = currentResult;
+
+    if (!englishDraft.trim()) {
+      if (!currentResult.drafts.ko.trim()) { setError('드래프트가 비어있습니다.'); return; }
+      setStatus('translating');
+      setError(null);
+      try {
+        englishDraft = await translateDraft({
+          text: currentResult.drafts.ko, from: 'ko', to: 'en', settings,
+        });
+        workingResult = {
+          ...currentResult,
+          drafts: { ...currentResult.drafts, en: englishDraft },
+        };
+        setCurrentResult(workingResult);
+      } catch (err) {
+        setError(toErrorMessage(err));
+        setStatus('error');
+        return;
+      }
+    }
+
+    setStatus('generating');
     setError(null);
     try {
       const { channels, bannedHits, factReport } = await formatChannels({
-        editedDraft,
-        facts: currentResult.facts,
+        englishDraft,
+        facts: workingResult.facts,
         settings,
       });
       const updated: ConvertedResult = {
-        ...currentResult,
-        editedDraft,
+        ...workingResult,
         channels,
+        channelsGenerated: true,
         bannedHits,
         factReport,
       };
@@ -79,7 +154,11 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
   const clearError = useCallback(() => setError(null), []);
 
   return (
-    <ConversionCtx.Provider value={{ status, error, currentResult, convert, regenerateChannels, loadResult, clearError }}>
+    <ConversionCtx.Provider value={{
+      status, error, currentResult,
+      analyze, setDraftText, switchLanguage, regenerateChannels,
+      loadResult, clearError,
+    }}>
       {children}
     </ConversionCtx.Provider>
   );

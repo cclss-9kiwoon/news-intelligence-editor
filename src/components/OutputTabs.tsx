@@ -25,6 +25,16 @@ export function OutputTabs() {
     );
   }
 
+  if (!currentResult.channelsGenerated) {
+    return (
+      <div className="flex h-40 flex-col items-center justify-center gap-2 text-sm text-slate-500">
+        <span>한국어 드래프트를 검토한 뒤 워크벤치의</span>
+        <span><span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800 font-semibold">채널 생성</span> 버튼을 눌러주세요.</span>
+        <span className="text-xs text-slate-400">(영문이 비어있으면 자동 번역 후 생성됩니다.)</span>
+      </div>
+    );
+  }
+
   const text = currentResult.channels[active];
   const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
   const bannedCount = currentResult.bannedHits[active].length;

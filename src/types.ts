@@ -41,7 +41,21 @@ export type FactReport = {
 };
 
 export type StylePresetKey = 'kpop' | 'ap' | 'bloomberg' | 'techcrunch' | 'custom';
-export type ModelId = 'gpt-4o-mini' | 'gpt-4o';
+export type ModelId = string;
+
+export type ModelOption = {
+  id: string;
+  label: string;
+  note?: string;
+};
+
+export const MODEL_OPTIONS: ModelOption[] = [
+  { id: 'gpt-3.5-turbo', label: 'gpt-3.5-turbo', note: '최저가 · 무료 한도/저예산용' },
+  { id: 'gpt-4o-mini', label: 'gpt-4o-mini', note: '기본 · 권장' },
+  { id: 'gpt-4o', label: 'gpt-4o', note: '고품질 · 비용 약 10배' },
+];
+
+export type DraftLanguage = 'ko' | 'en';
 
 export type Cluster = {
   id: string;
@@ -59,13 +73,17 @@ export type ConvertedResult = {
   valueScore: number;
   valueReason: string;
   facts: Facts;
-  englishDraft: string;
-  editedDraft?: string;
+  drafts: {
+    ko: string;
+    en: string;
+  };
+  activeLanguage: DraftLanguage;
   channels: {
     site: string;
     x: string;
     medium: string;
   };
+  channelsGenerated: boolean;
   factReport: FactReport;
   bannedHits: Record<'site' | 'x' | 'medium', string[]>;
   stylePreset: StylePresetKey;
@@ -84,11 +102,11 @@ export type Settings = {
   browserNotificationsEnabled: boolean;
 };
 
-export type AnalyzeAndTranslateOutput = {
+export type AnalyzeKoreanOutput = {
   valueScore: number;
   valueReason: string;
   facts: Facts;
-  englishDraft: string;
+  koreanDraft: string;
 };
 
 export type ChannelOutput = {

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Sparkles, AlertOctagon, ChevronLeft, ChevronRight, RotateCw } from 'lucide-react';
+import { Loader2, Sparkles, AlertOctagon, ChevronLeft, ChevronRight, RotateCw, Languages } from 'lucide-react';
 import { useClusters } from '../state/ClustersContext';
 import { useConversion } from '../state/ConversionContext';
 import { useSettings } from '../state/SettingsContext';
+import { MODEL_OPTIONS, type DraftLanguage } from '../types';
 
 type Props = {
   onMissingKey: () => void;
@@ -10,68 +11,87 @@ type Props = {
 
 export function Workbench({ onMissingKey }: Props) {
   const { selectedCluster, selectedArticles } = useClusters();
-  const { settings } = useSettings();
-  const { status, error, currentResult, convert, regenerateChannels, clearError } = useConversion();
+  const { settings, setModel } = useSettings();
+  const {
+    status, error, currentResult,
+    analyze, setDraftText, switchLanguage, regenerateChannels, clearError,
+  } = useConversion();
 
   const [sourceIdx, setSourceIdx] = useState(0);
-  const [draftEdit, setDraftEdit] = useState('');
-  const [draftDirty, setDraftDirty] = useState(false);
 
-  useEffect(() => {
-    setSourceIdx(0);
-  }, [selectedCluster?.id]);
+  useEffect(() => { setSourceIdx(0); }, [selectedCluster?.id]);
 
-  useEffect(() => {
-    if (currentResult) {
-      setDraftEdit(currentResult.editedDraft ?? currentResult.englishDraft);
-      setDraftDirty(false);
-    } else {
-      setDraftEdit('');
-      setDraftDirty(false);
-    }
-  }, [currentResult?.id, currentResult?.englishDraft, currentResult?.editedDraft]);
-
-  const triggerConvert = () => {
+  const triggerAnalyze = () => {
     if (selectedArticles.length === 0) return;
     if (!settings.apiKey) { onMissingKey(); return; }
-    convert(selectedArticles);
+    analyze(selectedArticles);
+  };
+
+  const triggerSwitchLang = (target: DraftLanguage) => {
+    if (!currentResult) return;
+    if (!settings.apiKey) { onMissingKey(); return; }
+    switchLanguage(target);
   };
 
   const triggerRegenerate = () => {
     if (!currentResult) return;
     if (!settings.apiKey) { onMissingKey(); return; }
-    regenerateChannels(draftEdit);
-    setDraftDirty(false);
-  };
-
-  const onDraftChange = (v: string) => {
-    setDraftEdit(v);
-    setDraftDirty(currentResult ? v !== (currentResult.editedDraft ?? currentResult.englishDraft) : false);
+    regenerateChannels();
   };
 
   const totalSources = selectedArticles.length;
   const currentSource = selectedArticles[sourceIdx];
 
+  const activeLang = currentResult?.activeLanguage ?? 'ko';
+  const currentText = currentResult ? currentResult.drafts[activeLang] : '';
+  const isBusy = status === 'analyzing' || status === 'translating' || status === 'generating';
+
+  const statusLabel: Record<typeof status, string> = {
+    idle: '',
+    analyzing: '종합 분석 중…',
+    translating: '번역 중…',
+    generating: '채널 생성 중…',
+    error: '',
+  };
+
   return (
     <section className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-2">
         <h2 className="min-w-0 truncate text-sm font-semibold">
           {selectedCluster
             ? `📝 ${selectedCluster.representativeTitle} · ${totalSources}개 소스`
             : '👈 왼쪽에서 사건을 선택하세요'}
         </h2>
-        <button
-          disabled={!selectedCluster || status === 'converting' || status === 'regenerating'}
-          onClick={triggerConvert}
-          className="flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {status === 'converting' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-          {status === 'converting' ? '종합 변환 중…' : '가치 평가 & 종합 변환'}
-        </button>
+        <div className="flex items-center gap-2 flex-none">
+          <label className="flex items-center gap-1 text-xs text-slate-500">
+            모델
+            <select
+              value={settings.model}
+              onChange={e => setModel(e.target.value)}
+              className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs"
+              title="OpenAI 모델 선택"
+            >
+              {MODEL_OPTIONS.map(m => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+              {!MODEL_OPTIONS.some(m => m.id === settings.model) && (
+                <option value={settings.model}>{settings.model} (custom)</option>
+              )}
+            </select>
+          </label>
+          <button
+            disabled={!selectedCluster || isBusy}
+            onClick={triggerAnalyze}
+            className="flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {status === 'analyzing' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            {status === 'analyzing' ? '분석 중…' : '가치 평가 & 종합 (한국어)'}
+          </button>
+        </div>
       </div>
 
       {error && error !== 'NO_API_KEY' && (
-        <div className="flex items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800">
+        <div className="flex items-start gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 whitespace-pre-wrap">
           <AlertOctagon size={16} className="mt-0.5 flex-none" />
           <span className="flex-1">{error}</span>
           <button onClick={clearError} className="text-xs underline">닫기</button>
@@ -125,20 +145,44 @@ export function Workbench({ onMissingKey }: Props) {
         </div>
 
         <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white">
-          <div className="flex items-center justify-between border-b border-slate-100 px-3 py-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-1.5">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              영문 종합 드래프트 · 가치 {currentResult?.valueScore ?? '—'}/10
-              {draftDirty && <span className="ml-2 rounded bg-amber-100 px-1.5 text-amber-700 normal-case">수정됨</span>}
+              종합 드래프트 · 가치 {currentResult?.valueScore ?? '—'}/10
+              {isBusy && <span className="ml-2 text-indigo-600 normal-case">{statusLabel[status]}</span>}
             </h3>
-            <button
-              onClick={triggerRegenerate}
-              disabled={!currentResult || !draftDirty || status === 'converting' || status === 'regenerating'}
-              className="flex items-center gap-1 rounded-md bg-amber-600 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-              title="편집한 드래프트로 3채널 출력 다시 생성"
-            >
-              {status === 'regenerating' ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
-              채널 재생성
-            </button>
+            <div className="flex items-center gap-1">
+              <div className="flex overflow-hidden rounded-md border border-slate-300 text-xs">
+                {(['ko', 'en'] as DraftLanguage[]).map(lang => (
+                  <button
+                    key={lang}
+                    onClick={() => triggerSwitchLang(lang)}
+                    disabled={!currentResult || isBusy}
+                    className={
+                      'px-2 py-1 ' +
+                      (activeLang === lang
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-white text-slate-600 hover:bg-slate-100') +
+                      (!currentResult || isBusy ? ' opacity-50 cursor-not-allowed' : '')
+                    }
+                    title={lang === 'ko' ? '한국어 보기' : '영문 보기 (없으면 자동 번역)'}
+                  >
+                    {lang === 'ko' ? 'KO' : 'EN'}
+                    {currentResult && !currentResult.drafts[lang].trim() && activeLang !== lang && (
+                      <Languages size={10} className="ml-1 inline" />
+                    )}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={triggerRegenerate}
+                disabled={!currentResult || isBusy}
+                className="flex items-center gap-1 rounded-md bg-amber-600 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+                title="현재 드래프트로 3채널 출력 (재)생성"
+              >
+                {status === 'generating' ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
+                {currentResult?.channelsGenerated ? '채널 재생성' : '채널 생성'}
+              </button>
+            </div>
           </div>
           {currentResult ? (
             <>
@@ -146,15 +190,19 @@ export function Workbench({ onMissingKey }: Props) {
                 {currentResult.valueReason}
               </p>
               <textarea
-                value={draftEdit}
-                onChange={e => onDraftChange(e.target.value)}
+                value={currentText}
+                onChange={e => setDraftText(e.target.value)}
                 className="flex-1 min-h-0 resize-none p-3 text-sm text-slate-800 outline-none"
-                placeholder="여기에 영문 드래프트가 생성되면 직접 편집할 수 있습니다."
+                placeholder={
+                  activeLang === 'ko'
+                    ? '여기에 한국어 종합 드래프트가 생성되면 직접 편집하세요.'
+                    : '영문이 비어있습니다. EN 버튼을 누르면 한국어 드래프트를 자동 번역합니다.'
+                }
               />
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-sm text-slate-400">
-              사건을 선택하고 위의 버튼을 눌러 종합 변환을 시작하세요.
+              사건을 선택하고 위의 버튼을 눌러 한국어 종합 드래프트를 생성하세요.
             </div>
           )}
         </div>

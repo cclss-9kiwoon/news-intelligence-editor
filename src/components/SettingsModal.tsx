@@ -3,7 +3,7 @@ import { X, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 import { useSettings } from '../state/SettingsContext';
 import { STYLE_PRESETS } from '../lib/styles';
 import { useHistory } from '../state/HistoryContext';
-import type { StylePresetKey, ModelId } from '../types';
+import { MODEL_OPTIONS, type StylePresetKey } from '../types';
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -76,18 +76,35 @@ export function SettingsModal({ open, onClose }: Props) {
 
           <section>
             <h3 className="mb-2 font-semibold">모델</h3>
-            <div className="flex gap-3 text-sm">
-              {(['gpt-4o-mini', 'gpt-4o'] as ModelId[]).map(m => (
-                <label key={m} className="flex items-center gap-1">
+            <div className="space-y-1 text-sm">
+              {MODEL_OPTIONS.map(m => (
+                <label key={m.id} className="flex items-start gap-2">
                   <input
                     type="radio"
-                    checked={settings.model === m}
-                    onChange={() => setModel(m)}
+                    checked={settings.model === m.id}
+                    onChange={() => setModel(m.id)}
+                    className="mt-0.5"
                   />
-                  {m}
+                  <span>
+                    <span className="font-mono">{m.label}</span>
+                    {m.note && <span className="ml-2 text-xs text-slate-500">{m.note}</span>}
+                  </span>
                 </label>
               ))}
+              <label className="mt-2 flex items-center gap-2">
+                <span className="text-xs text-slate-500">커스텀:</span>
+                <input
+                  type="text"
+                  placeholder="모델 ID 직접 입력 (예: gpt-4o-2024-08-06)"
+                  value={MODEL_OPTIONS.some(m => m.id === settings.model) ? '' : settings.model}
+                  onChange={e => setModel(e.target.value)}
+                  className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs font-mono"
+                />
+              </label>
             </div>
+            <p className="mt-2 text-xs text-amber-700">
+              💡 OpenAI 한도 초과 (429) 발생 시: 결제 정보 확인하거나 <span className="font-mono">gpt-3.5-turbo</span>로 전환.
+            </p>
           </section>
 
           <section>
