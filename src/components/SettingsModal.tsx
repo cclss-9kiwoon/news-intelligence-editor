@@ -1,16 +1,15 @@
 import { useState } from 'react';
 import { X, Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
 import { useSettings } from '../state/SettingsContext';
-import { STYLE_PRESETS } from '../lib/styles';
 import { useHistory } from '../state/HistoryContext';
-import { PROVIDERS, type StylePresetKey, type ProviderId } from '../types';
+import { PROVIDERS, type ProviderId } from '../types';
 
 type Props = { open: boolean; onClose: () => void };
 
 export function SettingsModal({ open, onClose }: Props) {
   const {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
-    setModel, setStylePreset, setCustomStyleInstruction,
+    setModel, setCustomStyleInstruction,
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold,
     setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled,
@@ -161,27 +160,20 @@ export function SettingsModal({ open, onClose }: Props) {
           </section>
 
           <section>
-            <h3 className="mb-2 font-semibold">글 스타일</h3>
-            <select
-              value={settings.stylePreset}
-              onChange={e => setStylePreset(e.target.value as StylePresetKey)}
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
-            >
-              {(Object.entries(STYLE_PRESETS) as Array<[StylePresetKey, typeof STYLE_PRESETS.kpop]>).map(([k, v]) => (
-                <option key={k} value={k}>{v.label}</option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-slate-500">
-              {STYLE_PRESETS[settings.stylePreset].instruction || '아래에 사용자 지침을 입력하세요.'}
+            <h3 className="mb-2 font-semibold">가치 기준 + 말투 통합 지침</h3>
+            <p className="mb-2 text-xs text-slate-500">
+              이 단일 필드 하나가 <b>어떤 사건을 Pass/Fail로 선별할지(가치 기준)</b>와
+              <b> 드래프트의 말투/문체</b>를 모두 결정합니다. 비워두면 기본 한국어 저널리즘 지침이 적용됩니다.
             </p>
-            {settings.stylePreset === 'custom' && (
-              <textarea
-                value={settings.customStyleInstruction}
-                onChange={e => setCustomStyleInstruction(e.target.value)}
-                placeholder="원하는 스타일 지침을 영어로 입력 (예: 'Casual TIME magazine style with strong leads')"
-                className="mt-2 w-full rounded border border-slate-300 px-3 py-2 text-sm h-20"
-              />
-            )}
+            <textarea
+              value={settings.customStyleInstruction}
+              onChange={e => setCustomStyleInstruction(e.target.value)}
+              placeholder={
+                "예) 가치 기준: 단순 가십·홍보성 기사는 보류, 산업/정책에 영향 있는 사건만 통과.\n" +
+                "말투: 신뢰감 있는 K-pop 전문 매체 톤, 짧고 명료한 문장, 과장 표현 자제."
+              }
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm h-32"
+            />
           </section>
 
           <section>

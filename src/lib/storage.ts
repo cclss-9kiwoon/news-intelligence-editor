@@ -26,5 +26,6 @@ export function removeKey(key: string): void {
 
 export const STORAGE_KEYS = {
   settings: 'nie:settings',
-  history: 'nie:history',
+  // v2: 단일 드래프트 스키마. 구버전 'nie:history'(3채널/이중언어)는 로드하지 않고 폐기.
+  history: 'nie:history.v2',
 } as const;

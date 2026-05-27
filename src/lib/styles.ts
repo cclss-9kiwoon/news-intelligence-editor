@@ -1,50 +1,10 @@
-import type { StylePresetKey } from '../types';
+// 단일 통합 지침(가치 기준 + 말투). 에디터가 settings.customStyleInstruction를
+// 비워두면 이 기본값이 엔진에 전달된다.
+export const DEFAULT_STYLE_INSTRUCTION =
+  '발행 가치 기준: 단순 가십·홍보성·근거가 빈약한 기사는 보류(Fail). ' +
+  '사실관계가 분명하고 독자 관심도가 높은 사건은 통과(Pass). ' +
+  '말투: 신뢰감 있는 한국어 저널리즘 문체. 짧고 명료한 문장, 과장·홍보 표현 자제, 핵심 사실 우선.';
 
-type Preset = { label: string; instruction: string; examples: string[] };
-
-export const STYLE_PRESETS: Record<StylePresetKey, Preset> = {
-  kpop: {
-    label: 'K-pop / 연예 / 가십',
-    instruction:
-      'Casual, fan-friendly tone. Use industry terms (idol, comeback, bias, agency, fandom name). ' +
-      'Direct quotes from sources when available. Conversational sentence rhythm. ' +
-      'Reference fan reactions when appropriate. Avoid academic vocabulary. ' +
-      'Keep paragraphs short (2-3 sentences). Punchy headlines.',
-    examples: ['Soompi', 'Allkpop', 'JustJared'],
-  },
-  ap: {
-    label: 'AP / Reuters 통신사',
-    instruction:
-      'Inverted pyramid structure. Lead sentence answers 5W1H. Neutral, third-person voice. ' +
-      'Short declarative sentences. Attribution for every claim ("according to ...", "officials said"). ' +
-      'No emojis. No editorializing.',
-    examples: ['AP', 'Reuters'],
-  },
-  bloomberg: {
-    label: 'Bloomberg / FT 경제지',
-    instruction:
-      'Data-forward. Lead with the number, trend, or market impact. Cite specific figures, dates, ' +
-      'and percentage changes. Quote named analysts or executives. Formal register. ' +
-      'Explain business implications.',
-    examples: ['Bloomberg', 'Financial Times'],
-  },
-  techcrunch: {
-    label: 'TechCrunch / Verge 테크',
-    instruction:
-      'Reader-friendly, slightly informal. Explain context for non-experts. Use active voice. ' +
-      'Mention competitors and ecosystem. Avoid jargon without definition. Light editorial framing OK.',
-    examples: ['TechCrunch', 'The Verge'],
-  },
-  custom: {
-    label: '커스텀',
-    instruction: '',
-    examples: [],
-  },
-};
-
-export function getStyleInstruction(key: StylePresetKey, customInstruction: string): string {
-  if (key === 'custom') {
-    return customInstruction.trim() || STYLE_PRESETS.kpop.instruction;
-  }
-  return STYLE_PRESETS[key].instruction;
+export function getStyleInstruction(customInstruction: string): string {
+  return customInstruction.trim() || DEFAULT_STYLE_INSTRUCTION;
 }

@@ -17,7 +17,6 @@ export const DEFAULT_SETTINGS: Settings = {
   apiBaseUrl: PROVIDERS[DEFAULT_PROVIDER].baseUrl,
   rss2jsonApiKey: '',
   model: 'gpt-4o-mini',
-  stylePreset: 'kpop',
   customStyleInstruction: '',
   rssSources: DEFAULT_RSS_SOURCES,
   rssPollMinutes: 5,

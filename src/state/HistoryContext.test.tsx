@@ -5,16 +5,15 @@ import type { ConvertedResult } from '../types';
 
 function make(id: string): ConvertedResult {
   return {
-    id, sourceArticleIds: ['a'], sourceTitle: 't', createdAt: parseInt(id), valueScore: 5,
-    valueReason: '', facts: { people: [], numbers: [], places: [], dates: [] },
-    drafts: { ko: '', en: '' }, activeLanguage: 'ko',
-    channels: { ko: { site: '', x: '', medium: '' }, en: { site: '', x: '', medium: '' } },
-    channelsGenerated: { ko: false, en: false },
-    bannedHits: {
-      ko: { site: [], x: [], medium: [] },
-      en: { site: [], x: [], medium: [] },
-    },
-    stylePreset: 'kpop', model: 'gpt-4o-mini',
+    schemaVersion: 2,
+    id,
+    sourceArticleIds: ['a'],
+    sourceTitle: 't',
+    createdAt: parseInt(id) || Date.now(),
+    valueDecision: 'Pass',
+    holdReason: '',
+    storyDraft: '# 1. 헤드라인',
+    model: 'gpt-4o-mini',
   };
 }
 
@@ -37,11 +36,11 @@ describe('HistoryContext', () => {
     expect(screen.getByTestId('count')).toHaveTextContent('0');
   });
 
-  it('adds entries and persists', () => {
+  it('adds entries and persists under the v2 key', () => {
     render(<HistoryProvider><Probe /></HistoryProvider>);
     act(() => screen.getByText('add').click());
     expect(screen.getByTestId('count')).toHaveTextContent('1');
-    expect(localStorage.getItem('nie:history')).toBeTruthy();
+    expect(localStorage.getItem('nie:history.v2')).toBeTruthy();
   });
 
   it('caps history at 20 entries (FIFO)', () => {
@@ -57,5 +56,16 @@ describe('HistoryContext', () => {
     act(() => screen.getByText('add').click());
     act(() => screen.getByText('clear').click());
     expect(screen.getByTestId('count')).toHaveTextContent('0');
+  });
+
+  it('version guard: discards entries that are not the current schema version', () => {
+    // Stale entries (no/old schemaVersion) stored under the v2 key are dropped on load.
+    localStorage.setItem('nie:history.v2', JSON.stringify([
+      { id: 'old1', sourceTitle: 'legacy', channels: {} },           // no schemaVersion
+      { ...make('111'), schemaVersion: 1 },                          // wrong version
+      make('222'),                                                   // valid v2
+    ]));
+    render(<HistoryProvider><Probe /></HistoryProvider>);
+    expect(screen.getByTestId('count')).toHaveTextContent('1');
   });
 });

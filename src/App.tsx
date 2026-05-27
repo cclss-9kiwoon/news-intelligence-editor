@@ -9,8 +9,7 @@ import { Header } from './components/Header';
 import { AlertBanner } from './components/AlertBanner';
 import { ClusterPicker } from './components/ClusterPicker';
 import { Workbench } from './components/Workbench';
-import { FactCheckLog } from './components/FactCheckLog';
-import { OutputTabs } from './components/OutputTabs';
+import { StoryPreview } from './components/StoryPreview';
 import { SettingsModal } from './components/SettingsModal';
 import { HistoryPanel } from './components/HistoryPanel';
 import { GuideModal } from './components/GuideModal';
@@ -70,10 +69,7 @@ function AppShell() {
             }
             bottom={
               <div className="flex h-full min-h-0 flex-col overflow-hidden">
-                <FactCheckLog />
-                <div className="flex-1 min-h-0 overflow-hidden">
-                  <OutputTabs />
-                </div>
+                <StoryPreview />
               </div>
             }
           />

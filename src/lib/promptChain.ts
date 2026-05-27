@@ -1,41 +1,47 @@
-import type {
-  Article, Settings, ConvertedResult, AnalyzeKoreanOutput, ChannelOutput, Facts, DraftLanguage, ChannelSet, ChannelBannedHits,
-} from '../types';
+import type { Article, Settings, ConvertedResult, StoryOutput } from '../types';
+import { CONVERTED_RESULT_SCHEMA_VERSION } from '../types';
 import { chatJson } from './openai';
-import { scan } from './bannedWords';
-import { getStyleInstruction, STYLE_PRESETS } from './styles';
+import { getStyleInstruction } from './styles';
 
 const BANNED_LIST_FOR_PROMPT =
   'delve, in conclusion, furthermore, testament, moreover, "it is important to note", ' +
   '"not only ... but also", "as an AI", "I think/believe/feel".';
 
-function buildAnalyzeSystem(settings: Settings, stricter: boolean): string {
-  const styleInstruction = getStyleInstruction(settings.stylePreset, settings.customStyleInstruction);
-  const styleLabel = STYLE_PRESETS[settings.stylePreset].label;
-  const stricterNote = stricter
-    ? '\n\nIMPORTANT: 이전 시도에 LLM 상투구/금지어가 들어갔습니다. 평이하고 전문적인 한국어로 다시 작성하세요.'
-    : '';
+function buildStorySystem(settings: Settings): string {
+  const instruction = getStyleInstruction(settings.customStyleInstruction);
   return [
-    '당신은 한국 연예/K-pop 분야의 시니어 에디터입니다.',
-    '여러 매체가 동일한 사건을 다룬 한국어 기사 N건을 입력으로 받습니다.',
-    '당신의 임무: 이 기사들을 교차검증하여 **단일 한국어 종합 드래프트**를 작성합니다.',
-    '각 매체를 따로 번역/요약하지 말고 한 편의 글로 합치세요.',
-    '숫자/날짜/이름이 매체 간 충돌하면 가장 일관된 값을 채택하고 마지막에 "Sources disagree on: ..."로 표기.',
-    '한 매체만 언급한 사실은 본문에 포함하되 인라인으로 "(◯◯ 보도)"로 출처 표시 가능.',
-    `톤/스타일: "${styleLabel}" (한국어로). 가이드: ${styleInstruction}`,
-    `다음 영어 LLM 상투구는 본 글이 영어로 번역될 때도 등장해선 안 되니 사고 단계에서 회피: ${BANNED_LIST_FOR_PROMPT}`,
-    'people/numbers/places/dates 팩트를 원문 그대로 추출 (이름은 한국어 그대로 또는 통상 영문 표기 모두 가능).',
-    '**오직 valid JSON만 출력**:',
+    '당신은 한국 디지털 매체의 시니어 에디터이자 가치 평가관입니다.',
+    '여러 매체가 동일 사건을 다룬 한국어 기사 N건을 입력으로 받습니다.',
+    '',
+    '[에디터 통합 지침 — 가치 기준 + 말투]',
+    instruction,
+    '',
+    '[작업]',
+    '1) 가치 평가: 위 지침의 가치 기준에 비추어 발행 가치가 있는지 Pass/Fail 판정. holdReason에 한국어로 구체 사유.',
+    '2) 종합 드래프트: 기사들을 교차검증해 단일 완결형 내러티브 작성. 매체별 개별 번역/요약 금지, 한 편의 글로 합칠 것.',
+    '',
+    '[MUST]',
+    '- 원문에 없는 인물관계/날짜/수치 추측·창작 금지(Hallucination). 근거 없는 정보 작성 금지.',
+    '- 숫자/날짜/이름이 매체 간 충돌 시 가장 일관된 값 채택 + §4에 "Sources disagree on: ..." 명시.',
+    '- 핵심 엔티티(인물/장소/소속사)를 본문에 누락 없이 자연스럽게 융합.',
+    '- §1~§4는 통합 지침의 말투로 한국어 작성.',
+    '- §5(이미지 프롬프트)는 반드시 순수 영문(Midjourney 호환). 한국어 한 단어도 금지.',
+    '',
+    `[NEVER — 영어 LLM 상투구] ${BANNED_LIST_FOR_PROMPT}`,
+    '사고 단계에서 회피하고 자연스러운 저널리즘 문체로 우회.',
+    '',
+    '[조언일 뿐] valueDecision이 Fail이어도 storyDraft는 끝까지 정상 작성(차단 금지).',
+    '',
+    '오직 valid JSON, 정확히 3개 키:',
     '{',
-    '  "valueScore": number 1-10 (이 사건의 뉴스 가치),',
-    '  "valueReason": string (간단한 이유, 한국어),',
-    '  "facts": { "people": string[], "numbers": string[], "places": string[], "dates": string[] },',
-    '  "koreanDraft": string (400-600자 한국어 종합 드래프트, 전문적인 톤)',
-    '}' + stricterNote,
+    '  "valueDecision": "Pass" | "Fail",',
+    '  "holdReason": "...(한국어)",',
+    '  "storyDraft": "# 1. [헤드라인]\\n\\n## 2. 스토리텔링형 본문\\n...\\n\\n## 3. 연관 키워드 및 태그\\n#키워드\\n\\n## 4. 에디터 코멘트 패널\\n...\\n\\n## 5. AI 이미지 생성용 영문 프롬프트\\n[pure English]"',
+    '}',
   ].join('\n');
 }
 
-function buildAnalyzeUser(articles: Article[]): string {
+function buildStoryUser(articles: Article[]): string {
   const parts: string[] = [`[같은 사건을 다룬 ${articles.length}개 소스 기사]`, ''];
   articles.forEach((a, i) => {
     parts.push(`--- 소스 ${i + 1}: ${a.source} ---`);
@@ -47,143 +53,34 @@ function buildAnalyzeUser(articles: Article[]): string {
   return parts.join('\n');
 }
 
-export async function analyzeKorean(articles: Article[], settings: Settings): Promise<AnalyzeKoreanOutput> {
-  if (articles.length === 0) throw new Error('analyzeKorean requires at least one article');
+export async function generateStory(articles: Article[], settings: Settings): Promise<StoryOutput> {
+  if (articles.length === 0) throw new Error('generateStory requires at least one article');
 
-  const first = await chatJson<AnalyzeKoreanOutput>({
+  return chatJson<StoryOutput>({
     apiKey: settings.apiKey,
     baseUrl: settings.apiBaseUrl,
     model: settings.model,
-    system: buildAnalyzeSystem(settings, false),
-    user: buildAnalyzeUser(articles),
+    system: buildStorySystem(settings),
+    user: buildStoryUser(articles),
     temperature: 0.5,
   });
-  return first;
-}
-
-export type TranslateArgs = {
-  text: string;
-  from: DraftLanguage;
-  to: DraftLanguage;
-  settings: Settings;
-};
-
-export async function translateDraft(args: TranslateArgs): Promise<string> {
-  if (args.from === args.to) return args.text;
-
-  const fromLabel = args.from === 'ko' ? '한국어' : '영어';
-  const toLabel = args.to === 'ko' ? '한국어' : '영어';
-  const styleInstruction = getStyleInstruction(args.settings.stylePreset, args.settings.customStyleInstruction);
-
-  const system = [
-    `You are a professional translator. Translate the given ${fromLabel} draft into ${toLabel}.`,
-    `Preserve facts exactly (people/numbers/places/dates). Keep paragraph structure. Adopt the editorial style: ${styleInstruction}`,
-    args.to === 'en'
-      ? `NEVER use these banned English phrases: ${BANNED_LIST_FOR_PROMPT}`
-      : '평범하고 자연스러운 한국어로.',
-    'Respond ONLY with valid JSON: { "translated": string }',
-  ].join('\n');
-
-  const result = await chatJson<{ translated: string }>({
-    apiKey: args.settings.apiKey,
-    baseUrl: args.settings.apiBaseUrl,
-    model: args.settings.model,
-    system,
-    user: args.text,
-    temperature: 0.3,
-  });
-  return result.translated;
-}
-
-function buildChannelsSystem(settings: Settings, facts: Facts, lang: DraftLanguage): string {
-  const styleInstruction = getStyleInstruction(settings.stylePreset, settings.customStyleInstruction);
-  const factSummary = JSON.stringify(facts);
-
-  if (lang === 'ko') {
-    return [
-      '당신은 다채널 뉴스 포맷터입니다. 주어진 한국어 드래프트를 3개 채널에 맞게 변환하세요.',
-      `다음 핵심 팩트(인물/숫자/장소/날짜)는 가능한 한 본문에 포함시키세요: ${factSummary}`,
-      `톤/스타일: ${styleInstruction}`,
-      '',
-      '채널 규칙:',
-      '1. site: 독립형 한국어 기사. 800-1200자. 헤드라인 + 리드 + 본문 + 마무리. 마크다운 없음.',
-      '2. x: X(트위터) 스레드, 5-8개 트윗, 각 280자 이내. 첫 트윗은 hook. "1/", "2/" 번호. 이모지 1-2개.',
-      '3. medium: 롱폼 블로그. 마크다운. H1 제목 + 이탤릭 부제 + H2 섹션(도입/본문/결론). 1500-2500자.',
-      '',
-      '오직 valid JSON만 출력: { "site": string, "x": string, "medium": string }',
-    ].join('\n');
-  }
-
-  return [
-    'You are a multi-channel news formatter. Convert the given English draft into three channel-ready outputs.',
-    `You MUST preserve ALL of these extracted facts: ${factSummary}`,
-    `You MUST NEVER use banned words: ${BANNED_LIST_FOR_PROMPT}`,
-    `Style: ${styleInstruction}`,
-    '',
-    'Channel rules:',
-    '1. site: Standalone English article. 400-600 words. Headline + lead + body + closing. NO markdown.',
-    '2. x: Twitter thread, 5-8 tweets, each <= 280 chars. First tweet = hook. Number tweets "1/", "2/", etc. 1-2 emojis per tweet max.',
-    '3. medium: Long-form blog. Markdown. H1 title, italic subtitle, H2 section headers (Intro / Body / Conclusion). 800-1200 words.',
-    '',
-    'Respond ONLY with valid JSON: { "site": string, "x": string, "medium": string }',
-  ].join('\n');
-}
-
-export type FormatChannelsArgs = {
-  draft: string;
-  language: DraftLanguage;
-  facts: Facts;
-  settings: Settings;
-};
-
-export type FormatChannelsResult = {
-  channels: ChannelSet;
-  bannedHits: ChannelBannedHits;
-};
-
-export async function formatChannels(args: FormatChannelsArgs): Promise<FormatChannelsResult> {
-  const channels = await chatJson<ChannelOutput>({
-    apiKey: args.settings.apiKey,
-    baseUrl: args.settings.apiBaseUrl,
-    model: args.settings.model,
-    system: buildChannelsSystem(args.settings, args.facts, args.language),
-    user: args.language === 'ko'
-      ? `[한국어 드래프트]\n${args.draft}`
-      : `[English draft]\n${args.draft}`,
-    temperature: 0.6,
-  });
-  const bannedHits: ChannelBannedHits = args.language === 'en'
-    ? {
-        site: scan(channels.site).hits,
-        x: scan(channels.x).hits,
-        medium: scan(channels.medium).hits,
-      }
-    : { site: [], x: [], medium: [] };
-  return { channels, bannedHits };
 }
 
 export function buildInitialResult(
   articles: Article[],
-  analyzed: AnalyzeKoreanOutput,
+  story: StoryOutput,
   settings: Settings,
 ): ConvertedResult {
   const newest = articles.reduce((p, c) => c.fetchedAt > p.fetchedAt ? c : p, articles[0]);
-  const emptyChannelSet: ChannelSet = { site: '', x: '', medium: '' };
-  const emptyBanned: ChannelBannedHits = { site: [], x: [], medium: [] };
   return {
+    schemaVersion: CONVERTED_RESULT_SCHEMA_VERSION,
     id: `${newest.id}-${Date.now()}`,
     sourceArticleIds: articles.map(a => a.id),
     sourceTitle: newest.title,
     createdAt: Date.now(),
-    valueScore: analyzed.valueScore,
-    valueReason: analyzed.valueReason,
-    facts: analyzed.facts,
-    drafts: { ko: analyzed.koreanDraft, en: '' },
-    activeLanguage: 'ko',
-    channels: { ko: { ...emptyChannelSet }, en: { ...emptyChannelSet } },
-    channelsGenerated: { ko: false, en: false },
-    bannedHits: { ko: { ...emptyBanned }, en: { ...emptyBanned } },
-    stylePreset: settings.stylePreset,
+    valueDecision: story.valueDecision,
+    holdReason: story.holdReason,
+    storyDraft: story.storyDraft,
     model: settings.model,
   };
 }

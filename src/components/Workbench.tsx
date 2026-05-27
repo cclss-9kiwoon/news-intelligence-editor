@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Sparkles, AlertOctagon, ChevronLeft, ChevronRight, RotateCw, Languages, ChevronUp, ChevronDown } from 'lucide-react';
+import { Loader2, Sparkles, AlertOctagon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, CheckCircle2, PauseCircle } from 'lucide-react';
 import { useClusters } from '../state/ClustersContext';
 import { useConversion } from '../state/ConversionContext';
 import { useSettings } from '../state/SettingsContext';
-import { PROVIDERS, type DraftLanguage } from '../types';
+import { PROVIDERS } from '../types';
 
 type Props = {
   onMissingKey: () => void;
@@ -14,10 +14,7 @@ type Props = {
 export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }: Props) {
   const { selectedCluster, selectedArticles } = useClusters();
   const { settings, setModel } = useSettings();
-  const {
-    status, error, currentResult,
-    analyze, setDraftText, switchLanguage, regenerateChannels, clearError,
-  } = useConversion();
+  const { status, error, currentResult, analyze, setDraftText, clearError } = useConversion();
 
   const [sourceIdx, setSourceIdx] = useState(0);
 
@@ -29,32 +26,10 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
     analyze(selectedArticles);
   };
 
-  const triggerSwitchLang = (target: DraftLanguage) => {
-    if (!currentResult) return;
-    if (!settings.apiKey) { onMissingKey(); return; }
-    switchLanguage(target);
-  };
-
-  const triggerRegenerate = () => {
-    if (!currentResult) return;
-    if (!settings.apiKey) { onMissingKey(); return; }
-    regenerateChannels();
-  };
-
   const totalSources = selectedArticles.length;
   const currentSource = selectedArticles[sourceIdx];
-
-  const activeLang = currentResult?.activeLanguage ?? 'ko';
-  const currentText = currentResult ? currentResult.drafts[activeLang] : '';
-  const isBusy = status === 'analyzing' || status === 'translating' || status === 'generating';
-
-  const statusLabel: Record<typeof status, string> = {
-    idle: '',
-    analyzing: '종합 분석 중…',
-    translating: '번역 중…',
-    generating: '채널 생성 중…',
-    error: '',
-  };
+  const isBusy = status === 'analyzing';
+  const decision = currentResult?.valueDecision;
 
   return (
     <section className="flex h-full min-h-0 flex-col">
@@ -64,7 +39,7 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
             <button
               onClick={onToggleCollapsed}
               className="rounded p-1 text-slate-500 hover:bg-slate-100"
-              title={collapsed ? '원문/드래프트 펼치기' : '원문/드래프트 접고 채널 출력 크게 보기'}
+              title={collapsed ? '원문/드래프트 펼치기' : '원문/드래프트 접고 미리보기 크게 보기'}
               aria-label={collapsed ? '펼치기' : '접기'}
             >
               {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
@@ -98,8 +73,8 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
             onClick={triggerAnalyze}
             className="flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
           >
-            {status === 'analyzing' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {status === 'analyzing' ? '분석 중…' : '가치 평가 & 종합 (한국어)'}
+            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            {isBusy ? '평가 & 종합 중…' : '✨ 가치 평가 & 종합'}
           </button>
         </div>
       </div>
@@ -167,62 +142,42 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
         <div data-tutorial="draft-panel" className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-1.5">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              종합 드래프트 · 가치 {currentResult?.valueScore ?? '—'}/10
-              {isBusy && <span className="ml-2 text-indigo-600 normal-case">{statusLabel[status]}</span>}
+              종합 드래프트
+              {isBusy && <span className="ml-2 text-indigo-600 normal-case">가치 평가 & 종합 중…</span>}
             </h3>
-            <div className="flex items-center gap-1">
-              <div className="flex overflow-hidden rounded-md border border-slate-300 text-xs">
-                {(['ko', 'en'] as DraftLanguage[]).map(lang => (
-                  <button
-                    key={lang}
-                    onClick={() => triggerSwitchLang(lang)}
-                    disabled={!currentResult || isBusy}
-                    className={
-                      'px-2 py-1 ' +
-                      (activeLang === lang
-                        ? 'bg-slate-900 text-white'
-                        : 'bg-white text-slate-600 hover:bg-slate-100') +
-                      (!currentResult || isBusy ? ' opacity-50 cursor-not-allowed' : '')
-                    }
-                    title={lang === 'ko' ? '한국어 보기' : '영문 보기 (없으면 자동 번역)'}
-                  >
-                    {lang === 'ko' ? 'KO' : 'EN'}
-                    {currentResult && !currentResult.drafts[lang].trim() && activeLang !== lang && (
-                      <Languages size={10} className="ml-1 inline" />
-                    )}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={triggerRegenerate}
-                disabled={!currentResult || isBusy}
-                className="flex items-center gap-1 rounded-md bg-amber-600 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-                title="현재 언어 드래프트로 3채널 출력 (재)생성"
+            {decision && (
+              <span
+                className={
+                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ' +
+                  (decision === 'Pass'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-amber-100 text-amber-800')
+                }
+                title="가치 평가 결과(조언) — Fail이어도 드래프트는 그대로 사용할 수 있습니다."
               >
-                {status === 'generating' ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
-                {currentResult?.channelsGenerated[activeLang] ? `${activeLang.toUpperCase()} 채널 재생성` : `${activeLang.toUpperCase()} 채널 생성`}
-              </button>
-            </div>
+                {decision === 'Pass'
+                  ? <><CheckCircle2 size={12} /> Pass</>
+                  : <><PauseCircle size={12} /> Fail (보류)</>}
+              </span>
+            )}
           </div>
           {currentResult ? (
             <>
-              <p className="border-b border-slate-100 px-3 py-1.5 text-xs italic text-slate-500">
-                {currentResult.valueReason}
-              </p>
+              {currentResult.holdReason && (
+                <p className="border-b border-slate-100 px-3 py-1.5 text-xs italic text-slate-500">
+                  {currentResult.holdReason}
+                </p>
+              )}
               <textarea
-                value={currentText}
+                value={currentResult.storyDraft}
                 onChange={e => setDraftText(e.target.value)}
                 className="flex-1 min-h-0 resize-none p-3 text-sm text-slate-800 outline-none"
-                placeholder={
-                  activeLang === 'ko'
-                    ? '여기에 한국어 종합 드래프트가 생성되면 직접 편집하세요.'
-                    : '영문이 비어있습니다. EN 버튼을 누르면 한국어 드래프트를 자동 번역합니다.'
-                }
+                placeholder="여기에 5섹션 종합 드래프트가 생성되면 직접 편집하세요."
               />
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-sm text-slate-400">
-              사건을 선택하고 위의 버튼을 눌러 한국어 종합 드래프트를 생성하세요.
+              사건을 선택하고 위의 버튼을 눌러 가치 평가 & 종합 드래프트를 생성하세요.
             </div>
           )}
         </div>

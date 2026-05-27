@@ -1,35 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { STYLE_PRESETS, getStyleInstruction } from './styles';
-
-describe('styles.STYLE_PRESETS', () => {
-  it('contains all five preset keys', () => {
-    expect(Object.keys(STYLE_PRESETS).sort()).toEqual(
-      ['ap', 'bloomberg', 'custom', 'kpop', 'techcrunch']
-    );
-  });
-
-  it('each non-custom preset has non-empty instruction and label', () => {
-    for (const key of ['kpop', 'ap', 'bloomberg', 'techcrunch'] as const) {
-      expect(STYLE_PRESETS[key].label.length).toBeGreaterThan(0);
-      expect(STYLE_PRESETS[key].instruction.length).toBeGreaterThan(20);
-    }
-  });
-
-  it('custom preset has empty default instruction', () => {
-    expect(STYLE_PRESETS.custom.instruction).toBe('');
-  });
-});
+import { DEFAULT_STYLE_INSTRUCTION, getStyleInstruction } from './styles';
 
 describe('styles.getStyleInstruction', () => {
-  it('returns built-in instruction for non-custom preset', () => {
-    expect(getStyleInstruction('kpop', '')).toBe(STYLE_PRESETS.kpop.instruction);
+  it('returns the editor instruction when provided', () => {
+    expect(getStyleInstruction('가치 기준 X / 말투 Y')).toBe('가치 기준 X / 말투 Y');
   });
 
-  it('returns user override for custom preset', () => {
-    expect(getStyleInstruction('custom', 'My tone is X')).toBe('My tone is X');
+  it('trims and returns custom instruction', () => {
+    expect(getStyleInstruction('  My tone  ')).toBe('My tone');
   });
 
-  it('falls back to kpop instruction if custom is empty', () => {
-    expect(getStyleInstruction('custom', '')).toBe(STYLE_PRESETS.kpop.instruction);
+  it('falls back to the default instruction when empty', () => {
+    expect(getStyleInstruction('')).toBe(DEFAULT_STYLE_INSTRUCTION);
+    expect(getStyleInstruction('   ')).toBe(DEFAULT_STYLE_INSTRUCTION);
+  });
+
+  it('default instruction is non-empty', () => {
+    expect(DEFAULT_STYLE_INSTRUCTION.length).toBeGreaterThan(20);
   });
 });

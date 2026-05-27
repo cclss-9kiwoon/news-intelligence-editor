@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import type { Settings, StylePresetKey, ModelId, RssSource, ProviderId } from '../types';
+import type { Settings, ModelId, RssSource, ProviderId } from '../types';
 import { PROVIDERS } from '../types';
 import { DEFAULT_SETTINGS } from '../lib/defaultSettings';
 import { loadJson, saveJson, STORAGE_KEYS } from '../lib/storage';
@@ -11,7 +11,6 @@ type Ctx = {
   setProvider: (p: ProviderId) => void;
   setApiBaseUrl: (u: string) => void;
   setModel: (m: ModelId) => void;
-  setStylePreset: (s: StylePresetKey) => void;
   setCustomStyleInstruction: (s: string) => void;
   setRssSources: (s: RssSource[]) => void;
   toggleRssSource: (id: string) => void;
@@ -45,7 +44,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }), []);
   const setApiBaseUrl = useCallback((u: string) => setSettings(s => ({ ...s, apiBaseUrl: u })), []);
   const setModel = useCallback((m: ModelId) => setSettings(s => ({ ...s, model: m })), []);
-  const setStylePreset = useCallback((p: StylePresetKey) => setSettings(s => ({ ...s, stylePreset: p })), []);
   const setCustomStyleInstruction = useCallback((v: string) => setSettings(s => ({ ...s, customStyleInstruction: v })), []);
   const setRssSources = useCallback((rs: RssSource[]) => setSettings(s => ({ ...s, rssSources: rs })), []);
   const toggleRssSource = useCallback((id: string) =>
@@ -60,7 +58,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const value: Ctx = {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
-    setModel, setStylePreset, setCustomStyleInstruction,
+    setModel, setCustomStyleInstruction,
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold, setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled, resetSettings,
   };

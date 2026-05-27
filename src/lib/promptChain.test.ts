@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { analyzeKorean, translateDraft, formatChannels, buildInitialResult } from './promptChain';
+import { generateStory, buildInitialResult } from './promptChain';
 import * as openai from './openai';
-import type { Settings, Article } from '../types';
+import type { Settings, Article, StoryOutput } from '../types';
 
 const SETTINGS: Settings = {
   provider: 'openai',
@@ -9,7 +9,6 @@ const SETTINGS: Settings = {
   apiBaseUrl: 'https://api.openai.com/v1',
   rss2jsonApiKey: '',
   model: 'gpt-4o-mini',
-  stylePreset: 'kpop',
   customStyleInstruction: '',
   rssSources: [],
   rssPollMinutes: 5,
@@ -31,113 +30,63 @@ const ARTICLE_B: Article = {
   link: 'https://e.com/2', pubDate: '', source: 'Soompi', inputType: 'rss', fetchedAt: 200,
 };
 
+const PASS_OUTPUT: StoryOutput = {
+  valueDecision: 'Pass',
+  holdReason: '글로벌 팬덤 관심도가 높고 사실관계가 분명함.',
+  storyDraft: [
+    '# 1. BLACKPINK, 서울 컴백 공식화',
+    '## 2. 스토리텔링형 본문\nBLACKPINK이 2026년 5월 25일 서울에서 컴백한다.',
+    '## 3. 연관 키워드 및 태그\n#BLACKPINK #컴백',
+    '## 4. 에디터 코멘트 패널\n매체 간 충돌 없음.',
+    '## 5. AI 이미지 생성용 영문 프롬프트\nFour K-pop idols on a neon Seoul stage, cinematic lighting.',
+  ].join('\n\n'),
+};
+
 beforeEach(() => vi.restoreAllMocks());
 
-describe('analyzeKorean', () => {
-  it('produces a Korean draft + facts + valueScore from N sources', async () => {
-    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({
-      valueScore: 8, valueReason: '글로벌 팬덤 관심',
-      facts: { people: ['BLACKPINK'], numbers: [], places: ['서울'], dates: ['2026년 5월 25일'] },
-      koreanDraft: 'BLACKPINK이 2026년 5월 25일 서울에서 컴백을 발표했다. ...',
-    });
+describe('generateStory', () => {
+  it('returns the single 3-key story object from N sources', async () => {
+    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce(PASS_OUTPUT);
 
-    const out = await analyzeKorean([ARTICLE_A, ARTICLE_B], SETTINGS);
+    const out = await generateStory([ARTICLE_A, ARTICLE_B], SETTINGS);
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(out.koreanDraft).toContain('BLACKPINK');
-    expect(out.facts.places).toContain('서울');
+    expect(out.valueDecision).toBe('Pass');
+    expect(out.holdReason).toMatch(/팬덤/);
+    expect(out.storyDraft).toContain('## 5. AI 이미지 생성용 영문 프롬프트');
 
     const call = spy.mock.calls[0][0] as { user: string; system: string };
     expect(call.user).toContain('연합');
     expect(call.user).toContain('Soompi');
-    expect(call.system).toMatch(/한국어/);
+    expect(call.system).toMatch(/Pass\/Fail/);
+    expect(call.system).toMatch(/Midjourney/);
+  });
+
+  it('still returns a non-empty storyDraft even when value decision is Fail (advisor only)', async () => {
+    vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({
+      valueDecision: 'Fail',
+      holdReason: '단순 가십성 기사로 발행 기준 미달.',
+      storyDraft: '# 1. 헤드라인\n\n## 2. 스토리텔링형 본문\n본문.',
+    } satisfies StoryOutput);
+
+    const out = await generateStory([ARTICLE_A], SETTINGS);
+    expect(out.valueDecision).toBe('Fail');
+    expect(out.storyDraft.trim().length).toBeGreaterThan(0);
   });
 
   it('throws on empty input', async () => {
-    await expect(analyzeKorean([], SETTINGS)).rejects.toThrow(/at least one/i);
-  });
-});
-
-describe('translateDraft', () => {
-  it('translates ko→en via single LLM call', async () => {
-    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({
-      translated: 'BLACKPINK announced their comeback in Seoul on May 25, 2026.',
-    });
-    const out = await translateDraft({
-      text: 'BLACKPINK이 서울에서 컴백을 발표했다.',
-      from: 'ko', to: 'en', settings: SETTINGS,
-    });
-    expect(spy).toHaveBeenCalledTimes(1);
-    expect(out).toContain('Seoul');
-  });
-
-  it('returns text unchanged when from === to', async () => {
-    const spy = vi.spyOn(openai, 'chatJson');
-    const out = await translateDraft({ text: 'hi', from: 'en', to: 'en', settings: SETTINGS });
-    expect(out).toBe('hi');
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it('translates en→ko', async () => {
-    vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({ translated: '안녕' });
-    const out = await translateDraft({ text: 'hello', from: 'en', to: 'ko', settings: SETTINGS });
-    expect(out).toBe('안녕');
-  });
-});
-
-describe('formatChannels (en)', () => {
-  it('generates 3 English channels and flags banned words', async () => {
-    vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({
-      site: 'Furthermore, the band returns.',
-      x: '1/ A clean tweet.',
-      medium: '# Title\n## Intro\nA clean section.',
-    });
-    const out = await formatChannels({
-      draft: 'A clean draft about the comeback.',
-      language: 'en',
-      facts: { people: [], numbers: [], places: [], dates: [] },
-      settings: SETTINGS,
-    });
-    expect(out.channels.site).toContain('Furthermore');
-    expect(out.bannedHits.site.length).toBeGreaterThan(0);
-    expect(out.bannedHits.x).toEqual([]);
-  });
-});
-
-describe('formatChannels (ko)', () => {
-  it('generates 3 Korean channels without banned-word checks', async () => {
-    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({
-      site: '본 사이트 한국어 기사 내용.',
-      x: '1/ 첫 트윗.',
-      medium: '# 제목\n## 도입\n본문.',
-    });
-    const out = await formatChannels({
-      draft: '한국어 드래프트 원문.',
-      language: 'ko',
-      facts: { people: ['BLACKPINK'], numbers: [], places: [], dates: [] },
-      settings: SETTINGS,
-    });
-    expect(spy).toHaveBeenCalledTimes(1);
-    const call = spy.mock.calls[0][0] as { system: string };
-    expect(call.system).toMatch(/한국어/);
-    expect(out.channels.site).toContain('본 사이트');
-    expect(out.bannedHits.site).toEqual([]);
+    await expect(generateStory([], SETTINGS)).rejects.toThrow(/at least one/i);
   });
 });
 
 describe('buildInitialResult', () => {
-  it('initializes ko draft, empty en, empty channels for both languages', () => {
-    const r = buildInitialResult([ARTICLE_A, ARTICLE_B], {
-      valueScore: 7, valueReason: 'ok',
-      facts: { people: [], numbers: [], places: [], dates: [] },
-      koreanDraft: '본문',
-    }, SETTINGS);
-    expect(r.drafts.ko).toBe('본문');
-    expect(r.drafts.en).toBe('');
-    expect(r.activeLanguage).toBe('ko');
-    expect(r.channelsGenerated.ko).toBe(false);
-    expect(r.channelsGenerated.en).toBe(false);
-    expect(r.channels.ko.site).toBe('');
-    expect(r.channels.en.site).toBe('');
+  it('wraps a StoryOutput into a versioned ConvertedResult', () => {
+    const r = buildInitialResult([ARTICLE_A, ARTICLE_B], PASS_OUTPUT, SETTINGS);
+    expect(r.schemaVersion).toBe(2);
+    expect(r.valueDecision).toBe('Pass');
+    expect(r.holdReason).toBe(PASS_OUTPUT.holdReason);
+    expect(r.storyDraft).toBe(PASS_OUTPUT.storyDraft);
     expect(r.sourceArticleIds).toEqual(['a1', 'a2']);
+    expect(r.sourceTitle).toBe(ARTICLE_B.title); // newest by fetchedAt
+    expect(r.model).toBe('gpt-4o-mini');
   });
 });

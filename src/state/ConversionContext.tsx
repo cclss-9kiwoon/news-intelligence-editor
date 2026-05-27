@@ -1,11 +1,11 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import type { Article, ConvertedResult, DraftLanguage, ChannelKey } from '../types';
-import { analyzeKorean, translateDraft, formatChannels, buildInitialResult } from '../lib/promptChain';
+import type { Article, ConvertedResult } from '../types';
+import { generateStory, buildInitialResult } from '../lib/promptChain';
 import { OpenAIError } from '../lib/openai';
 import { useSettings } from './SettingsContext';
 import { useHistory } from './HistoryContext';
 
-type Status = 'idle' | 'analyzing' | 'translating' | 'generating' | 'error';
+type Status = 'idle' | 'analyzing' | 'error';
 
 type Ctx = {
   status: Status;
@@ -13,9 +13,6 @@ type Ctx = {
   currentResult: ConvertedResult | null;
   analyze: (articles: Article[]) => Promise<void>;
   setDraftText: (text: string) => void;
-  setChannelText: (channel: ChannelKey, text: string) => void;
-  switchLanguage: (target: DraftLanguage) => Promise<void>;
-  regenerateChannels: () => Promise<void>;
   loadResult: (result: ConvertedResult) => void;
   clearError: () => void;
 };
@@ -52,8 +49,8 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
     setStatus('analyzing');
     setError(null);
     try {
-      const analyzed = await analyzeKorean(articles, settings);
-      const result = buildInitialResult(articles, analyzed, settings);
+      const story = await generateStory(articles, settings);
+      const result = buildInitialResult(articles, story, settings);
       setCurrentResult(result);
       addEntry(result);
       setStatus('idle');
@@ -64,89 +61,8 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
   }, [settings, addEntry]);
 
   const setDraftText = useCallback((text: string) => {
-    setCurrentResult(prev => {
-      if (!prev) return prev;
-      return { ...prev, drafts: { ...prev.drafts, [prev.activeLanguage]: text } };
-    });
+    setCurrentResult(prev => (prev ? { ...prev, storyDraft: text } : prev));
   }, []);
-
-  const setChannelText = useCallback((channel: ChannelKey, text: string) => {
-    setCurrentResult(prev => {
-      if (!prev) return prev;
-      const lang = prev.activeLanguage;
-      return {
-        ...prev,
-        channels: {
-          ...prev.channels,
-          [lang]: { ...prev.channels[lang], [channel]: text },
-        },
-      };
-    });
-  }, []);
-
-  const switchLanguage = useCallback(async (target: DraftLanguage) => {
-    if (!currentResult) return;
-    if (!settings.apiKey) { setError('NO_API_KEY'); return; }
-    if (currentResult.activeLanguage === target) return;
-
-    const existing = currentResult.drafts[target];
-    if (existing && existing.trim().length > 0) {
-      setCurrentResult({ ...currentResult, activeLanguage: target });
-      return;
-    }
-
-    const source: DraftLanguage = target === 'ko' ? 'en' : 'ko';
-    const sourceText = currentResult.drafts[source];
-    if (!sourceText.trim()) { setError(`${source === 'ko' ? '한국어' : '영문'} 드래프트가 비어있어 번역할 수 없습니다.`); return; }
-
-    setStatus('translating');
-    setError(null);
-    try {
-      const translated = await translateDraft({ text: sourceText, from: source, to: target, settings });
-      const updated: ConvertedResult = {
-        ...currentResult,
-        drafts: { ...currentResult.drafts, [target]: translated },
-        activeLanguage: target,
-      };
-      setCurrentResult(updated);
-      addEntry(updated);
-      setStatus('idle');
-    } catch (err) {
-      setError(toErrorMessage(err));
-      setStatus('error');
-    }
-  }, [currentResult, settings, addEntry]);
-
-  const regenerateChannels = useCallback(async () => {
-    if (!currentResult) return;
-    if (!settings.apiKey) { setError('NO_API_KEY'); return; }
-    const lang = currentResult.activeLanguage;
-    const draft = currentResult.drafts[lang];
-    if (!draft.trim()) {
-      setError(`${lang === 'ko' ? '한국어' : '영문'} 드래프트가 비어있습니다.`);
-      return;
-    }
-
-    setStatus('generating');
-    setError(null);
-    try {
-      const { channels, bannedHits } = await formatChannels({
-        draft, language: lang, facts: currentResult.facts, settings,
-      });
-      const updated: ConvertedResult = {
-        ...currentResult,
-        channels: { ...currentResult.channels, [lang]: channels },
-        channelsGenerated: { ...currentResult.channelsGenerated, [lang]: true },
-        bannedHits: { ...currentResult.bannedHits, [lang]: bannedHits },
-      };
-      setCurrentResult(updated);
-      addEntry(updated);
-      setStatus('idle');
-    } catch (err) {
-      setError(toErrorMessage(err));
-      setStatus('error');
-    }
-  }, [currentResult, settings, addEntry]);
 
   const loadResult = useCallback((r: ConvertedResult) => setCurrentResult(r), []);
   const clearError = useCallback(() => setError(null), []);
@@ -154,8 +70,7 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
   return (
     <ConversionCtx.Provider value={{
       status, error, currentResult,
-      analyze, setDraftText, setChannelText, switchLanguage, regenerateChannels,
-      loadResult, clearError,
+      analyze, setDraftText, loadResult, clearError,
     }}>
       {children}
     </ConversionCtx.Provider>

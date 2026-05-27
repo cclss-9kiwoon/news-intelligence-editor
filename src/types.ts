@@ -28,19 +28,6 @@ export type BreakingAlert = {
   dismissedAt?: number;
 };
 
-export type Facts = {
-  people: string[];
-  numbers: string[];
-  places: string[];
-  dates: string[];
-};
-
-export type FactReport = {
-  ok: boolean;
-  missing: Array<{ category: keyof Facts; value: string }>;
-};
-
-export type StylePresetKey = 'kpop' | 'ap' | 'bloomberg' | 'techcrunch' | 'custom';
 export type ModelId = string;
 export type ProviderId = 'openai' | 'gemini' | 'custom';
 
@@ -97,8 +84,6 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
 
 export const DEFAULT_PROVIDER: ProviderId = 'openai';
 
-export type DraftLanguage = 'ko' | 'en';
-
 export type Cluster = {
   id: string;
   articleIds: string[];
@@ -107,42 +92,26 @@ export type Cluster = {
   createdAt: number;
 };
 
-export type ChannelKey = 'site' | 'x' | 'medium';
+export type ValueDecision = 'Pass' | 'Fail';
 
-export type ChannelSet = {
-  site: string;
-  x: string;
-  medium: string;
+// LLM이 반환하는 정확히 3개 키 (단일 드래프트 엔진 산출물)
+export type StoryOutput = {
+  valueDecision: ValueDecision;
+  holdReason: string;   // 한국어
+  storyDraft: string;   // 5섹션 마크다운 (§5만 영문)
 };
 
-export type ChannelBannedHits = Record<ChannelKey, string[]>;
+export const CONVERTED_RESULT_SCHEMA_VERSION = 2;
 
 export type ConvertedResult = {
+  schemaVersion: typeof CONVERTED_RESULT_SCHEMA_VERSION;
   id: string;
   sourceArticleIds: string[];
   sourceTitle: string;
   createdAt: number;
-  valueScore: number;
-  valueReason: string;
-  facts: Facts;
-  drafts: {
-    ko: string;
-    en: string;
-  };
-  activeLanguage: DraftLanguage;
-  channels: {
-    ko: ChannelSet;
-    en: ChannelSet;
-  };
-  channelsGenerated: {
-    ko: boolean;
-    en: boolean;
-  };
-  bannedHits: {
-    ko: ChannelBannedHits;
-    en: ChannelBannedHits;
-  };
-  stylePreset: StylePresetKey;
+  valueDecision: ValueDecision;
+  holdReason: string;
+  storyDraft: string;
   model: ModelId;
 };
 
@@ -152,7 +121,6 @@ export type Settings = {
   apiBaseUrl: string;
   rss2jsonApiKey: string;
   model: ModelId;
-  stylePreset: StylePresetKey;
   customStyleInstruction: string;
   rssSources: RssSource[];
   rssPollMinutes: number;
@@ -161,17 +129,4 @@ export type Settings = {
   simulatorIntervalSec: number;
   alertSoundEnabled: boolean;
   browserNotificationsEnabled: boolean;
-};
-
-export type AnalyzeKoreanOutput = {
-  valueScore: number;
-  valueReason: string;
-  facts: Facts;
-  koreanDraft: string;
-};
-
-export type ChannelOutput = {
-  site: string;
-  x: string;
-  medium: string;
 };
