@@ -9,7 +9,8 @@ type Props = { open: boolean; onClose: () => void };
 export function SettingsModal({ open, onClose }: Props) {
   const {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
-    setModel, setCustomStyleInstruction,
+    setModel,
+    addCategory, updateCategory, removeCategory,
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold,
     setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled,
@@ -21,6 +22,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const [showRssKey, setShowRssKey] = useState(false);
   const [newRssName, setNewRssName] = useState('');
   const [newRssUrl, setNewRssUrl] = useState('');
+  const [tab, setTab] = useState<'ai' | 'category'>('ai');
 
   if (!open) return null;
 
@@ -56,7 +58,18 @@ export function SettingsModal({ open, onClose }: Props) {
           </button>
         </div>
 
-        <div className="space-y-6 p-5">
+        <div className="flex border-b border-slate-200 px-5">
+          <button
+            onClick={() => setTab('ai')}
+            className={'px-3 py-2 text-sm font-medium border-b-2 ' + (tab === 'ai' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700')}
+          >⚙ AI·연결</button>
+          <button
+            onClick={() => setTab('category')}
+            className={'px-3 py-2 text-sm font-medium border-b-2 ' + (tab === 'category' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700')}
+          >🎯 카테고리</button>
+        </div>
+
+        <div className={'space-y-6 p-5 ' + (tab === 'ai' ? '' : 'hidden')}>
           <section>
             <h3 className="mb-2 font-semibold">AI Provider</h3>
             <div className="flex flex-wrap gap-3 text-sm">
@@ -157,23 +170,6 @@ export function SettingsModal({ open, onClose }: Props) {
                 />
               </label>
             </div>
-          </section>
-
-          <section>
-            <h3 className="mb-2 font-semibold">가치 기준 + 말투 통합 지침</h3>
-            <p className="mb-2 text-xs text-slate-500">
-              이 단일 필드 하나가 <b>어떤 사건을 Pass/Fail로 선별할지(가치 기준)</b>와
-              <b> 드래프트의 말투/문체</b>를 모두 결정합니다. 비워두면 기본 한국어 저널리즘 지침이 적용됩니다.
-            </p>
-            <textarea
-              value={settings.customStyleInstruction}
-              onChange={e => setCustomStyleInstruction(e.target.value)}
-              placeholder={
-                "예) 가치 기준: 단순 가십·홍보성 기사는 보류, 산업/정책에 영향 있는 사건만 통과.\n" +
-                "말투: 신뢰감 있는 K-pop 전문 매체 톤, 짧고 명료한 문장, 과장 표현 자제."
-              }
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm h-32"
-            />
           </section>
 
           <section>
@@ -312,6 +308,51 @@ export function SettingsModal({ open, onClose }: Props) {
               변환 이력 전체 삭제
             </button>
           </section>
+        </div>
+
+        <div className={'space-y-4 p-5 ' + (tab === 'category' ? '' : 'hidden')}>
+          <p className="text-xs text-slate-500">
+            카테고리(렌즈)별로 <b>선별·정리 기준</b>과 <b>말투</b>를 정해둡니다. 워크벤치 상단 드롭다운에서 선택한 카테고리가 변환에 사용됩니다.
+          </p>
+          {settings.categories.map(c => (
+            <div key={c.id} className="rounded border border-slate-200 p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <input
+                  value={c.label}
+                  onChange={e => updateCategory(c.id, { label: e.target.value })}
+                  className="flex-1 rounded border border-slate-300 px-2 py-1 text-sm font-semibold"
+                  placeholder="카테고리 이름"
+                />
+                <button
+                  onClick={() => { if (confirm(`'${c.label}' 카테고리를 삭제할까요?`)) removeCategory(c.id); }}
+                  className="rounded p-1 text-red-600 hover:bg-red-50"
+                  aria-label="카테고리 삭제"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">선별·정리 기준</label>
+              <textarea
+                value={c.criteria}
+                onChange={e => updateCategory(c.id, { criteria: e.target.value })}
+                className="mb-2 w-full rounded border border-slate-300 px-2 py-1 text-sm h-20"
+                placeholder="이 카테고리에서 무엇을 어떻게 다룰지"
+              />
+              <label className="mb-1 block text-xs font-semibold text-slate-500">말투</label>
+              <textarea
+                value={c.tone}
+                onChange={e => updateCategory(c.id, { tone: e.target.value })}
+                className="w-full rounded border border-slate-300 px-2 py-1 text-sm h-16"
+                placeholder="문체·어조"
+              />
+            </div>
+          ))}
+          <button
+            onClick={addCategory}
+            className="flex items-center gap-1 rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50"
+          >
+            <Plus size={14} /> 카테고리 추가
+          </button>
         </div>
       </div>
     </div>
