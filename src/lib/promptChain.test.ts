@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { generateStory, buildInitialResult } from './promptChain';
+import { generateStory, sanitizeBody, buildInitialResult } from './promptChain';
 import * as openai from './openai';
-import type { Settings, Article, StoryOutput } from '../types';
+import type { Settings, Article, Category, StoryOutput } from '../types';
+import { DEFAULT_CATEGORIES } from './defaultCategories';
+
+const CATEGORY: Category = DEFAULT_CATEGORIES.find(c => c.id === 'screen')!;
 
 const SETTINGS: Settings = {
   provider: 'openai',
@@ -9,7 +12,8 @@ const SETTINGS: Settings = {
   apiBaseUrl: 'https://api.openai.com/v1',
   rss2jsonApiKey: '',
   model: 'gpt-4o-mini',
-  customStyleInstruction: '',
+  categories: DEFAULT_CATEGORIES,
+  activeCategoryId: 'screen',
   rssSources: [],
   rssPollMinutes: 5,
   clusterThreshold: 0.35,
@@ -20,73 +24,81 @@ const SETTINGS: Settings = {
 };
 
 const ARTICLE_A: Article = {
-  id: 'a1', title: 'BLACKPINK 컴백 발표',
-  description: 'BLACKPINK이 2026년 5월 25일 서울에서 컴백 발표.',
+  id: 'a1', title: "JTBC '리본 루키' 출연진 공개",
+  description: "JTBC 새 드라마 '리본 루키'가 출연진과 줄거리를 공개했다.",
   link: 'https://e.com/1', pubDate: '', source: '연합', inputType: 'rss', fetchedAt: 100,
 };
 const ARTICLE_B: Article = {
-  id: 'a2', title: 'BLACKPINK Drops Comeback Teaser',
-  description: 'The group confirmed a Seoul comeback for May 25, 2026.',
+  id: 'a2', title: "'리본 루키' 티저 공개",
+  description: '영혼 교체 설정의 예고편이 공개됐다.',
   link: 'https://e.com/2', pubDate: '', source: 'Soompi', inputType: 'rss', fetchedAt: 200,
 };
 
-const PASS_OUTPUT: StoryOutput = {
-  valueDecision: 'Pass',
-  holdReason: '글로벌 팬덤 관심도가 높고 사실관계가 분명함.',
-  storyDraft: [
-    '# 1. BLACKPINK, 서울 컴백 공식화',
-    '## 2. 스토리텔링형 본문\nBLACKPINK이 2026년 5월 25일 서울에서 컴백한다.',
-    '## 3. 연관 키워드 및 태그\n#BLACKPINK #컴백',
-    '## 4. 에디터 코멘트 패널\n매체 간 충돌 없음.',
-    '## 5. AI 이미지 생성용 영문 프롬프트\nFour K-pop idols on a neon Seoul stage, cinematic lighting.',
-  ].join('\n\n'),
+const STORY: StoryOutput = {
+  summary: "JTBC 새 드라마 '리본 루키'가 줄거리와 출연진을 공개했습니다.",
+  headline: "JTBC '리본 루키', 영혼 교체 줄거리 공개",
+  body: '드라마가 첫 방송을 앞두고 주요 줄거리를 공개했다. 출연진은 호흡을 자랑했다.',
+  tags: ['리본루키', 'JTBC'],
+  imagePrompt: 'A dramatic K-drama scene, soul swap, cinematic lighting.',
 };
 
 beforeEach(() => vi.restoreAllMocks());
 
-describe('generateStory', () => {
-  it('returns the single 3-key story object from N sources', async () => {
-    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce(PASS_OUTPUT);
+describe('sanitizeBody', () => {
+  it('strips internal section-label lines but keeps prose', () => {
+    const dirty = '# 1. 헤드라인\n## 2. 스토리텔링형 본문\n진짜 본문 한 줄.\n## 3. 태그\n#a #b';
+    const clean = sanitizeBody(dirty);
+    expect(clean).toBe('진짜 본문 한 줄.\n#a #b');
+    expect(clean).not.toContain('## 2.');
+    expect(clean).not.toContain('# 1.');
+  });
+});
 
-    const out = await generateStory([ARTICLE_A, ARTICLE_B], SETTINGS);
+describe('generateStory', () => {
+  it('returns the 5-key story object and injects category criteria+tone', async () => {
+    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce(STORY);
+
+    const out = await generateStory([ARTICLE_A, ARTICLE_B], SETTINGS, CATEGORY);
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(out.valueDecision).toBe('Pass');
-    expect(out.holdReason).toMatch(/팬덤/);
-    expect(out.storyDraft).toContain('## 5. AI 이미지 생성용 영문 프롬프트');
+    expect(out.headline).toContain('리본 루키');
+    expect(out.tags).toEqual(['리본루키', 'JTBC']);
 
     const call = spy.mock.calls[0][0] as { user: string; system: string };
     expect(call.user).toContain('연합');
     expect(call.user).toContain('Soompi');
-    expect(call.system).toMatch(/Pass\/Fail/);
-    expect(call.system).toMatch(/Midjourney/);
+    expect(call.system).toContain(CATEGORY.criteria);
+    expect(call.system).toContain(CATEGORY.tone);
+    expect(call.system).toContain('발행 여부를 판단하지');
   });
 
-  it('still returns a non-empty storyDraft even when value decision is Fail (advisor only)', async () => {
+  it('sanitizes leftover section labels in body and coerces tags to array', async () => {
     vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({
-      valueDecision: 'Fail',
-      holdReason: '단순 가십성 기사로 발행 기준 미달.',
-      storyDraft: '# 1. 헤드라인\n\n## 2. 스토리텔링형 본문\n본문.',
-    } satisfies StoryOutput);
-
-    const out = await generateStory([ARTICLE_A], SETTINGS);
-    expect(out.valueDecision).toBe('Fail');
-    expect(out.storyDraft.trim().length).toBeGreaterThan(0);
+      ...STORY,
+      body: '## 2. 스토리텔링형 본문\n깨끗해야 하는 본문.',
+      tags: undefined as unknown as string[],
+    });
+    const out = await generateStory([ARTICLE_A], SETTINGS, CATEGORY);
+    expect(out.body).toBe('깨끗해야 하는 본문.');
+    expect(out.tags).toEqual([]);
   });
 
   it('throws on empty input', async () => {
-    await expect(generateStory([], SETTINGS)).rejects.toThrow(/at least one/i);
+    await expect(generateStory([], SETTINGS, CATEGORY)).rejects.toThrow(/at least one/i);
   });
 });
 
 describe('buildInitialResult', () => {
-  it('wraps a StoryOutput into a versioned ConvertedResult', () => {
-    const r = buildInitialResult([ARTICLE_A, ARTICLE_B], PASS_OUTPUT, SETTINGS);
-    expect(r.schemaVersion).toBe(2);
-    expect(r.valueDecision).toBe('Pass');
-    expect(r.holdReason).toBe(PASS_OUTPUT.holdReason);
-    expect(r.storyDraft).toBe(PASS_OUTPUT.storyDraft);
+  it('wraps a StoryOutput into a versioned ConvertedResult with categoryId', () => {
+    const r = buildInitialResult([ARTICLE_A, ARTICLE_B], STORY, SETTINGS, CATEGORY);
+    expect(r.schemaVersion).toBe(3);
+    expect(r.categoryId).toBe('screen');
+    expect(r.summary).toBe(STORY.summary);
+    expect(r.headline).toBe(STORY.headline);
+    expect(r.body).toBe(STORY.body);
+    expect(r.tags).toEqual(STORY.tags);
+    expect(r.imagePrompt).toBe(STORY.imagePrompt);
     expect(r.sourceArticleIds).toEqual(['a1', 'a2']);
-    expect(r.sourceTitle).toBe(ARTICLE_B.title); // newest by fetchedAt
+    expect(r.sourceTitle).toBe(ARTICLE_B.title);
     expect(r.model).toBe('gpt-4o-mini');
   });
 });

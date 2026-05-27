@@ -1,43 +1,43 @@
-import type { Article, Settings, ConvertedResult, StoryOutput } from '../types';
+import type { Article, Settings, Category, ConvertedResult, StoryOutput } from '../types';
 import { CONVERTED_RESULT_SCHEMA_VERSION } from '../types';
 import { chatJson } from './openai';
-import { getStyleInstruction } from './styles';
 
 const BANNED_LIST_FOR_PROMPT =
   'delve, in conclusion, furthermore, testament, moreover, "it is important to note", ' +
   '"not only ... but also", "as an AI", "I think/believe/feel".';
 
-function buildStorySystem(settings: Settings): string {
-  const instruction = getStyleInstruction(settings.customStyleInstruction);
+// body에 남은 내부 섹션 라벨 줄("# 1. ...", "## 2. ...")을 제거하는 안전망
+export function sanitizeBody(body: string): string {
+  return body
+    .split('\n')
+    .filter(line => !/^\s*#{1,6}\s*\d+\.\s/.test(line))
+    .join('\n')
+    .trim();
+}
+
+function buildStorySystem(category: Category): string {
   return [
-    '당신은 한국 디지털 매체의 시니어 에디터이자 가치 평가관입니다.',
+    '당신은 한국 연예 매체의 시니어 에디터입니다.',
     '여러 매체가 동일 사건을 다룬 한국어 기사 N건을 입력으로 받습니다.',
     '',
-    '[에디터 통합 지침 — 가치 기준 + 말투]',
-    instruction,
+    `[카테고리: ${category.label}]`,
+    '[선별·정리 기준]',
+    category.criteria,
+    '[말투]',
+    category.tone,
     '',
-    '[작업]',
-    '1) 가치 평가: 위 지침의 가치 기준에 비추어 발행 가치가 있는지 Pass/Fail 판정. holdReason에 한국어로 구체 사유.',
-    '2) 종합 드래프트: 기사들을 교차검증해 단일 완결형 내러티브 작성. 매체별 개별 번역/요약 금지, 한 편의 글로 합칠 것.',
+    '[작업] 발행 여부를 판단하지 마라. 위 기준과 말투로 기사들을 교차검증해 정리·종합만 한다.',
     '',
     '[MUST]',
-    '- 원문에 없는 인물관계/날짜/수치 추측·창작 금지(Hallucination). 근거 없는 정보 작성 금지.',
-    '- 숫자/날짜/이름이 매체 간 충돌 시 가장 일관된 값 채택 + §4에 "Sources disagree on: ..." 명시.',
-    '- 핵심 엔티티(인물/장소/소속사)를 본문에 누락 없이 자연스럽게 융합.',
-    '- §1~§4는 통합 지침의 말투로 한국어 작성.',
-    '- §5(이미지 프롬프트)는 반드시 순수 영문(Midjourney 호환). 한국어 한 단어도 금지.',
+    '- summary: 무엇에 관한 기사인지 중립적으로 1~2줄(누가/무엇/핵심). 가치 평가나 발행 권고 금지.',
+    '- headline: 기사 제목.',
+    '- body: 머리표·섹션 라벨(#, "## 2." 등) 없이 깨끗한 발행용 본문. 매체 간 충돌 시 가장 일관된 값 채택, 충돌 사실은 summary에 명시.',
+    '- 원문에 없는 사실 추측·창작 금지. 핵심 엔티티(인물/장소/소속사) 누락 금지.',
+    '- tags: 해시태그 문자열 배열(# 없이 키워드만). imagePrompt: 순수 영문(Midjourney 호환, 한국어 금지).',
+    `- 영어 LLM 상투구 회피: ${BANNED_LIST_FOR_PROMPT}`,
     '',
-    `[NEVER — 영어 LLM 상투구] ${BANNED_LIST_FOR_PROMPT}`,
-    '사고 단계에서 회피하고 자연스러운 저널리즘 문체로 우회.',
-    '',
-    '[조언일 뿐] valueDecision이 Fail이어도 storyDraft는 끝까지 정상 작성(차단 금지).',
-    '',
-    '오직 valid JSON, 정확히 3개 키:',
-    '{',
-    '  "valueDecision": "Pass" | "Fail",',
-    '  "holdReason": "...(한국어)",',
-    '  "storyDraft": "# 1. [헤드라인]\\n\\n## 2. 스토리텔링형 본문\\n...\\n\\n## 3. 연관 키워드 및 태그\\n#키워드\\n\\n## 4. 에디터 코멘트 패널\\n...\\n\\n## 5. AI 이미지 생성용 영문 프롬프트\\n[pure English]"',
-    '}',
+    '오직 valid JSON, 정확히 5개 키:',
+    '{ "summary": string, "headline": string, "body": string, "tags": string[], "imagePrompt": string }',
   ].join('\n');
 }
 
@@ -53,34 +53,50 @@ function buildStoryUser(articles: Article[]): string {
   return parts.join('\n');
 }
 
-export async function generateStory(articles: Article[], settings: Settings): Promise<StoryOutput> {
+export async function generateStory(
+  articles: Article[],
+  settings: Settings,
+  category: Category,
+): Promise<StoryOutput> {
   if (articles.length === 0) throw new Error('generateStory requires at least one article');
 
-  return chatJson<StoryOutput>({
+  const out = await chatJson<StoryOutput>({
     apiKey: settings.apiKey,
     baseUrl: settings.apiBaseUrl,
     model: settings.model,
-    system: buildStorySystem(settings),
+    system: buildStorySystem(category),
     user: buildStoryUser(articles),
     temperature: 0.5,
   });
+
+  return {
+    summary: out.summary ?? '',
+    headline: out.headline ?? '',
+    body: sanitizeBody(out.body ?? ''),
+    tags: Array.isArray(out.tags) ? out.tags : [],
+    imagePrompt: out.imagePrompt ?? '',
+  };
 }
 
 export function buildInitialResult(
   articles: Article[],
   story: StoryOutput,
   settings: Settings,
+  category: Category,
 ): ConvertedResult {
-  const newest = articles.reduce((p, c) => c.fetchedAt > p.fetchedAt ? c : p, articles[0]);
+  const newest = articles.reduce((p, c) => (c.fetchedAt > p.fetchedAt ? c : p), articles[0]);
   return {
     schemaVersion: CONVERTED_RESULT_SCHEMA_VERSION,
     id: `${newest.id}-${Date.now()}`,
     sourceArticleIds: articles.map(a => a.id),
     sourceTitle: newest.title,
     createdAt: Date.now(),
-    valueDecision: story.valueDecision,
-    holdReason: story.holdReason,
-    storyDraft: story.storyDraft,
     model: settings.model,
+    categoryId: category.id,
+    summary: story.summary,
+    headline: story.headline,
+    body: story.body,
+    tags: story.tags,
+    imagePrompt: story.imagePrompt,
   };
 }
