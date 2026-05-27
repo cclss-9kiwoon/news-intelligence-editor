@@ -49,7 +49,7 @@ export function SettingsModal({ open, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
-        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-xl"
+        className="flex h-[640px] max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
@@ -78,6 +78,7 @@ export function SettingsModal({ open, onClose }: Props) {
           >🎯 카테고리</button>
         </div>
 
+        <div className="flex-1 overflow-y-auto">
         <div className={'space-y-6 p-5 ' + (tab === 'ai' ? '' : 'hidden')}>
           <section>
             <h3 className="mb-2 font-semibold">AI Provider</h3>
@@ -240,9 +241,8 @@ export function SettingsModal({ open, onClose }: Props) {
               </select>
             </div>
             <p className="mt-2 text-xs text-amber-700">
-              💡 rss2json 무료 한도: <b>분당 10건</b>. 활성 소스가 많거나 폴링이 잦으면 429 발생.
-              429 발생 시 해당 소스는 자동으로 30분간 호출 중단됩니다.
-              응답은 5분 캐시됩니다.
+              💡 rss2json 무료 한도: <b>분당 10건</b>. 활성 소스가 많거나 폴링이 잦으면 일시적으로 요청이 거부될 수 있습니다.
+              이 경우 해당 소스는 자동으로 30분간 호출을 멈췄다가 재시도합니다. 응답은 5분 캐시됩니다.
             </p>
           </section>
 
@@ -391,6 +391,7 @@ export function SettingsModal({ open, onClose }: Props) {
           >
             <Plus size={14} /> 카테고리 추가
           </button>
+        </div>
         </div>
       </div>
     </div>

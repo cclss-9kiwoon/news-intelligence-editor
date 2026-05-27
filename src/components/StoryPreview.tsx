@@ -17,8 +17,9 @@ export function StoryPreview() {
     );
   }
 
-  const { headline, body } = currentResult;
-  const markdown = `# ${headline}\n\n${body}`;
+  const { headline, body, tags } = currentResult;
+  const tagLine = tags.map(t => `#${t}`).join(' ');
+  const markdown = `# ${headline}\n\n${body}${tagLine ? `\n\n${tagLine}` : ''}`;
   const bannedHits = scan(body).hits;
 
   const doCopy = async () => {

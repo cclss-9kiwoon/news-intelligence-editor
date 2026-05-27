@@ -44,7 +44,7 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
 
   const fieldText = (key: FieldKey): string => {
     if (!currentResult) return '';
-    if (key === 'tags') return currentResult.tags.join(' ');
+    if (key === 'tags') return currentResult.tags.map(t => `#${t}`).join(' ');
     return currentResult[key];
   };
 
@@ -57,10 +57,7 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
   };
 
   const doCopy = async (key: FieldKey) => {
-    const value = key === 'tags' && currentResult
-      ? currentResult.tags.map(t => `#${t}`).join(' ')
-      : fieldText(key);
-    if (await copyToClipboard(value)) {
+    if (await copyToClipboard(fieldText(key))) {
       setCopiedField(key);
       setTimeout(() => setCopiedField(null), 1500);
     }
@@ -177,7 +174,7 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
             </p>
           )}
           {currentResult?.summary && (
-            <div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
               <button
                 onClick={() => setSummaryOpen(v => !v)}
                 className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700"
@@ -187,7 +184,7 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
                 요약
               </button>
               {summaryOpen && (
-                <p className="mt-1 whitespace-pre-wrap text-xs italic text-slate-500">
+                <p className="mt-1 whitespace-pre-wrap text-xs italic text-slate-600">
                   {currentResult.summary}
                 </p>
               )}
