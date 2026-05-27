@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Sparkles, AlertOctagon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, CheckCircle2, PauseCircle } from 'lucide-react';
+import { Loader2, Sparkles, AlertOctagon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Copy, Check } from 'lucide-react';
 import { useClusters } from '../state/ClustersContext';
 import { useConversion } from '../state/ConversionContext';
 import { useSettings } from '../state/SettingsContext';
+import { copyToClipboard } from '../lib/clipboard';
 import { PROVIDERS } from '../types';
 
 type Props = {
@@ -11,12 +12,23 @@ type Props = {
   onToggleCollapsed?: () => void;
 };
 
+type FieldKey = 'summary' | 'headline' | 'body' | 'tags' | 'imagePrompt';
+
+const FIELD_META: Array<{ key: FieldKey; label: string; placeholder: string; rows: number }> = [
+  { key: 'summary', label: '요약', placeholder: '생성 후 무엇에 관한 기사인지 중립 요약이 표시됩니다.', rows: 2 },
+  { key: 'headline', label: '헤드라인', placeholder: '제목', rows: 1 },
+  { key: 'body', label: '본문 (발행용)', placeholder: '라벨 없는 깨끗한 발행 본문', rows: 8 },
+  { key: 'tags', label: '태그', placeholder: '공백/쉼표로 구분 (예: 리본루키 JTBC)', rows: 1 },
+  { key: 'imagePrompt', label: 'AI 이미지 프롬프트 (영문)', placeholder: 'English Midjourney prompt', rows: 3 },
+];
+
 export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }: Props) {
   const { selectedCluster, selectedArticles } = useClusters();
-  const { settings, setModel } = useSettings();
-  const { status, error, currentResult, analyze, setDraftText, clearError } = useConversion();
+  const { settings, setModel, setActiveCategoryId } = useSettings();
+  const { status, error, currentResult, analyze, setText, setTags, clearError } = useConversion();
 
   const [sourceIdx, setSourceIdx] = useState(0);
+  const [copiedField, setCopiedField] = useState<FieldKey | null>(null);
 
   useEffect(() => { setSourceIdx(0); }, [selectedCluster?.id]);
 
@@ -29,7 +41,30 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
   const totalSources = selectedArticles.length;
   const currentSource = selectedArticles[sourceIdx];
   const isBusy = status === 'analyzing';
-  const decision = currentResult?.valueDecision;
+
+  const fieldText = (key: FieldKey): string => {
+    if (!currentResult) return '';
+    if (key === 'tags') return currentResult.tags.join(' ');
+    return currentResult[key];
+  };
+
+  const onFieldChange = (key: FieldKey, value: string) => {
+    if (key === 'tags') {
+      setTags(value.split(/[\s,]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean));
+    } else {
+      setText(key, value);
+    }
+  };
+
+  const doCopy = async (key: FieldKey) => {
+    const value = key === 'tags' && currentResult
+      ? currentResult.tags.map(t => `#${t}`).join(' ')
+      : fieldText(key);
+    if (await copyToClipboard(value)) {
+      setCopiedField(key);
+      setTimeout(() => setCopiedField(null), 1500);
+    }
+  };
 
   return (
     <section className="flex h-full min-h-0 flex-col">
@@ -39,7 +74,7 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
             <button
               onClick={onToggleCollapsed}
               className="rounded p-1 text-slate-500 hover:bg-slate-100"
-              title={collapsed ? '원문/드래프트 펼치기' : '원문/드래프트 접고 미리보기 크게 보기'}
+              title={collapsed ? '원문/드래프트 펼치기' : '원문/드래프트 접기'}
               aria-label={collapsed ? '펼치기' : '접기'}
             >
               {collapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
@@ -52,6 +87,16 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
           </h2>
         </div>
         <div className="flex items-center gap-2 flex-none">
+          <select
+            value={settings.activeCategoryId}
+            onChange={e => setActiveCategoryId(e.target.value)}
+            className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs"
+            title="카테고리(렌즈) 선택"
+          >
+            {settings.categories.map(c => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
           <label className="flex items-center gap-1 text-xs text-slate-500">
             <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold">{PROVIDERS[settings.provider].name}</span>
             <select
@@ -101,20 +146,8 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
             </h3>
             {totalSources > 1 && (
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setSourceIdx(i => (i - 1 + totalSources) % totalSources)}
-                  className="rounded p-1 hover:bg-slate-100"
-                  aria-label="이전 소스"
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <button
-                  onClick={() => setSourceIdx(i => (i + 1) % totalSources)}
-                  className="rounded p-1 hover:bg-slate-100"
-                  aria-label="다음 소스"
-                >
-                  <ChevronRight size={14} />
-                </button>
+                <button onClick={() => setSourceIdx(i => (i - 1 + totalSources) % totalSources)} className="rounded p-1 hover:bg-slate-100" aria-label="이전 소스"><ChevronLeft size={14} /></button>
+                <button onClick={() => setSourceIdx(i => (i + 1) % totalSources)} className="rounded p-1 hover:bg-slate-100" aria-label="다음 소스"><ChevronRight size={14} /></button>
               </div>
             )}
           </div>
@@ -130,56 +163,42 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
                   {currentSource.fullText || currentSource.description || '—'}
                 </div>
                 {currentSource.link && !currentSource.link.startsWith('manual://') && !currentSource.link.startsWith('simulator://') && (
-                  <a href={currentSource.link} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs text-indigo-600 hover:underline">
-                    원문 보기 ↗
-                  </a>
+                  <a href={currentSource.link} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs text-indigo-600 hover:underline">원문 보기 ↗</a>
                 )}
               </>
             ) : <span className="text-sm text-slate-400">—</span>}
           </div>
         </div>
 
-        <div data-tutorial="draft-panel" className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-1.5">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-              종합 드래프트
-              {isBusy && <span className="ml-2 text-indigo-600 normal-case">가치 평가 & 종합 중…</span>}
-            </h3>
-            {decision && (
-              <span
-                className={
-                  'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ' +
-                  (decision === 'Pass'
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : 'bg-amber-100 text-amber-800')
-                }
-                title="가치 평가 결과(조언) — Fail이어도 드래프트는 그대로 사용할 수 있습니다."
-              >
-                {decision === 'Pass'
-                  ? <><CheckCircle2 size={12} /> Pass</>
-                  : <><PauseCircle size={12} /> Fail (보류)</>}
-              </span>
-            )}
-          </div>
-          {currentResult ? (
-            <>
-              {currentResult.holdReason && (
-                <p className="border-b border-slate-100 px-3 py-1.5 text-xs italic text-slate-500">
-                  {currentResult.holdReason}
-                </p>
-              )}
-              <textarea
-                value={currentResult.storyDraft}
-                onChange={e => setDraftText(e.target.value)}
-                className="flex-1 min-h-0 resize-none p-3 text-sm text-slate-800 outline-none"
-                placeholder="여기에 5섹션 종합 드래프트가 생성되면 직접 편집하세요."
-              />
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-sm text-slate-400">
-              사건을 선택하고 위의 버튼을 눌러 가치 평가 & 종합 드래프트를 생성하세요.
-            </div>
+        <div data-tutorial="draft-panel" className="flex min-h-0 flex-col gap-2 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3">
+          {!currentResult && !isBusy && (
+            <p className="text-sm text-slate-400">
+              사건을 선택하고 카테고리를 고른 뒤 [✨ 가치 평가 & 종합]을 누르면 아래 필드가 채워집니다.
+            </p>
           )}
+          {FIELD_META.map(({ key, label, placeholder, rows }) => (
+            <div key={key} className="flex flex-col">
+              <div className="mb-0.5 flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</span>
+                <button
+                  onClick={() => doCopy(key)}
+                  disabled={!currentResult}
+                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                  title={`${label} 복사`}
+                >
+                  {copiedField === key ? <Check size={12} /> : <Copy size={12} />}
+                  {copiedField === key ? '복사됨' : '복사'}
+                </button>
+              </div>
+              <textarea
+                value={fieldText(key)}
+                onChange={e => onFieldChange(key, e.target.value)}
+                rows={rows}
+                placeholder={placeholder}
+                className="resize-y rounded border border-slate-200 p-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+              />
+            </div>
+          ))}
         </div>
       </div>
     </section>
