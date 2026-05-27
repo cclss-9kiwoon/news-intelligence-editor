@@ -6,13 +6,15 @@ import { useSettings } from './SettingsContext';
 import { useHistory } from './HistoryContext';
 
 type Status = 'idle' | 'analyzing' | 'error';
+type TextField = 'summary' | 'headline' | 'body' | 'imagePrompt';
 
 type Ctx = {
   status: Status;
   error: string | null;
   currentResult: ConvertedResult | null;
   analyze: (articles: Article[]) => Promise<void>;
-  setDraftText: (text: string) => void;
+  setText: (field: TextField, value: string) => void;
+  setTags: (tags: string[]) => void;
   loadResult: (result: ConvertedResult) => void;
   clearError: () => void;
 };
@@ -46,11 +48,14 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
   const analyze = useCallback(async (articles: Article[]) => {
     if (!settings.apiKey) { setError('NO_API_KEY'); return; }
     if (articles.length === 0) { setError('변환할 기사가 없습니다.'); return; }
+    const category = settings.categories.find(c => c.id === settings.activeCategoryId)
+      ?? settings.categories[0];
+    if (!category) { setError('카테고리가 없습니다. ⚙ 설정에서 추가하세요.'); return; }
     setStatus('analyzing');
     setError(null);
     try {
-      const story = await generateStory(articles, settings);
-      const result = buildInitialResult(articles, story, settings);
+      const story = await generateStory(articles, settings, category);
+      const result = buildInitialResult(articles, story, settings, category);
       setCurrentResult(result);
       addEntry(result);
       setStatus('idle');
@@ -60,8 +65,12 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
     }
   }, [settings, addEntry]);
 
-  const setDraftText = useCallback((text: string) => {
-    setCurrentResult(prev => (prev ? { ...prev, storyDraft: text } : prev));
+  const setText = useCallback((field: TextField, value: string) => {
+    setCurrentResult(prev => (prev ? { ...prev, [field]: value } : prev));
+  }, []);
+
+  const setTags = useCallback((tags: string[]) => {
+    setCurrentResult(prev => (prev ? { ...prev, tags } : prev));
   }, []);
 
   const loadResult = useCallback((r: ConvertedResult) => setCurrentResult(r), []);
@@ -70,7 +79,7 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
   return (
     <ConversionCtx.Provider value={{
       status, error, currentResult,
-      analyze, setDraftText, loadResult, clearError,
+      analyze, setText, setTags, loadResult, clearError,
     }}>
       {children}
     </ConversionCtx.Provider>

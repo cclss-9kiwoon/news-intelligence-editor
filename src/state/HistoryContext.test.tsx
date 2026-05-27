@@ -5,15 +5,18 @@ import type { ConvertedResult } from '../types';
 
 function make(id: string): ConvertedResult {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     id,
     sourceArticleIds: ['a'],
     sourceTitle: 't',
     createdAt: parseInt(id) || Date.now(),
-    valueDecision: 'Pass',
-    holdReason: '',
-    storyDraft: '# 1. 헤드라인',
     model: 'gpt-4o-mini',
+    categoryId: 'music',
+    summary: '요약',
+    headline: '헤드라인',
+    body: '본문',
+    tags: ['a'],
+    imagePrompt: 'prompt',
   };
 }
 
@@ -61,9 +64,9 @@ describe('HistoryContext', () => {
   it('version guard: discards entries that are not the current schema version', () => {
     // Stale entries (no/old schemaVersion) stored under the v2 key are dropped on load.
     localStorage.setItem('nie:history.v2', JSON.stringify([
-      { id: 'old1', sourceTitle: 'legacy', channels: {} },           // no schemaVersion
-      { ...make('111'), schemaVersion: 1 },                          // wrong version
-      make('222'),                                                   // valid v2
+      { id: 'old1', sourceTitle: 'legacy', channels: {} },  // no schemaVersion
+      { ...make('111'), schemaVersion: 2 },                  // wrong version
+      make('222'),                                           // valid v3
     ]));
     render(<HistoryProvider><Probe /></HistoryProvider>);
     expect(screen.getByTestId('count')).toHaveTextContent('1');
