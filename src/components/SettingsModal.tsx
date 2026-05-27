@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { X, Eye, EyeOff, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import { useSettings } from '../state/SettingsContext';
 import { useHistory } from '../state/HistoryContext';
-import { PROVIDERS, type ProviderId } from '../types';
+import { PROVIDERS, type ProviderId, type ArticleWindow } from '../types';
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -10,7 +10,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
     setModel,
-    addCategory, updateCategory, removeCategory,
+    addCategory, updateCategory, removeCategory, setArticleWindow,
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold,
     setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled,
@@ -185,7 +185,7 @@ export function SettingsModal({ open, onClose }: Props) {
 
         <div className={'space-y-6 p-5 ' + (tab === 'rss' ? '' : 'hidden')}>
           <section>
-            <h3 className="mb-2 font-semibold">RSS 소스</h3>
+            <h3 className="mb-2 font-semibold">매체 (RSS)</h3>
             <ul className="space-y-1 text-sm">
               {settings.rssSources.map(r => (
                 <li key={r.id} className="flex items-center gap-2">
@@ -241,13 +241,13 @@ export function SettingsModal({ open, onClose }: Props) {
               </select>
             </div>
             <p className="mt-2 text-xs text-amber-700">
-              💡 rss2json 무료 한도: <b>분당 10건</b>. 활성 소스가 많거나 폴링이 잦으면 일시적으로 요청이 거부될 수 있습니다.
-              이 경우 해당 소스는 자동으로 30분간 호출을 멈췄다가 재시도합니다. 응답은 5분 캐시됩니다.
+              💡 rss2json 무료 한도: <b>분당 10건</b>. 활성 매체가 많거나 폴링이 잦으면 일시적으로 요청이 거부될 수 있습니다.
+              이 경우 해당 매체는 자동으로 30분간 호출을 멈췄다가 재시도합니다. 응답은 5분 캐시됩니다.
             </p>
           </section>
 
           <section>
-            <h3 className="mb-2 font-semibold">사건 묶기(클러스터링) 민감도</h3>
+            <h3 className="mb-2 font-semibold">이슈 묶기(클러스터링) 민감도</h3>
             <div className="flex items-center gap-3">
               <span className="text-xs text-slate-500 w-16">느슨 0.20</span>
               <input
@@ -265,8 +265,26 @@ export function SettingsModal({ open, onClose }: Props) {
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              낮을수록 더 많은 기사가 한 사건으로 묶임 (포용적). 높을수록 엄격히 분리.
+              낮을수록 더 많은 기사가 한 이슈로 묶임 (포용적). 높을수록 엄격히 분리.
               기본 0.35.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="mb-2 font-semibold">이슈 묶는 기사 범위</h3>
+            <select
+              value={settings.articleWindow}
+              onChange={e => setArticleWindow(e.target.value as ArticleWindow)}
+              className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="1h">최근 1시간</option>
+              <option value="24h">최근 24시간 (오늘)</option>
+              <option value="7d">최근 7일</option>
+              <option value="30d">최근 30일</option>
+              <option value="breaking">속보만</option>
+            </select>
+            <p className="mt-1 text-xs text-slate-500">
+              가져온 시각 기준으로 이 범위 안의 기사만 이슈로 묶습니다. '속보만'은 속보로 분류된 기사만 모읍니다.
             </p>
           </section>
         </div>

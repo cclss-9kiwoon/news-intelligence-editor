@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import type { Settings, ModelId, RssSource, ProviderId, Category } from '../types';
+import type { Settings, ModelId, RssSource, ProviderId, Category, ArticleWindow } from '../types';
 import { PROVIDERS } from '../types';
 import { DEFAULT_SETTINGS } from '../lib/defaultSettings';
 import { loadJson, saveJson, STORAGE_KEYS } from '../lib/storage';
@@ -15,6 +15,7 @@ type Ctx = {
   addCategory: () => void;
   updateCategory: (id: string, patch: Partial<Category>) => void;
   removeCategory: (id: string) => void;
+  setArticleWindow: (w: ArticleWindow) => void;
   setRssSources: (s: RssSource[]) => void;
   toggleRssSource: (id: string) => void;
   setRssPollMinutes: (n: number) => void;
@@ -68,6 +69,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const activeCategoryId = s.activeCategoryId === id ? (categories[0]?.id ?? '') : s.activeCategoryId;
     return { ...s, categories, activeCategoryId };
   }), []);
+  const setArticleWindow = useCallback((w: ArticleWindow) => setSettings(s => ({ ...s, articleWindow: w })), []);
   const setRssSources = useCallback((rs: RssSource[]) => setSettings(s => ({ ...s, rssSources: rs })), []);
   const toggleRssSource = useCallback((id: string) =>
     setSettings(s => ({ ...s, rssSources: s.rssSources.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r) })), []);
@@ -81,7 +83,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const value: Ctx = {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
-    setModel, setActiveCategoryId, addCategory, updateCategory, removeCategory,
+    setModel, setActiveCategoryId, addCategory, updateCategory, removeCategory, setArticleWindow,
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold, setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled, resetSettings,
   };

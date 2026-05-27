@@ -1,8 +1,16 @@
 import { createContext, useContext, useMemo, useState, useCallback, useEffect, ReactNode } from 'react';
-import type { Article, Cluster } from '../types';
+import type { Article, Cluster, ArticleWindow } from '../types';
 import { groupIntoClusters } from '../lib/clustering';
 import { useArticles } from './ArticlesContext';
 import { useSettings } from './SettingsContext';
+
+const WINDOW_MS: Record<ArticleWindow, number> = {
+  '1h': 3600_000,
+  '24h': 24 * 3600_000,
+  '7d': 7 * 24 * 3600_000,
+  '30d': 30 * 24 * 3600_000,
+  'breaking': 30 * 24 * 3600_000,
+};
 
 type Ctx = {
   clusters: Cluster[];
@@ -38,7 +46,9 @@ export function ClustersProvider({ children }: { children: ReactNode }) {
   const [mergeModeSourceId, setMergeModeSourceId] = useState<string | null>(null);
 
   const clusters = useMemo(() => {
-    const auto = groupIntoClusters(articles, { threshold: settings.clusterThreshold });
+    const win = settings.articleWindow;
+    const pool = win === 'breaking' ? articles.filter(a => a.isBreaking) : articles;
+    const auto = groupIntoClusters(pool, { threshold: settings.clusterThreshold, windowMs: WINDOW_MS[win] });
 
     let withSplits: Cluster[] = [];
     for (const c of auto) {
@@ -86,7 +96,7 @@ export function ClustersProvider({ children }: { children: ReactNode }) {
 
     withSplits.sort((a, b) => b.createdAt - a.createdAt);
     return withSplits;
-  }, [articles, settings.clusterThreshold, splitOut, manualMerges]);
+  }, [articles, settings.clusterThreshold, settings.articleWindow, splitOut, manualMerges]);
 
   useEffect(() => {
     if (selectedClusterId && !clusters.some(c => c.id === selectedClusterId)) {

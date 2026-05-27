@@ -20,6 +20,7 @@ export const DEFAULT_SETTINGS: Settings = {
   model: 'gpt-4o-mini',
   categories: DEFAULT_CATEGORIES,
   activeCategoryId: 'music',
+  articleWindow: '24h',
   rssSources: DEFAULT_RSS_SOURCES,
   rssPollMinutes: 5,
   clusterThreshold: 0.35,

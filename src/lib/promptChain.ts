@@ -18,7 +18,7 @@ export function sanitizeBody(body: string): string {
 function buildStorySystem(category: Category): string {
   return [
     '당신은 한국 연예 매체의 시니어 에디터입니다.',
-    '여러 매체가 동일 사건을 다룬 한국어 기사 N건을 입력으로 받습니다.',
+    '여러 매체가 동일 이슈를 다룬 한국어 기사 N건을 입력으로 받습니다.',
     '',
     `[카테고리: ${category.label}]`,
     '[선별·정리 기준]',
@@ -42,9 +42,9 @@ function buildStorySystem(category: Category): string {
 }
 
 function buildStoryUser(articles: Article[]): string {
-  const parts: string[] = [`[같은 사건을 다룬 ${articles.length}개 소스 기사]`, ''];
+  const parts: string[] = [`[같은 이슈를 다룬 ${articles.length}개 매체 기사]`, ''];
   articles.forEach((a, i) => {
-    parts.push(`--- 소스 ${i + 1}: ${a.source} ---`);
+    parts.push(`--- 매체 ${i + 1}: ${a.source} ---`);
     parts.push(`제목: ${a.title}`);
     parts.push(`본문: ${a.fullText || a.description}`);
     if (a.pubDate) parts.push(`발행: ${a.pubDate}`);

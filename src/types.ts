@@ -120,6 +120,8 @@ export type ConvertedResult = StoryOutput & {
   categoryId: string;
 };
 
+export type ArticleWindow = '1h' | '24h' | '7d' | '30d' | 'breaking';
+
 export type Settings = {
   provider: ProviderId;
   apiKey: string;
@@ -128,6 +130,7 @@ export type Settings = {
   model: ModelId;
   categories: Category[];
   activeCategoryId: string;
+  articleWindow: ArticleWindow;
   rssSources: RssSource[];
   rssPollMinutes: number;
   clusterThreshold: number;

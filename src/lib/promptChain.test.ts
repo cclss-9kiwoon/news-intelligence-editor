@@ -14,6 +14,7 @@ const SETTINGS: Settings = {
   model: 'gpt-4o-mini',
   categories: DEFAULT_CATEGORIES,
   activeCategoryId: 'screen',
+  articleWindow: '24h',
   rssSources: [],
   rssPollMinutes: 5,
   clusterThreshold: 0.35,

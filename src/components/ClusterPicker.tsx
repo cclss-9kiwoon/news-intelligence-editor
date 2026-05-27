@@ -44,7 +44,7 @@ export function ClusterPicker() {
     <aside data-tutorial="cluster-list" className="flex h-full min-h-0 flex-col overflow-hidden border-r border-slate-200 bg-white">
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
         <h2 className="text-sm font-semibold">
-          🗂 사건 ({clusters.length}) · 기사 {totalArticles}
+          🗂 이슈 ({clusters.length}) · 기사 {totalArticles}
         </h2>
         <div className="flex gap-1">
           <button
@@ -217,7 +217,7 @@ export function ClusterPicker() {
                                 ? 'bg-indigo-600 text-white'
                                 : 'text-slate-400 hover:bg-indigo-100 hover:text-indigo-700')
                             }
-                            title="다른 사건으로 이동"
+                            title="다른 이슈로 이동"
                           >
                             <Move size={12} />
                           </button>
@@ -225,7 +225,7 @@ export function ClusterPicker() {
                             <button
                               onClick={e => { e.stopPropagation(); splitArticleOut(a.id); }}
                               className="rounded p-1 text-slate-400 hover:bg-amber-100 hover:text-amber-700"
-                              title="단독 사건으로 분리"
+                              title="단독 이슈로 분리"
                             >
                               <Split size={12} />
                             </button>

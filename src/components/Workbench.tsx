@@ -79,8 +79,8 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
           )}
           <h2 className="min-w-0 truncate text-sm font-semibold">
             {selectedCluster
-              ? `📝 ${selectedCluster.representativeTitle} · ${totalSources}개 소스`
-              : '👈 왼쪽에서 사건을 선택하세요'}
+              ? `📝 ${selectedCluster.representativeTitle} · ${totalSources}개 매체`
+              : '👈 왼쪽에서 이슈를 선택하세요'}
           </h2>
         </div>
         <div className="flex items-center gap-2 flex-none">
@@ -143,8 +143,8 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
             </h3>
             {totalSources > 1 && (
               <div className="flex items-center gap-1">
-                <button onClick={() => setSourceIdx(i => (i - 1 + totalSources) % totalSources)} className="rounded p-1 hover:bg-slate-100" aria-label="이전 소스"><ChevronLeft size={14} /></button>
-                <button onClick={() => setSourceIdx(i => (i + 1) % totalSources)} className="rounded p-1 hover:bg-slate-100" aria-label="다음 소스"><ChevronRight size={14} /></button>
+                <button onClick={() => setSourceIdx(i => (i - 1 + totalSources) % totalSources)} className="rounded p-1 hover:bg-slate-100" aria-label="이전 매체"><ChevronLeft size={14} /></button>
+                <button onClick={() => setSourceIdx(i => (i + 1) % totalSources)} className="rounded p-1 hover:bg-slate-100" aria-label="다음 매체"><ChevronRight size={14} /></button>
               </div>
             )}
           </div>
@@ -170,7 +170,7 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
         <div data-tutorial="draft-panel" className="flex min-h-0 flex-col gap-2 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3">
           {!currentResult && !isBusy && (
             <p className="text-sm text-slate-400">
-              사건을 선택하고 카테고리를 고른 뒤 [✨ 가치 평가 & 종합]을 누르면 아래 필드가 채워집니다.
+              이슈를 선택하고 카테고리를 고른 뒤 [✨ 가치 평가 & 종합]을 누르면 아래 필드가 채워집니다.
             </p>
           )}
           {currentResult?.summary && (
