@@ -12,13 +12,12 @@ type Props = {
   onToggleCollapsed?: () => void;
 };
 
-type FieldKey = 'summary' | 'headline' | 'body' | 'tags' | 'imagePrompt';
+type FieldKey = 'headline' | 'body' | 'tags' | 'imagePrompt';
 
 const FIELD_META: Array<{ key: FieldKey; label: string; placeholder: string; rows: number }> = [
-  { key: 'summary', label: '요약', placeholder: '생성 후 무엇에 관한 기사인지 중립 요약이 표시됩니다.', rows: 2 },
   { key: 'headline', label: '헤드라인', placeholder: '제목', rows: 1 },
   { key: 'body', label: '본문 (발행용)', placeholder: '라벨 없는 깨끗한 발행 본문', rows: 8 },
-  { key: 'tags', label: '태그', placeholder: '공백/쉼표로 구분 (예: 리본루키 JTBC)', rows: 1 },
+  { key: 'tags', label: '태그', placeholder: '공백/쉼표로 구분 (예: #태그 #예시)', rows: 1 },
   { key: 'imagePrompt', label: 'AI 이미지 프롬프트 (영문)', placeholder: 'English Midjourney prompt', rows: 3 },
 ];
 
@@ -29,6 +28,7 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
 
   const [sourceIdx, setSourceIdx] = useState(0);
   const [copiedField, setCopiedField] = useState<FieldKey | null>(null);
+  const [summaryOpen, setSummaryOpen] = useState(true);
 
   useEffect(() => { setSourceIdx(0); }, [selectedCluster?.id]);
 
@@ -175,6 +175,23 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
             <p className="text-sm text-slate-400">
               사건을 선택하고 카테고리를 고른 뒤 [✨ 가치 평가 & 종합]을 누르면 아래 필드가 채워집니다.
             </p>
+          )}
+          {currentResult?.summary && (
+            <div>
+              <button
+                onClick={() => setSummaryOpen(v => !v)}
+                className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700"
+                title="요약 접기/펼치기"
+              >
+                {summaryOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                요약
+              </button>
+              {summaryOpen && (
+                <p className="mt-1 whitespace-pre-wrap text-xs italic text-slate-500">
+                  {currentResult.summary}
+                </p>
+              )}
+            </div>
           )}
           {FIELD_META.map(({ key, label, placeholder, rows }) => (
             <div key={key} className="flex flex-col">

@@ -24,21 +24,21 @@ const SETTINGS: Settings = {
 };
 
 const ARTICLE_A: Article = {
-  id: 'a1', title: "JTBC '리본 루키' 출연진 공개",
-  description: "JTBC 새 드라마 '리본 루키'가 출연진과 줄거리를 공개했다.",
+  id: 'a1', title: "A방송 '예시작품' 출연진 공개",
+  description: "A방송 새 드라마 '예시작품'가 출연진과 줄거리를 공개했다.",
   link: 'https://e.com/1', pubDate: '', source: '연합', inputType: 'rss', fetchedAt: 100,
 };
 const ARTICLE_B: Article = {
-  id: 'a2', title: "'리본 루키' 티저 공개",
+  id: 'a2', title: "'예시작품' 티저 공개",
   description: '영혼 교체 설정의 예고편이 공개됐다.',
   link: 'https://e.com/2', pubDate: '', source: 'Soompi', inputType: 'rss', fetchedAt: 200,
 };
 
 const STORY: StoryOutput = {
-  summary: "JTBC 새 드라마 '리본 루키'가 줄거리와 출연진을 공개했습니다.",
-  headline: "JTBC '리본 루키', 영혼 교체 줄거리 공개",
+  summary: "A방송 새 드라마 '예시작품'가 줄거리와 출연진을 공개했습니다.",
+  headline: "A방송 '예시작품', 영혼 교체 줄거리 공개",
   body: '드라마가 첫 방송을 앞두고 주요 줄거리를 공개했다. 출연진은 호흡을 자랑했다.',
-  tags: ['리본루키', 'JTBC'],
+  tags: ['예시작품', 'A방송'],
   imagePrompt: 'A dramatic K-drama scene, soul swap, cinematic lighting.',
 };
 
@@ -60,8 +60,8 @@ describe('generateStory', () => {
 
     const out = await generateStory([ARTICLE_A, ARTICLE_B], SETTINGS, CATEGORY);
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(out.headline).toContain('리본 루키');
-    expect(out.tags).toEqual(['리본루키', 'JTBC']);
+    expect(out.headline).toContain('예시작품');
+    expect(out.tags).toEqual(['예시작품', 'A방송']);
 
     const call = spy.mock.calls[0][0] as { user: string; system: string };
     expect(call.user).toContain('연합');
