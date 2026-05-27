@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Sparkles, AlertOctagon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Copy, Check } from 'lucide-react';
+import { Loader2, Sparkles, AlertOctagon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Copy, Check, Languages } from 'lucide-react';
 import { useClusters } from '../state/ClustersContext';
 import { useConversion } from '../state/ConversionContext';
 import { useSettings } from '../state/SettingsContext';
@@ -24,7 +24,7 @@ const FIELD_META: Array<{ key: FieldKey; label: string; placeholder: string; row
 export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }: Props) {
   const { selectedCluster, selectedArticles } = useClusters();
   const { settings, setModel, setActiveCategoryId } = useSettings();
-  const { status, error, currentResult, analyze, setText, setTags, clearError } = useConversion();
+  const { status, error, currentResult, viewLang, analyze, switchLang, setText, setTags, clearError } = useConversion();
 
   const [sourceIdx, setSourceIdx] = useState(0);
   const [copiedField, setCopiedField] = useState<FieldKey | null>(null);
@@ -40,12 +40,25 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
 
   const totalSources = selectedArticles.length;
   const currentSource = selectedArticles[sourceIdx];
-  const isBusy = status === 'analyzing';
+  const isBusy = status === 'analyzing' || status === 'translating';
+
+  const view = currentResult
+    ? (viewLang === 'en' && currentResult.en
+        ? currentResult.en
+        : { summary: currentResult.summary, headline: currentResult.headline, body: currentResult.body, tags: currentResult.tags })
+    : null;
+
+  const triggerSwitchLang = (lang: 'ko' | 'en') => {
+    if (lang === 'en' && !currentResult?.en && !settings.apiKey) { onMissingKey(); return; }
+    switchLang(lang);
+  };
 
   const fieldText = (key: FieldKey): string => {
-    if (!currentResult) return '';
-    if (key === 'tags') return currentResult.tags.map(t => `#${t}`).join(' ');
-    return currentResult[key];
+    if (!currentResult || !view) return '';
+    if (key === 'imagePrompt') return currentResult.imagePrompt;
+    if (key === 'tags') return view.tags.map(t => `#${t}`).join(' ');
+    if (key === 'headline') return view.headline;
+    return view.body;
   };
 
   const onFieldChange = (key: FieldKey, value: string) => {
@@ -173,7 +186,30 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
               이슈를 선택하고 카테고리를 고른 뒤 [✨ 가치 평가 & 종합]을 누르면 아래 필드가 채워집니다.
             </p>
           )}
-          {currentResult?.summary && (
+          {currentResult && (
+            <div className="flex items-center justify-between">
+              <div className="flex overflow-hidden rounded-md border border-slate-300 text-xs">
+                {(['ko', 'en'] as const).map(lang => (
+                  <button
+                    key={lang}
+                    onClick={() => triggerSwitchLang(lang)}
+                    disabled={isBusy}
+                    className={
+                      'flex items-center px-2 py-0.5 ' +
+                      (viewLang === lang ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100') +
+                      (isBusy ? ' cursor-not-allowed opacity-50' : '')
+                    }
+                    title={lang === 'ko' ? '한국어 보기' : '영어로 번역해서 보기'}
+                  >
+                    {lang === 'ko' ? '한국어' : 'English'}
+                    {lang === 'en' && !currentResult.en && <Languages size={10} className="ml-1" />}
+                  </button>
+                ))}
+              </div>
+              {status === 'translating' && <span className="text-xs text-indigo-600">번역 중…</span>}
+            </div>
+          )}
+          {view?.summary && (
             <div className="rounded-md border border-slate-200 bg-slate-50 p-2">
               <button
                 onClick={() => setSummaryOpen(v => !v)}
@@ -185,7 +221,7 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
               </button>
               {summaryOpen && (
                 <p className="mt-1 whitespace-pre-wrap text-xs italic text-slate-600">
-                  {currentResult.summary}
+                  {view.summary}
                 </p>
               )}
             </div>

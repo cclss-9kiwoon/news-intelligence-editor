@@ -1,4 +1,4 @@
-import type { Article, Settings, Category, ConvertedResult, StoryOutput } from '../types';
+import type { Article, Settings, Category, ConvertedResult, StoryOutput, TranslatedFields } from '../types';
 import { CONVERTED_RESULT_SCHEMA_VERSION } from '../types';
 import { chatJson } from './openai';
 
@@ -75,6 +75,42 @@ export async function generateStory(
     body: sanitizeBody(out.body ?? ''),
     tags: Array.isArray(out.tags) ? out.tags : [],
     imagePrompt: out.imagePrompt ?? '',
+  };
+}
+
+export async function translateToEnglish(
+  fields: TranslatedFields,
+  settings: Settings,
+): Promise<TranslatedFields> {
+  const system = [
+    'You are a professional Korean→English news translator and copy editor.',
+    'Translate the given Korean draft fields into natural, publication-ready English.',
+    'Preserve every fact exactly (people, numbers, dates, organizations). Romanize Korean names in standard form (e.g., 양정아 → Yang Jung-ah).',
+    `NEVER use these AI clichés: ${BANNED_LIST_FOR_PROMPT}`,
+    'tags: translate each keyword to a concise English keyword (no # prefix).',
+    'Respond ONLY with valid JSON, exactly 4 keys: { "summary": string, "headline": string, "body": string, "tags": string[] }',
+  ].join('\n');
+  const user = [
+    `[summary]\n${fields.summary}`,
+    `[headline]\n${fields.headline}`,
+    `[body]\n${fields.body}`,
+    `[tags]\n${fields.tags.join(', ')}`,
+  ].join('\n\n');
+
+  const out = await chatJson<TranslatedFields>({
+    apiKey: settings.apiKey,
+    baseUrl: settings.apiBaseUrl,
+    model: settings.model,
+    system,
+    user,
+    temperature: 0.3,
+  });
+
+  return {
+    summary: out.summary ?? '',
+    headline: out.headline ?? '',
+    body: sanitizeBody(out.body ?? ''),
+    tags: Array.isArray(out.tags) ? out.tags : [],
   };
 }
 

@@ -110,6 +110,9 @@ export type StoryOutput = {
 
 export const CONVERTED_RESULT_SCHEMA_VERSION = 3;
 
+// 번역 가능한 필드 부분집합 (imagePrompt는 항상 영문이라 제외)
+export type TranslatedFields = Pick<StoryOutput, 'summary' | 'headline' | 'body' | 'tags'>;
+
 export type ConvertedResult = StoryOutput & {
   schemaVersion: typeof CONVERTED_RESULT_SCHEMA_VERSION;
   id: string;
@@ -118,6 +121,7 @@ export type ConvertedResult = StoryOutput & {
   createdAt: number;
   model: ModelId;
   categoryId: string;
+  en?: TranslatedFields;  // 영어 번역본 (요청 시 생성·캐시)
 };
 
 export type ArticleWindow = '1h' | '24h' | '7d' | '30d' | 'breaking';

@@ -6,7 +6,7 @@ import { copyToClipboard } from '../lib/clipboard';
 import { scan } from '../lib/bannedWords';
 
 export function StoryPreview() {
-  const { currentResult } = useConversion();
+  const { currentResult, viewLang, switchLang, status } = useConversion();
   const [copied, setCopied] = useState(false);
 
   if (!currentResult) {
@@ -17,7 +17,8 @@ export function StoryPreview() {
     );
   }
 
-  const { headline, body, tags } = currentResult;
+  const view = viewLang === 'en' && currentResult.en ? currentResult.en : currentResult;
+  const { headline, body, tags } = view;
   const tagLine = tags.map(t => `#${t}`).join(' ');
   const markdown = `# ${headline}\n\n${body}${tagLine ? `\n\n${tagLine}` : ''}`;
   const bannedHits = scan(body).hits;
@@ -34,6 +35,24 @@ export function StoryPreview() {
       <div className="flex flex-wrap items-center border-b border-slate-200 px-4 py-1">
         <span className="text-sm font-medium text-slate-700">📄 발행용 미리보기 (헤드라인 + 본문)</span>
         <div className="ml-auto flex flex-wrap items-center gap-3 text-xs text-slate-500">
+          <div className="flex overflow-hidden rounded-md border border-slate-300">
+            {(['ko', 'en'] as const).map(lang => (
+              <button
+                key={lang}
+                onClick={() => switchLang(lang)}
+                disabled={status === 'translating'}
+                className={
+                  'px-2 py-0.5 ' +
+                  (viewLang === lang ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 hover:bg-slate-100') +
+                  (status === 'translating' ? ' cursor-not-allowed opacity-50' : '')
+                }
+                title={lang === 'ko' ? '한국어 보기' : '영어로 번역해서 보기'}
+              >
+                {lang === 'ko' ? '한국어' : 'English'}
+              </button>
+            ))}
+          </div>
+          {status === 'translating' && <span className="text-indigo-600">번역 중…</span>}
           <span>글자 {body.length}</span>
           {bannedHits.length > 0 && (
             <span className="font-semibold text-red-600">금지어 {bannedHits.length}건</span>

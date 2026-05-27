@@ -1,18 +1,21 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import type { Article, ConvertedResult } from '../types';
-import { generateStory, buildInitialResult } from '../lib/promptChain';
+import { generateStory, buildInitialResult, translateToEnglish } from '../lib/promptChain';
 import { OpenAIError } from '../lib/openai';
 import { useSettings } from './SettingsContext';
 import { useHistory } from './HistoryContext';
 
-type Status = 'idle' | 'analyzing' | 'error';
+type Status = 'idle' | 'analyzing' | 'translating' | 'error';
 type TextField = 'summary' | 'headline' | 'body' | 'imagePrompt';
+type ViewLang = 'ko' | 'en';
 
 type Ctx = {
   status: Status;
   error: string | null;
   currentResult: ConvertedResult | null;
+  viewLang: ViewLang;
   analyze: (articles: Article[]) => Promise<void>;
+  switchLang: (target: ViewLang) => Promise<void>;
   setText: (field: TextField, value: string) => void;
   setTags: (tags: string[]) => void;
   loadResult: (result: ConvertedResult) => void;
@@ -44,6 +47,7 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
   const [currentResult, setCurrentResult] = useState<ConvertedResult | null>(null);
+  const [viewLang, setViewLang] = useState<ViewLang>('ko');
 
   const analyze = useCallback(async (articles: Article[]) => {
     if (!settings.apiKey) { setError('NO_API_KEY'); return; }
@@ -57,6 +61,7 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
       const story = await generateStory(articles, settings, category);
       const result = buildInitialResult(articles, story, settings, category);
       setCurrentResult(result);
+      setViewLang('ko');
       addEntry(result);
       setStatus('idle');
     } catch (err) {
@@ -65,21 +70,52 @@ export function ConversionProvider({ children }: { children: ReactNode }) {
     }
   }, [settings, addEntry]);
 
+  const switchLang = useCallback(async (target: ViewLang) => {
+    if (!currentResult) return;
+    if (target === 'ko') { setViewLang('ko'); return; }
+    if (currentResult.en) { setViewLang('en'); return; }
+    if (!settings.apiKey) { setError('NO_API_KEY'); return; }
+    setStatus('translating');
+    setError(null);
+    try {
+      const en = await translateToEnglish(
+        { summary: currentResult.summary, headline: currentResult.headline, body: currentResult.body, tags: currentResult.tags },
+        settings,
+      );
+      setCurrentResult(prev => (prev ? { ...prev, en } : prev));
+      setViewLang('en');
+      setStatus('idle');
+    } catch (err) {
+      setError(toErrorMessage(err));
+      setStatus('error');
+    }
+  }, [currentResult, settings]);
+
   const setText = useCallback((field: TextField, value: string) => {
-    setCurrentResult(prev => (prev ? { ...prev, [field]: value } : prev));
-  }, []);
+    setCurrentResult(prev => {
+      if (!prev) return prev;
+      if (viewLang === 'en' && prev.en && field !== 'imagePrompt') {
+        return { ...prev, en: { ...prev.en, [field]: value } };
+      }
+      return { ...prev, [field]: value };
+    });
+  }, [viewLang]);
 
   const setTags = useCallback((tags: string[]) => {
-    setCurrentResult(prev => (prev ? { ...prev, tags } : prev));
-  }, []);
+    setCurrentResult(prev => {
+      if (!prev) return prev;
+      if (viewLang === 'en' && prev.en) return { ...prev, en: { ...prev.en, tags } };
+      return { ...prev, tags };
+    });
+  }, [viewLang]);
 
-  const loadResult = useCallback((r: ConvertedResult) => setCurrentResult(r), []);
+  const loadResult = useCallback((r: ConvertedResult) => { setCurrentResult(r); setViewLang('ko'); }, []);
   const clearError = useCallback(() => setError(null), []);
 
   return (
     <ConversionCtx.Provider value={{
-      status, error, currentResult,
-      analyze, setText, setTags, loadResult, clearError,
+      status, error, currentResult, viewLang,
+      analyze, switchLang, setText, setTags, loadResult, clearError,
     }}>
       {children}
     </ConversionCtx.Provider>
