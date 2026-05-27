@@ -1,5 +1,6 @@
 import type { Settings, RssSource } from '../types';
 import { DEFAULT_PROVIDER, PROVIDERS } from '../types';
+import { DEFAULT_CATEGORIES } from './defaultCategories';
 
 export const DEFAULT_RSS_SOURCES: RssSource[] = [
   { id: 'yna-news', name: '연합뉴스 속보', url: 'https://www.yna.co.kr/rss/news.xml', enabled: true },
@@ -17,7 +18,8 @@ export const DEFAULT_SETTINGS: Settings = {
   apiBaseUrl: PROVIDERS[DEFAULT_PROVIDER].baseUrl,
   rss2jsonApiKey: '',
   model: 'gpt-4o-mini',
-  customStyleInstruction: '',
+  categories: DEFAULT_CATEGORIES,
+  activeCategoryId: 'music',
   rssSources: DEFAULT_RSS_SOURCES,
   rssPollMinutes: 5,
   clusterThreshold: 0.35,

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import type { Settings, ModelId, RssSource, ProviderId } from '../types';
+import type { Settings, ModelId, RssSource, ProviderId, Category } from '../types';
 import { PROVIDERS } from '../types';
 import { DEFAULT_SETTINGS } from '../lib/defaultSettings';
 import { loadJson, saveJson, STORAGE_KEYS } from '../lib/storage';
@@ -11,7 +11,10 @@ type Ctx = {
   setProvider: (p: ProviderId) => void;
   setApiBaseUrl: (u: string) => void;
   setModel: (m: ModelId) => void;
-  setCustomStyleInstruction: (s: string) => void;
+  setActiveCategoryId: (id: string) => void;
+  addCategory: () => void;
+  updateCategory: (id: string, patch: Partial<Category>) => void;
+  removeCategory: (id: string) => void;
   setRssSources: (s: RssSource[]) => void;
   toggleRssSource: (id: string) => void;
   setRssPollMinutes: (n: number) => void;
@@ -28,7 +31,13 @@ const SettingsCtx = createContext<Ctx | null>(null);
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(() => {
     const stored = loadJson<Partial<Settings>>(STORAGE_KEYS.settings, {});
-    return { ...DEFAULT_SETTINGS, ...stored, rssSources: stored.rssSources || DEFAULT_SETTINGS.rssSources };
+    return {
+      ...DEFAULT_SETTINGS,
+      ...stored,
+      rssSources: stored.rssSources || DEFAULT_SETTINGS.rssSources,
+      categories: stored.categories && stored.categories.length > 0 ? stored.categories : DEFAULT_SETTINGS.categories,
+      activeCategoryId: stored.activeCategoryId || DEFAULT_SETTINGS.activeCategoryId,
+    };
   });
 
   useEffect(() => {
@@ -44,7 +53,21 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }), []);
   const setApiBaseUrl = useCallback((u: string) => setSettings(s => ({ ...s, apiBaseUrl: u })), []);
   const setModel = useCallback((m: ModelId) => setSettings(s => ({ ...s, model: m })), []);
-  const setCustomStyleInstruction = useCallback((v: string) => setSettings(s => ({ ...s, customStyleInstruction: v })), []);
+  const setActiveCategoryId = useCallback((id: string) => setSettings(s => ({ ...s, activeCategoryId: id })), []);
+  const addCategory = useCallback(() => setSettings(s => {
+    const id = `cat-${Date.now()}`;
+    const next: Category = { id, label: '새 카테고리', criteria: '', tone: '' };
+    return { ...s, categories: [...s.categories, next], activeCategoryId: id };
+  }), []);
+  const updateCategory = useCallback((id: string, patch: Partial<Category>) => setSettings(s => ({
+    ...s,
+    categories: s.categories.map(c => (c.id === id ? { ...c, ...patch } : c)),
+  })), []);
+  const removeCategory = useCallback((id: string) => setSettings(s => {
+    const categories = s.categories.filter(c => c.id !== id);
+    const activeCategoryId = s.activeCategoryId === id ? (categories[0]?.id ?? '') : s.activeCategoryId;
+    return { ...s, categories, activeCategoryId };
+  }), []);
   const setRssSources = useCallback((rs: RssSource[]) => setSettings(s => ({ ...s, rssSources: rs })), []);
   const toggleRssSource = useCallback((id: string) =>
     setSettings(s => ({ ...s, rssSources: s.rssSources.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r) })), []);
@@ -58,7 +81,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const value: Ctx = {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
-    setModel, setCustomStyleInstruction,
+    setModel, setActiveCategoryId, addCategory, updateCategory, removeCategory,
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold, setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled, resetSettings,
   };
