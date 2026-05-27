@@ -1,12 +1,15 @@
 import { X, Trash2 } from 'lucide-react';
 import { useHistory } from '../state/HistoryContext';
 import { useConversion } from '../state/ConversionContext';
+import { useSettings } from '../state/SettingsContext';
 
 type Props = { open: boolean; onClose: () => void };
 
 export function HistoryPanel({ open, onClose }: Props) {
   const { history, removeEntry } = useHistory();
   const { loadResult } = useConversion();
+  const { settings } = useSettings();
+  const labelOf = (id: string) => settings.categories.find(c => c.id === id)?.label ?? id;
 
   if (!open) return null;
 
@@ -39,18 +42,10 @@ export function HistoryPanel({ open, onClose }: Props) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 text-xs text-slate-500">
                     <span>{new Date(h.createdAt).toLocaleString('ko-KR')}</span>
-                    <span
-                      className={
-                        'rounded px-1.5 font-semibold ' +
-                        (h.valueDecision === 'Pass'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-amber-100 text-amber-700')
-                      }
-                    >
-                      {h.valueDecision === 'Pass' ? '✅ Pass' : '⚠️ Fail'}
-                    </span>
+                    <span className="rounded bg-slate-100 px-1.5 text-slate-700">{labelOf(h.categoryId)}</span>
                   </div>
                   <div className="mt-0.5 text-sm font-medium truncate">{h.sourceTitle}</div>
+                  {h.summary && <div className="mt-0.5 text-xs text-slate-500 truncate">{h.summary}</div>}
                 </div>
                 <button
                   onClick={e => { e.stopPropagation(); removeEntry(h.id); }}
