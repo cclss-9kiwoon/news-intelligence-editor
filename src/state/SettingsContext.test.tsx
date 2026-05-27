@@ -11,6 +11,9 @@ function Probe() {
       <span data-testid="screen-label">
         {settings.categories.find(c => c.id === 'screen')?.label}
       </span>
+      <span data-testid="music-label">
+        {settings.categories.find(c => c.id === 'music')?.label}
+      </span>
       <button onClick={() => setActiveCategoryId('screen')}>activate</button>
       <button onClick={() => addCategory()}>add</button>
       <button onClick={() => updateCategory('music', { label: 'EDITED' })}>edit</button>
@@ -39,6 +42,7 @@ describe('SettingsContext categories', () => {
     act(() => screen.getByText('add').click());
     expect(screen.getByTestId('count')).toHaveTextContent('6');
     act(() => screen.getByText('edit').click());
+    expect(screen.getByTestId('music-label')).toHaveTextContent('EDITED');
     expect(screen.getByTestId('screen-label')).toHaveTextContent('🎬');
     act(() => screen.getByText('remove').click());
     expect(screen.getByTestId('count')).toHaveTextContent('5');
