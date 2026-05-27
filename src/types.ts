@@ -92,27 +92,32 @@ export type Cluster = {
   createdAt: number;
 };
 
-export type ValueDecision = 'Pass' | 'Fail';
-
-// LLM이 반환하는 정확히 3개 키 (단일 드래프트 엔진 산출물)
-export type StoryOutput = {
-  valueDecision: ValueDecision;
-  holdReason: string;   // 한국어
-  storyDraft: string;   // 5섹션 마크다운 (§5만 영문)
+export type Category = {
+  id: string;
+  label: string;
+  criteria: string;  // 선별/평가 기준 템플릿
+  tone: string;      // 말투/문체 템플릿
 };
 
-export const CONVERTED_RESULT_SCHEMA_VERSION = 2;
+// LLM이 반환하는 정확히 5개 키 (구조화 발행 드래프트)
+export type StoryOutput = {
+  summary: string;     // 중립 요약 1~2줄 (판단 X)
+  headline: string;
+  body: string;        // 발행용 깨끗한 본문 (섹션 라벨 없음)
+  tags: string[];
+  imagePrompt: string; // 순수 영문(Midjourney)
+};
 
-export type ConvertedResult = {
+export const CONVERTED_RESULT_SCHEMA_VERSION = 3;
+
+export type ConvertedResult = StoryOutput & {
   schemaVersion: typeof CONVERTED_RESULT_SCHEMA_VERSION;
   id: string;
   sourceArticleIds: string[];
   sourceTitle: string;
   createdAt: number;
-  valueDecision: ValueDecision;
-  holdReason: string;
-  storyDraft: string;
   model: ModelId;
+  categoryId: string;
 };
 
 export type Settings = {
@@ -121,7 +126,8 @@ export type Settings = {
   apiBaseUrl: string;
   rss2jsonApiKey: string;
   model: ModelId;
-  customStyleInstruction: string;
+  categories: Category[];
+  activeCategoryId: string;
   rssSources: RssSource[];
   rssPollMinutes: number;
   clusterThreshold: number;
