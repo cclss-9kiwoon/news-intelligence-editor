@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { loadJson, saveJson, removeKey } from './storage';
+import { loadJson, saveJson } from './storage';
 
 beforeEach(() => {
   localStorage.clear();
@@ -18,12 +18,6 @@ describe('storage', () => {
   it('loadJson returns default when value is invalid JSON', () => {
     localStorage.setItem('nie:bad', '{not json');
     expect(loadJson('nie:bad', { fallback: true })).toEqual({ fallback: true });
-  });
-
-  it('removeKey clears the value', () => {
-    saveJson('nie:gone', { x: 1 });
-    removeKey('nie:gone');
-    expect(loadJson('nie:gone', null)).toBe(null);
   });
 
   it('saveJson swallows quota errors gracefully', () => {

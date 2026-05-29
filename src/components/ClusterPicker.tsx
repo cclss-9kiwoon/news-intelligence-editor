@@ -1,15 +1,23 @@
 import { useState } from 'react';
-import { RefreshCw, Plus, ChevronDown, ChevronRight, Split, Move, X, ArrowDownToLine } from 'lucide-react';
+import { RefreshCw, Loader2, Plus, ChevronDown, ChevronRight, Split, Move, X, ArrowDownToLine, Sparkles } from 'lucide-react';
 import { useArticles } from '../state/ArticlesContext';
 import { useClusters } from '../state/ClustersContext';
+import { useSettings } from '../state/SettingsContext';
+import { useConversion } from '../state/ConversionContext';
 
 export function ClusterPicker() {
-  const { articles, addManualArticle, refreshNow } = useArticles();
+  const { articles, addManualArticle, refreshNow, isRefreshing, isInitialLoading, lastRefreshedAt, enrichStats, enrichMethod } = useArticles();
   const {
     clusters, selectedClusterId, selectCluster,
     splitArticleOut, resetSplits, resetMerges,
     mergeModeSourceId, startMergeMode, cancelMergeMode, mergeIntoCluster,
   } = useClusters();
+
+  const { settings } = useSettings();
+  const { status, analyze } = useConversion();
+  const isBusy = status === 'analyzing' || status === 'translating';
+  const [activeCategoryFilter, setActiveCategoryFilter] = useState<string | null>(null);
+  const [categoryExpanded, setCategoryExpanded] = useState(true);
 
   const [showManual, setShowManual] = useState(false);
   const [manualTitle, setManualTitle] = useState('');
@@ -19,6 +27,15 @@ export function ClusterPicker() {
 
   const totalArticles = articles.length;
   const movingArticle = mergeModeSourceId ? articles.find(a => a.id === mergeModeSourceId) : null;
+
+  const filteredClusters = activeCategoryFilter
+    ? clusters.filter(cluster => {
+        const memberArticles = cluster.articleIds
+          .map(id => articles.find(a => a.id === id))
+          .filter((a): a is NonNullable<typeof a> => !!a);
+        return memberArticles.some(a => a.category === activeCategoryFilter);
+      })
+    : clusters;
 
   const toggleExpanded = (id: string) => {
     setExpanded(prev => {
@@ -43,9 +60,23 @@ export function ClusterPicker() {
   return (
     <aside data-tutorial="cluster-list" className="flex h-full min-h-0 flex-col overflow-hidden border-r border-slate-200 bg-white">
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
-        <h2 className="text-sm font-semibold">
-          🗂 이슈 ({clusters.length}) · 기사 {totalArticles}
-        </h2>
+        <div>
+          <h2 className="text-sm font-semibold">
+            🗂 이슈 ({activeCategoryFilter ? `${filteredClusters.length}/${clusters.length}` : clusters.length}) · 기사 {totalArticles}
+          </h2>
+          {lastRefreshedAt && (
+            <p className="text-[10px] text-slate-400">
+              마지막 갱신: {new Date(lastRefreshedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
+          <p className="text-[10px] text-slate-400 flex items-center gap-1">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
+            {enrichMethod === 'naver' ? '네이버 전문 수집 활성' : '전문 수집 활성'}
+            {enrichStats && (
+              <span className="text-green-600 ml-1">· {enrichStats.enriched}건 전문 확보</span>
+            )}
+          </p>
+        </div>
         <div className="flex gap-1">
           <button
             onClick={() => { resetSplits(); resetMerges(); }}
@@ -56,10 +87,11 @@ export function ClusterPicker() {
           </button>
           <button
             onClick={refreshNow}
-            className="rounded p-1 hover:bg-slate-100"
+            disabled={isRefreshing}
+            className={'rounded p-1 hover:bg-slate-100' + (isRefreshing ? ' animate-spin text-indigo-600' : '')}
             title="새로고침"
           >
-            <RefreshCw size={14} />
+            {isRefreshing ? <Loader2 size={14} /> : <RefreshCw size={14} />}
           </button>
           <button
             onClick={() => setShowManual(v => !v)}
@@ -119,13 +151,58 @@ export function ClusterPicker() {
         </div>
       )}
 
+      <div className="border-b border-slate-100">
+        <button
+          onClick={() => setCategoryExpanded(v => !v)}
+          className="flex w-full items-center justify-between px-3 py-1 text-xs text-slate-500 hover:bg-slate-50"
+        >
+          <span className="font-semibold">카테고리 필터 {activeCategoryFilter ? '(적용 중)' : ''}</span>
+          {categoryExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        </button>
+        {categoryExpanded && (
+          <div className="flex flex-wrap gap-1 px-3 pb-2">
+            <button
+              onClick={() => setActiveCategoryFilter(null)}
+              className={
+                'rounded-full px-2.5 py-1 text-xs font-medium transition-colors ' +
+                (activeCategoryFilter === null
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200')
+              }
+            >
+              전체
+            </button>
+            {settings.categories.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategoryFilter(prev => prev === cat.id ? null : cat.id)}
+                className={
+                  'rounded-full px-2.5 py-1 text-xs font-medium transition-colors ' +
+                  (activeCategoryFilter === cat.id
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200')
+                }
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       <ul className="flex-1 min-h-0 overflow-y-auto">
-        {clusters.length === 0 && (
+        {isInitialLoading && filteredClusters.length === 0 && (
+          <li className="px-4 py-6 text-center text-sm text-slate-400">
+            <Loader2 size={16} className="inline animate-spin mr-1" />
+            기사 수집 중…
+          </li>
+        )}
+        {!isInitialLoading && filteredClusters.length === 0 && (
           <li className="px-4 py-6 text-center text-sm text-slate-400">
             아직 수집된 기사가 없습니다. 30초 대기 또는 ＋ 버튼으로 직접 입력.
           </li>
         )}
-        {clusters.map(cluster => {
+        {filteredClusters.map(cluster => {
           const isOpen = expanded.has(cluster.id);
           const isSelected = selectedClusterId === cluster.id;
           const memberArticles = cluster.articleIds
@@ -170,6 +247,23 @@ export function ClusterPicker() {
                     </div>
                   )}
                 </div>
+                {!movingArticle && (
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      selectCluster(cluster.id);
+                      const clusterArticles = cluster.articleIds
+                        .map(id => articles.find(a => a.id === id))
+                        .filter((a): a is NonNullable<typeof a> => !!a);
+                      if (clusterArticles.length > 0) analyze(clusterArticles);
+                    }}
+                    disabled={isBusy}
+                    className="mt-0.5 shrink-0 rounded p-1 text-slate-400 hover:bg-indigo-100 hover:text-indigo-600 disabled:opacity-30"
+                    title="바로 드래프트 생성"
+                  >
+                    <Sparkles size={14} />
+                  </button>
+                )}
                 {isMergeTarget && (
                   <button
                     onClick={e => { e.stopPropagation(); mergeIntoCluster(cluster.id); }}
@@ -191,9 +285,14 @@ export function ClusterPicker() {
                     >
                       <div className="flex items-start gap-2">
                         <div className="min-w-0 flex-1">
-                          <div className="text-xs text-slate-500">
+                          <div className="text-xs text-slate-500 flex items-center gap-1">
                             {a.source}
-                            {a.inputType === 'simulator' && <span className="ml-1">🧪</span>}
+                            {a.inputType === 'simulator' && <span>🧪</span>}
+                            {a.fullText ? (
+                              <span className="rounded bg-green-100 px-1 text-[10px] text-green-700">전문</span>
+                            ) : (
+                              <span className="rounded bg-amber-100 px-1 text-[10px] text-amber-700">스니펫</span>
+                            )}
                           </div>
                           <div className="text-xs text-slate-800 line-clamp-2">{a.title}</div>
                           {a.link && !a.link.startsWith('manual://') && !a.link.startsWith('simulator://') && (

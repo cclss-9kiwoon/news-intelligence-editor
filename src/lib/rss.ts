@@ -100,6 +100,17 @@ function setBackoff(sourceId: string) {
   try { localStorage.setItem(BACKOFF_PREFIX + sourceId, String(Date.now())); } catch { /* ignore */ }
 }
 
+export function clearAllRssCache() {
+  const toRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.startsWith(CACHE_PREFIX) || key.startsWith(BACKOFF_PREFIX))) {
+      toRemove.push(key);
+    }
+  }
+  toRemove.forEach(k => localStorage.removeItem(k));
+}
+
 export async function fetchRss(source: RssSource, apiKey?: string): Promise<Article[]> {
   const cached = readCache(source.id);
   if (cached) return cached;

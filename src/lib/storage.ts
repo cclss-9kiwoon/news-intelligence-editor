@@ -16,16 +16,59 @@ export function saveJson(key: string, value: unknown): void {
   }
 }
 
-export function removeKey(key: string): void {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    /* ignore */
-  }
-}
-
 export const STORAGE_KEYS = {
   settings: 'nie:settings',
   // v2: 단일 드래프트 스키마. 구버전 'nie:history'(3채널/이중언어)는 로드하지 않고 폐기.
   history: 'nie:history.v2',
 } as const;
+
+// ─── File-based settings backup ─────────────────────────────────────
+// Persists settings to a local file via Vite dev server so they survive
+// localStorage wipes (port changes, cache clears, etc.)
+
+let backupTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Keys stripped from backup — never persisted to disk */
+const SENSITIVE_KEYS = ['apiKey', 'apiBaseUrl', 'naverClientId', 'naverClientSecret', 'rss2jsonApiKey'];
+
+function stripSensitive(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (SENSITIVE_KEYS.includes(k)) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+/** Save settings to file-based backup (debounced). Sensitive fields (API keys) excluded. */
+export function backupSettingsToFile(settings: unknown): void {
+  if (backupTimer) clearTimeout(backupTimer);
+  backupTimer = setTimeout(async () => {
+    try {
+      const safe = typeof settings === 'object' && settings !== null
+        ? stripSensitive(settings as Record<string, unknown>)
+        : settings;
+      await fetch('/api/settings-backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(safe),
+      });
+      console.log('[storage] settings backed up to file (keys excluded)');
+    } catch {
+      // Dev server may not be available (production build) — silently ignore
+    }
+  }, 2000);
+}
+
+/** Try to restore settings from file backup. Returns null if none found. */
+export async function restoreSettingsFromFile<T>(): Promise<T | null> {
+  try {
+    const res = await fetch('/api/settings-backup');
+    if (!res.ok) return null;
+    const data = await res.json();
+    console.log('[storage] settings restored from file backup');
+    return data as T;
+  } catch {
+    return null;
+  }
+}

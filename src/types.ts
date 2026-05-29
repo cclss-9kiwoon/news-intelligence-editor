@@ -5,6 +5,13 @@ export type RssSource = {
   enabled: boolean;
 };
 
+export type ArticleImage = {
+  url: string;
+  alt?: string;
+  caption?: string;
+  source?: string;          // 출처 매체명
+};
+
 export type Article = {
   id: string;
   title: string;
@@ -16,6 +23,7 @@ export type Article = {
   inputType: 'rss' | 'url' | 'paste' | 'simulator';
   category?: string;
   thumbnail?: string;
+  images?: ArticleImage[];   // 본문 내 모든 이미지
   isBreaking?: boolean;
   fetchedAt: number;
 };
@@ -84,6 +92,21 @@ export const PROVIDERS: Record<ProviderId, ProviderConfig> = {
 
 export const DEFAULT_PROVIDER: ProviderId = 'openai';
 
+export type PromptConfig = {
+  editorRole: string;
+  publishingGuide: string;
+  taskInstructions: string;
+  bannedExpressions: string;
+};
+
+export type ReferenceArticle = {
+  id: string;
+  url: string;
+  title: string;
+  body: string;
+  fetchedAt: number;
+};
+
 export type Cluster = {
   id: string;
   articleIds: string[];
@@ -99,13 +122,14 @@ export type Category = {
   tone: string;      // 말투/문체 템플릿
 };
 
-// LLM이 반환하는 정확히 5개 키 (구조화 발행 드래프트)
+// LLM이 반환하는 정확히 6개 키 (구조화 발행 드래프트)
 export type StoryOutput = {
   summary: string;     // 중립 요약 1~2줄 (판단 X)
   headline: string;
   body: string;        // 발행용 깨끗한 본문 (섹션 라벨 없음)
   tags: string[];
   imagePrompt: string; // 순수 영문(Midjourney)
+  sourceFacts?: string[];  // key facts extracted from sources
 };
 
 export const CONVERTED_RESULT_SCHEMA_VERSION = 3;
@@ -142,4 +166,9 @@ export type Settings = {
   simulatorIntervalSec: number;
   alertSoundEnabled: boolean;
   browserNotificationsEnabled: boolean;
+  naverClientId: string;
+  naverClientSecret: string;
+  naverQueries: string[];
+  promptConfig: PromptConfig;
+  referenceArticles: ReferenceArticle[];
 };

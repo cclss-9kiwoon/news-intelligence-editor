@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { X, Eye, EyeOff, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, Eye, EyeOff, Plus, Trash2, ChevronDown, ChevronRight, RotateCcw, Loader2 } from 'lucide-react';
 import { useSettings } from '../state/SettingsContext';
 import { useHistory } from '../state/HistoryContext';
-import { PROVIDERS, type ProviderId, type ArticleWindow } from '../types';
+import { PROVIDERS, type ProviderId, type ArticleWindow, type PromptConfig } from '../types';
+import { extractArticleText } from '../lib/scraper';
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -14,16 +15,23 @@ export function SettingsModal({ open, onClose }: Props) {
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold,
     setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled,
+    updatePromptConfig, resetPromptConfigField,
+    addReferenceArticle, removeReferenceArticle,
+    setNaverClientId, setNaverClientSecret, setNaverQueries,
   } = useSettings();
   const providerCfg = PROVIDERS[settings.provider];
   const providerModels = providerCfg.models;
   const { clear } = useHistory();
   const [showKey, setShowKey] = useState(false);
   const [showRssKey, setShowRssKey] = useState(false);
+  const [showNaverKey, setShowNaverKey] = useState(false);
   const [newRssName, setNewRssName] = useState('');
   const [newRssUrl, setNewRssUrl] = useState('');
-  const [tab, setTab] = useState<'ai' | 'rss' | 'alerts' | 'category'>('ai');
+  const [tab, setTab] = useState<'ai' | 'rss' | 'alerts' | 'category' | 'prompt'>('ai');
   const [categoryOpen, setCategoryOpen] = useState<Record<string, boolean>>({});
+  const [refUrl, setRefUrl] = useState('');
+  const [refFetching, setRefFetching] = useState(false);
+  const [refError, setRefError] = useState('');
 
   if (!open) return null;
 
@@ -72,6 +80,10 @@ export function SettingsModal({ open, onClose }: Props) {
             onClick={() => setTab('alerts')}
             className={'px-3 py-2 text-sm font-medium border-b-2 ' + (tab === 'alerts' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700')}
           >🔔 알림</button>
+          <button
+            onClick={() => setTab('prompt')}
+            className={'px-3 py-2 text-sm font-medium border-b-2 ' + (tab === 'prompt' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700')}
+          >✏️ 프롬프트</button>
           <button
             onClick={() => setTab('category')}
             className={'px-3 py-2 text-sm font-medium border-b-2 ' + (tab === 'category' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700')}
@@ -333,6 +345,61 @@ export function SettingsModal({ open, onClose }: Props) {
 
         <div className={'space-y-6 p-5 ' + (tab === 'ai' ? '' : 'hidden')}>
           <section>
+            <h3 className="mb-2 font-semibold">네이버 뉴스 API (전문 수집)</h3>
+            <div className="space-y-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">Client ID</label>
+                <input
+                  type="text"
+                  value={settings.naverClientId}
+                  onChange={e => setNaverClientId(e.target.value)}
+                  placeholder="네이버 개발자센터에서 발급"
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">Client Secret</label>
+                <div className="flex gap-2">
+                  <input
+                    type={showNaverKey ? 'text' : 'password'}
+                    value={settings.naverClientSecret}
+                    onChange={e => setNaverClientSecret(e.target.value)}
+                    placeholder="Client Secret"
+                    className="flex-1 rounded border border-slate-300 px-3 py-2 text-sm font-mono"
+                  />
+                  <button
+                    onClick={() => setShowNaverKey(v => !v)}
+                    className="rounded border border-slate-300 px-2 hover:bg-slate-50"
+                    aria-label="토글"
+                  >
+                    {showNaverKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              <a href="https://developers.naver.com/apps/" target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">developers.naver.com</a>에서 앱 등록 → 검색 API 사용.
+              일 25,000건 무료. 미입력 시 Jina 추출기로 fallback.
+            </p>
+            {settings.naverClientId && settings.naverClientSecret && (
+              <>
+                <p className="mt-1 text-xs text-green-600">✓ 네이버 전문 수집 활성 (메인 소스)</p>
+                <div className="mt-3">
+                  <label className="mb-1 block text-xs font-semibold text-slate-500">검색어 (쉼표로 구분)</label>
+                  <input
+                    type="text"
+                    value={settings.naverQueries.join(', ')}
+                    onChange={e => setNaverQueries(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                    placeholder="연예, K-pop 아이돌, 한국 드라마 영화"
+                    className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                  />
+                  <p className="mt-0.5 text-xs text-slate-500">이 키워드로 네이버 뉴스를 검색합니다. 검색어가 많을수록 다양한 기사 수집.</p>
+                </div>
+              </>
+            )}
+          </section>
+
+          <section>
             <h3 className="mb-2 font-semibold">이력 관리</h3>
             <button
               onClick={() => { if (confirm('변환 이력을 모두 삭제하시겠습니까?')) clear(); }}
@@ -340,6 +407,124 @@ export function SettingsModal({ open, onClose }: Props) {
             >
               변환 이력 전체 삭제
             </button>
+          </section>
+        </div>
+
+        <div className={'space-y-6 p-5 ' + (tab === 'prompt' ? '' : 'hidden')}>
+          {([
+            {
+              field: 'editorRole' as keyof PromptConfig,
+              label: '에디터 역할',
+              desc: 'LLM이 맡는 역할. 매체 성격에 맞게 변경. 예: "글로벌 테크 미디어의 수석 기자"',
+              rows: 2,
+            },
+            {
+              field: 'publishingGuide' as keyof PromptConfig,
+              label: '발행 가이드',
+              desc: '기사 작성 규칙. 문체, 구조, 분량, 인용 방식 등.',
+              rows: 6,
+            },
+            {
+              field: 'taskInstructions' as keyof PromptConfig,
+              label: '작업 지침',
+              desc: 'LLM이 기사를 종합하는 방식. 교차검증, 팩트 처리 규칙.',
+              rows: 6,
+            },
+            {
+              field: 'bannedExpressions' as keyof PromptConfig,
+              label: '금지 표현',
+              desc: '쉼표로 구분. LLM이 이 표현을 쓰지 않도록 지시.',
+              rows: 3,
+            },
+          ]).map(({ field, label, desc, rows }) => (
+            <section key={field}>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="font-semibold text-sm">{label}</h3>
+                <button
+                  onClick={() => resetPromptConfigField(field)}
+                  className="flex items-center gap-1 rounded px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-100"
+                  title="기본값 복원"
+                >
+                  <RotateCcw size={12} /> 기본값 복원
+                </button>
+              </div>
+              <textarea
+                value={settings.promptConfig[field]}
+                onChange={e => updatePromptConfig(field, e.target.value)}
+                rows={rows}
+                className="w-full rounded border border-slate-300 px-3 py-2 text-sm font-mono leading-relaxed"
+              />
+              <p className="mt-0.5 text-xs text-slate-500">{desc}</p>
+            </section>
+          ))}
+
+          <section>
+            <h3 className="mb-2 font-semibold text-sm">레퍼런스 기사 (최대 5개)</h3>
+            <p className="mb-2 text-xs text-slate-500">
+              우리 매체가 실제로 발행한 기사 URL을 등록하면 LLM이 문체·구조를 참고합니다.
+            </p>
+            {settings.referenceArticles.map(ref => (
+              <div key={ref.id} className="mb-2 flex items-start gap-2 rounded border border-slate-200 p-2">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{ref.title || ref.url}</div>
+                  <div className="text-xs text-slate-400 truncate">{ref.url}</div>
+                  <div className="text-xs text-green-600 mt-0.5">
+                    ✅ 전문 수집 완료 ({ref.body.length.toLocaleString()}자)
+                  </div>
+                </div>
+                <button
+                  onClick={() => removeReferenceArticle(ref.id)}
+                  className="rounded p-1 text-red-500 hover:bg-red-50"
+                  aria-label="삭제"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+            {settings.referenceArticles.length < 5 && (
+              <div className="flex gap-2">
+                <input
+                  value={refUrl}
+                  onChange={e => { setRefUrl(e.target.value); setRefError(''); }}
+                  placeholder="기사 URL 입력"
+                  className="flex-1 rounded border border-slate-300 px-3 py-1.5 text-sm"
+                  disabled={refFetching}
+                />
+                <button
+                  onClick={async () => {
+                    const url = refUrl.trim();
+                    if (!url || !url.startsWith('http')) { setRefError('올바른 URL을 입력하세요.'); return; }
+                    setRefFetching(true);
+                    setRefError('');
+                    try {
+                      const result = await extractArticleText(url);
+                      if (!result.ok || !result.text) {
+                        setRefError(result.error || '전문을 추출할 수 없습니다.');
+                        return;
+                      }
+                      addReferenceArticle({
+                        id: `ref-${Date.now()}`,
+                        url,
+                        title: result.title || url,
+                        body: result.text,
+                        fetchedAt: Date.now(),
+                      });
+                      setRefUrl('');
+                    } catch (err: any) {
+                      setRefError(err.message || '추출 실패');
+                    } finally {
+                      setRefFetching(false);
+                    }
+                  }}
+                  disabled={refFetching || !refUrl.trim()}
+                  className="flex items-center gap-1 rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+                >
+                  {refFetching ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                  추가
+                </button>
+              </div>
+            )}
+            {refError && <p className="mt-1 text-xs text-red-600">{refError}</p>}
           </section>
         </div>
 

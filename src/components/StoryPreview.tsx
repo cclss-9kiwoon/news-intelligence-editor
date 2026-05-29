@@ -8,6 +8,8 @@ import { scan } from '../lib/bannedWords';
 export function StoryPreview() {
   const { currentResult, viewLang, switchLang, status } = useConversion();
   const [copied, setCopied] = useState(false);
+  const [showSource, setShowSource] = useState(true);
+  const [showAiLabel, setShowAiLabel] = useState(false);
 
   if (!currentResult) {
     return (
@@ -20,7 +22,13 @@ export function StoryPreview() {
   const view = viewLang === 'en' && currentResult.en ? currentResult.en : currentResult;
   const { headline, body, tags } = view;
   const tagLine = tags.map(t => `#${t}`).join(' ');
-  const markdown = `# ${headline}\n\n${body}${tagLine ? `\n\n${tagLine}` : ''}`;
+  let markdown = `# ${headline}\n\n*${view.summary || ''}*\n\n${body}${tagLine ? `\n\n---\n\n${tagLine}` : ''}`;
+  if (showSource && currentResult.sourceTitle) {
+    markdown += `\n\n---\n\n*출처: ${currentResult.sourceTitle}*`;
+  }
+  if (showAiLabel) {
+    markdown += `\n\n*이 기사는 AI의 도움을 받아 작성되었습니다.*`;
+  }
   const bannedHits = scan(body).hits;
 
   const doCopy = async () => {
@@ -52,6 +60,24 @@ export function StoryPreview() {
               </button>
             ))}
           </div>
+          <label className="flex items-center gap-1 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showSource}
+              onChange={e => setShowSource(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            출처 표기
+          </label>
+          <label className="flex items-center gap-1 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showAiLabel}
+              onChange={e => setShowAiLabel(e.target.checked)}
+              className="rounded border-slate-300"
+            />
+            AI 도움 표기
+          </label>
           {status === 'translating' && <span className="text-indigo-600">번역 중…</span>}
           <span>글자 {body.length}</span>
           {bannedHits.length > 0 && (
@@ -70,6 +96,17 @@ export function StoryPreview() {
       <div className="flex min-h-0 flex-1 flex-col p-2">
         <div className="prose prose-sm max-w-none flex-1 overflow-y-auto rounded border border-slate-200 bg-slate-50 p-3">
           <ReactMarkdown>{markdown}</ReactMarkdown>
+          {currentResult.imagePrompt && (
+            <div className="mt-3 rounded border border-dashed border-slate-300 bg-slate-100 p-3 text-center">
+              <span className="text-xs text-slate-500">🖼 AI 이미지 프롬프트:</span>
+              <p className="mt-1 text-xs italic text-slate-600">{currentResult.imagePrompt}</p>
+            </div>
+          )}
+          {currentResult.sourceArticleIds.length > 0 && (
+            <div className="mt-3 border-t border-slate-200 pt-2 text-xs text-slate-500">
+              출처: {currentResult.sourceTitle} 외 {currentResult.sourceArticleIds.length - 1}개 매체
+            </div>
+          )}
         </div>
         {bannedHits.length > 0 && (
           <p className="mt-1 px-1 text-xs text-red-600">

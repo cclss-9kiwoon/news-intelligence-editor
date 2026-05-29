@@ -5,6 +5,7 @@ import { useConversion } from '../state/ConversionContext';
 import { useSettings } from '../state/SettingsContext';
 import { copyToClipboard } from '../lib/clipboard';
 import { PROVIDERS } from '../types';
+import type { ArticleImage } from '../types';
 
 type Props = {
   onMissingKey: () => void;
@@ -166,7 +167,25 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
               <>
                 <div className="mb-2 text-xs text-slate-500">
                   <span className="rounded bg-slate-100 px-1.5">{currentSource.source}</span>
-                  {currentSource.pubDate && <span className="ml-2">{currentSource.pubDate}</span>}
+                  {currentSource.pubDate && (
+                    <span className="ml-2">
+                      {(() => {
+                        try {
+                          const raw = currentSource.pubDate.trim();
+                          // rss2json returns "2026-05-28 07:13:32" (UTC, no tz indicator)
+                          // JS Date needs ISO format: "2026-05-28T07:13:32Z"
+                          // Check for timezone at end: Z, +09:00, -05:00 etc
+                          let isoStr = raw;
+                          if (!/[Z]$/i.test(raw) && !/[+-]\d{2}:?\d{2}$/.test(raw)) {
+                            isoStr = raw.replace(' ', 'T') + 'Z';
+                          }
+                          const d = new Date(isoStr);
+                          if (isNaN(d.getTime())) return raw;
+                          return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+                        } catch { return currentSource.pubDate; }
+                      })()}
+                    </span>
+                  )}
                 </div>
                 <div className="mb-2 text-sm font-medium text-slate-900">{currentSource.title}</div>
                 <div className="whitespace-pre-wrap text-sm text-slate-800">
@@ -174,6 +193,16 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
                 </div>
                 {currentSource.link && !currentSource.link.startsWith('manual://') && !currentSource.link.startsWith('simulator://') && (
                   <a href={currentSource.link} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs text-indigo-600 hover:underline">원문 보기 ↗</a>
+                )}
+                {currentResult?.sourceFacts && currentResult.sourceFacts.length > 0 && (
+                  <div className="mt-3 rounded-md border border-blue-200 bg-blue-50 p-2">
+                    <h4 className="mb-1 text-xs font-semibold text-blue-700">📋 원문 핵심 사실</h4>
+                    <ul className="space-y-0.5">
+                      {currentResult.sourceFacts.map((fact, i) => (
+                        <li key={i} className="text-xs text-blue-900">• {fact}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </>
             ) : <span className="text-sm text-slate-400">—</span>}
@@ -249,6 +278,66 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
               />
             </div>
           ))}
+          {(() => {
+            // Collect all images from all articles in the cluster
+            const allImages: (ArticleImage & { articleSource: string })[] = [];
+            const seenUrls = new Set<string>();
+            for (const a of selectedArticles) {
+              // From images array (full extraction)
+              if (a.images) {
+                for (const img of a.images) {
+                  if (!seenUrls.has(img.url)) {
+                    seenUrls.add(img.url);
+                    allImages.push({ ...img, articleSource: img.source || a.source });
+                  }
+                }
+              }
+              // Fallback: thumbnail only (RSS without full extraction)
+              if (a.thumbnail && !seenUrls.has(a.thumbnail)) {
+                seenUrls.add(a.thumbnail);
+                allImages.push({ url: a.thumbnail, articleSource: a.source });
+              }
+            }
+            if (allImages.length === 0) return null;
+            return (
+              <div className="flex flex-col">
+                <span className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  원문 이미지 후보 ({allImages.length})
+                </span>
+                <p className="mb-1.5 text-xs text-slate-400">원문 이미지를 그대로 사용합니다. 클릭하면 URL이 복사됩니다.</p>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {allImages.map((img) => (
+                    <button
+                      key={img.url}
+                      onClick={async () => {
+                        if (await copyToClipboard(img.url)) {
+                          setCopiedField('imagePrompt');
+                          setTimeout(() => setCopiedField(null), 1500);
+                        }
+                      }}
+                      className="group relative shrink-0 overflow-hidden rounded border border-slate-200 hover:border-indigo-400"
+                      title={`${img.articleSource}${img.caption ? ` — ${img.caption}` : ''}\n클릭하여 URL 복사`}
+                    >
+                      <img
+                        src={img.url}
+                        alt={img.alt || img.caption || ''}
+                        className="h-24 w-32 object-cover"
+                        onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                      />
+                      <span className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5 text-[10px] text-white truncate">
+                        {img.articleSource}
+                      </span>
+                      {img.caption && (
+                        <span className="absolute top-0 left-0 right-0 bg-black/40 px-1 py-0.5 text-[9px] text-white/80 truncate">
+                          {img.caption}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </section>

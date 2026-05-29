@@ -1,10 +1,7 @@
-import type { Article, Settings, Category, ConvertedResult, StoryOutput, TranslatedFields } from '../types';
+import type { Article, Settings, Category, ConvertedResult, StoryOutput, TranslatedFields, ReferenceArticle } from '../types';
 import { CONVERTED_RESULT_SCHEMA_VERSION } from '../types';
 import { chatJson } from './openai';
-
-const BANNED_LIST_FOR_PROMPT =
-  'delve, in conclusion, furthermore, testament, moreover, "it is important to note", ' +
-  '"not only ... but also", "as an AI", "I think/believe/feel".';
+import { extractArticleText } from './scraper';
 
 // body에 남은 내부 섹션 라벨 줄("# 1. ...", "## 2. ...")을 제거하는 안전망
 export function sanitizeBody(body: string): string {
@@ -15,30 +12,71 @@ export function sanitizeBody(body: string): string {
     .trim();
 }
 
-function buildStorySystem(category: Category): string {
-  return [
-    '당신은 한국 연예 매체의 시니어 에디터입니다.',
-    '여러 매체가 동일 이슈를 다룬 한국어 기사 N건을 입력으로 받습니다.',
-    '',
-    `[카테고리: ${category.label}]`,
-    '[선별·정리 기준]',
-    category.criteria,
-    '[말투]',
-    category.tone,
-    '',
-    '[작업] 발행 여부를 판단하지 마라. 위 기준과 말투로 기사들을 교차검증해 정리·종합만 한다.',
-    '',
-    '[MUST]',
-    '- summary: 무엇에 관한 기사인지 중립적으로 1~2줄(누가/무엇/핵심). 가치 평가나 발행 권고 금지.',
-    '- headline: 기사 제목.',
-    '- body: 머리표·섹션 라벨(#, "## 2." 등) 없이 깨끗한 발행용 본문. 매체 간 충돌 시 가장 일관된 값 채택, 충돌 사실은 summary에 명시.',
-    '- 원문에 없는 사실 추측·창작 금지. 핵심 엔티티(인물/장소/소속사) 누락 금지.',
-    '- tags: 해시태그 문자열 배열(# 없이 키워드만). imagePrompt: 순수 영문(Midjourney 호환, 한국어 금지).',
-    `- 영어 LLM 상투구 회피: ${BANNED_LIST_FOR_PROMPT}`,
-    '',
-    '오직 valid JSON, 정확히 5개 키:',
-    '{ "summary": string, "headline": string, "body": string, "tags": string[], "imagePrompt": string }',
-  ].join('\n');
+function buildStorySystem(category: Category, settings: Settings): string {
+  const { promptConfig, referenceArticles } = settings;
+
+  const sections: string[] = [];
+
+  // 1. 에디터 역할
+  sections.push(`당신은 ${promptConfig.editorRole}입니다.`);
+  sections.push('여러 매체가 동일 이슈를 다룬 한국어 기사 N건을 입력으로 받습니다.');
+  sections.push('');
+
+  // 2. 발행 가이드
+  if (promptConfig.publishingGuide.trim()) {
+    sections.push('[발행 가이드]');
+    sections.push(promptConfig.publishingGuide);
+    sections.push('');
+  }
+
+  // 3. 작업 지침
+  if (promptConfig.taskInstructions.trim()) {
+    sections.push('[작업 지침]');
+    sections.push(promptConfig.taskInstructions);
+    sections.push('');
+  }
+
+  // 4. 카테고리 (기존)
+  sections.push(`[카테고리: ${category.label}]`);
+  sections.push('[선별·정리 기준]');
+  sections.push(category.criteria);
+  sections.push('[말투]');
+  sections.push(category.tone);
+  sections.push('');
+
+  // 5. 레퍼런스 기사 (있을 때만)
+  if (referenceArticles.length > 0) {
+    sections.push('[우리 매체 기사 예시]');
+    referenceArticles.forEach((ref: ReferenceArticle, i: number) => {
+      sections.push(`--- 예시 ${i + 1} ---`);
+      sections.push(`제목: ${ref.title}`);
+      sections.push(`본문: ${ref.body.slice(0, 2000)}`);
+    });
+    sections.push('위 예시의 문체·구조·톤을 참고하라.');
+    sections.push('');
+  }
+
+  // 6. 고정 지침
+  sections.push('[작업] 발행 여부를 판단하지 마라. 위 기준과 말투로 기사들을 교차검증해 정리·종합만 한다.');
+  sections.push('');
+  sections.push('[MUST]');
+  sections.push('- summary: 무엇에 관한 기사인지 중립적으로 1~2줄(누가/무엇/핵심). 가치 평가나 발행 권고 금지.');
+  sections.push('- headline: 기사 제목.');
+  sections.push('- body: 머리표·섹션 라벨(#, "## 2." 등) 없이 깨끗한 발행용 본문. 매체 간 충돌 시 가장 일관된 값 채택, 충돌 사실은 summary에 명시.');
+  sections.push('- 원문에 없는 사실 추측·창작 금지. 핵심 엔티티(인물/장소/소속사) 누락 금지.');
+  sections.push('- tags: 해시태그 문자열 배열(# 없이 키워드만). imagePrompt: 순수 영문(Midjourney 호환, 한국어 금지).');
+  sections.push('- sourceFacts: 원문에서 추출한 핵심 사실 5~10개를 불릿 리스트 배열로. 각 항목은 한 줄 이내, "누가 무엇을 했다" 형식. 드래프트에 반영했는지 에디터가 대조할 용도.');
+
+  // 7. 금지 표현
+  if (promptConfig.bannedExpressions.trim()) {
+    sections.push(`- 영어 LLM 상투구 회피: ${promptConfig.bannedExpressions}`);
+  }
+
+  sections.push('');
+  sections.push('오직 valid JSON, 정확히 6개 키:');
+  sections.push('{ "summary": string, "headline": string, "body": string, "tags": string[], "imagePrompt": string, "sourceFacts": string[] }');
+
+  return sections.join('\n');
 }
 
 function buildStoryUser(articles: Article[]): string {
@@ -53,6 +91,39 @@ function buildStoryUser(articles: Article[]): string {
   return parts.join('\n');
 }
 
+/**
+ * On-demand full text extraction for articles missing fullText.
+ * Retries extraction right before story generation so the AI gets maximum context.
+ */
+async function enrichMissingFullText(articles: Article[]): Promise<void> {
+  const missing = articles.filter(a => !a.fullText && a.link && a.link.startsWith('http'));
+  if (missing.length === 0) return;
+
+  console.log(`[promptChain] on-demand extraction for ${missing.length} articles missing fullText`);
+  const patches = new Map<string, { fullText: string; images?: typeof missing[0]['images']; thumbnail?: string }>();
+  await Promise.allSettled(
+    missing.map(async (article) => {
+      const result = await extractArticleText(article.link);
+      if (result.ok && result.text) {
+        patches.set(article.link, {
+          fullText: result.text,
+          ...(result.images ? { images: result.images.map(img => ({ ...img, source: article.source })) } : {}),
+          ...(result.thumbnail ? { thumbnail: result.thumbnail } : {}),
+        });
+        console.log(`[promptChain] ✓ extracted ${result.text.length} chars from ${article.source} (${result.method})`);
+      }
+    }),
+  );
+  for (const article of articles) {
+    const p = patches.get(article.link);
+    if (p) {
+      article.fullText = p.fullText;
+      if (p.images && !article.images) article.images = p.images;
+      if (p.thumbnail && !article.thumbnail) article.thumbnail = p.thumbnail;
+    }
+  }
+}
+
 export async function generateStory(
   articles: Article[],
   settings: Settings,
@@ -60,11 +131,14 @@ export async function generateStory(
 ): Promise<StoryOutput> {
   if (articles.length === 0) throw new Error('generateStory requires at least one article');
 
+  // On-demand: retry extraction for articles still missing fullText
+  await enrichMissingFullText(articles);
+
   const out = await chatJson<StoryOutput>({
     apiKey: settings.apiKey,
     baseUrl: settings.apiBaseUrl,
     model: settings.model,
-    system: buildStorySystem(category),
+    system: buildStorySystem(category, settings),
     user: buildStoryUser(articles),
     temperature: 0.5,
   });
@@ -75,6 +149,7 @@ export async function generateStory(
     body: sanitizeBody(out.body ?? ''),
     tags: Array.isArray(out.tags) ? out.tags : [],
     imagePrompt: out.imagePrompt ?? '',
+    sourceFacts: Array.isArray(out.sourceFacts) ? out.sourceFacts : [],
   };
 }
 
@@ -82,11 +157,12 @@ export async function translateToEnglish(
   fields: TranslatedFields,
   settings: Settings,
 ): Promise<TranslatedFields> {
+  const bannedList = settings.promptConfig?.bannedExpressions || '';
   const system = [
     'You are a professional Korean→English news translator and copy editor.',
     'Translate the given Korean draft fields into natural, publication-ready English.',
     'Preserve every fact exactly (people, numbers, dates, organizations). Romanize Korean names in standard form (e.g., 양정아 → Yang Jung-ah).',
-    `NEVER use these AI clichés: ${BANNED_LIST_FOR_PROMPT}`,
+    ...(bannedList.trim() ? [`NEVER use these AI clichés: ${bannedList}`] : []),
     'tags: translate each keyword to a concise English keyword (no # prefix).',
     'Respond ONLY with valid JSON, exactly 4 keys: { "summary": string, "headline": string, "body": string, "tags": string[] }',
   ].join('\n');
@@ -134,5 +210,6 @@ export function buildInitialResult(
     body: story.body,
     tags: story.tags,
     imagePrompt: story.imagePrompt,
+    sourceFacts: story.sourceFacts || [],
   };
 }

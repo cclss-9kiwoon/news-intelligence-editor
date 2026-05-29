@@ -94,6 +94,35 @@ function clusterId(articleIds: string[]): string {
   return 'c-' + (h >>> 0).toString(16);
 }
 
+// WARNING: Keys must match category IDs defined in defaultCategories.ts.
+// If you rename or add category IDs there, update this record accordingly.
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  music: ['컴백', '신곡', '앨범', '음원', '차트', '콘서트', '투어', '뮤직비디오', 'MV', '팬미팅', '아이돌', '보이그룹', '걸그룹', 'K-pop', 'Kpop', '음악', '가수', '빌보드', '멜론', '발매', '타이틀곡', '뮤직', '래퍼', '싱어'],
+  screen: ['드라마', '영화', '예능', '방영', '개봉', '시청률', '캐스팅', '촬영', '감독', '연출', '시즌', '넷플릭스', '티빙', '웨이브', '쿠팡플레이', 'OTT', '흥행', '배역', '극장', '개봉'],
+  people: ['배우', '모델', '화보', '인터뷰', '근황', 'SNS', '인스타', '유튜브', '셀럽', '연예인', '스타', '소속사', '데뷔'],
+  gossip: ['열애', '결별', '결혼', '이혼', '임신', '출산', '연인', '커플', '파경', '불륜', '스캔들', '사생활'],
+  events: ['시상식', '수상', '후보', '페스티벌', '행사', '축제', '레드카펫', '그래미', '골든디스크', '대상', '신인상', '본상'],
+};
+
+export function classifyArticleCategory(article: { title: string; description: string }): string | undefined {
+  const text = `${article.title} ${article.description}`.toLowerCase();
+  let bestCategory: string | undefined;
+  let bestScore = 0;
+
+  for (const [catId, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    let score = 0;
+    for (const kw of keywords) {
+      if (text.includes(kw.toLowerCase())) score++;
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestCategory = catId;
+    }
+  }
+
+  return bestScore >= 1 ? bestCategory : undefined;
+}
+
 export function groupIntoClusters(articles: Article[], opts: ClusterOptions = {}): Cluster[] {
   const threshold = opts.threshold ?? DEFAULTS.threshold;
   const windowMs = opts.windowMs ?? DEFAULTS.windowMs;
