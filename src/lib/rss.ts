@@ -27,14 +27,28 @@ export function makeArticleId(link: string): string {
 }
 
 export function dedupeAndMerge(existing: Article[], incoming: Article[], maxSize: number): Article[] {
-  const seen = new Set<string>();
-  const out: Article[] = [];
+  const map = new Map<string, Article>();
+  // Add existing articles first
   for (const a of existing) {
-    if (!seen.has(a.id)) { seen.add(a.id); out.push(a); }
+    if (!map.has(a.id)) map.set(a.id, a);
   }
+  // Merge incoming: if article already exists, create new object with enriched fields
   for (const a of incoming) {
-    if (!seen.has(a.id)) { seen.add(a.id); out.push(a); }
+    const prev = map.get(a.id);
+    if (prev) {
+      // Only create new object if there's actually new data to merge
+      const patch: Partial<Article> = {};
+      if (a.fullText && !prev.fullText) patch.fullText = a.fullText;
+      if (a.images && !prev.images) patch.images = a.images;
+      if (a.thumbnail && !prev.thumbnail) patch.thumbnail = a.thumbnail;
+      if (Object.keys(patch).length > 0) {
+        map.set(a.id, { ...prev, ...patch });
+      }
+    } else {
+      map.set(a.id, a);
+    }
   }
+  const out = Array.from(map.values());
   out.sort((a, b) => b.fetchedAt - a.fetchedAt);
   return out.slice(0, maxSize);
 }
@@ -50,6 +64,7 @@ type Rss2JsonItem = {
   content?: string;
   pubDate?: string;
   thumbnail?: string;
+  enclosure?: { link?: string; type?: string };
   categories?: string[];
 };
 
@@ -135,18 +150,22 @@ export async function fetchRss(source: RssSource, apiKey?: string): Promise<Arti
     const data = (await res.json()) as Rss2JsonResponse;
     if (data.status !== 'ok' || !data.items) return [];
     const now = Date.now();
-    const articles = data.items.map((it): Article => ({
-      id: makeArticleId(it.link),
-      title: stripHtml(it.title || ''),
-      description: stripHtml(it.description || it.content || ''),
-      link: it.link,
-      pubDate: it.pubDate || '',
-      source: source.name,
-      inputType: 'rss',
-      category: it.categories?.[0],
-      thumbnail: it.thumbnail || undefined,
-      fetchedAt: now,
-    }));
+    const articles = data.items.map((it): Article => {
+      // Thumbnail: prefer explicit thumbnail, fall back to enclosure image
+      const thumb = it.thumbnail || (it.enclosure?.type?.toLowerCase().startsWith('image') ? it.enclosure.link : undefined) || undefined;
+      return {
+        id: makeArticleId(it.link),
+        title: stripHtml(it.title || ''),
+        description: stripHtml(it.description || it.content || ''),
+        link: it.link,
+        pubDate: it.pubDate || '',
+        source: source.name,
+        inputType: 'rss',
+        category: it.categories?.[0],
+        thumbnail: thumb,
+        fetchedAt: now,
+      };
+    });
     writeCache(source.id, articles);
     return articles;
   } catch (err) {
