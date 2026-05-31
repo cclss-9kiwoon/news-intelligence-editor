@@ -6,7 +6,7 @@ import { useSettings } from '../state/SettingsContext';
 import { useConversion } from '../state/ConversionContext';
 
 export function ClusterPicker() {
-  const { articles, addManualArticle, refreshNow, isRefreshing, isInitialLoading, lastRefreshedAt, enrichStats, enrichMethod } = useArticles();
+  const { articles, addManualArticle, refreshNow, isRefreshing, isInitialLoading, loadingStatus, lastRefreshedAt, enrichStats, enrichMethod } = useArticles();
   const {
     clusters, selectedClusterId, selectCluster,
     splitArticleOut, resetSplits, resetMerges,
@@ -73,7 +73,12 @@ export function ClusterPicker() {
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
             {enrichMethod === 'naver' ? '네이버 전문 수집 활성' : '전문 수집 활성'}
             {enrichStats && (
-              <span className="text-green-600 ml-1">· {enrichStats.enriched}건 전문 확보</span>
+              <>
+                <span className="text-green-600 ml-1">· {enrichStats.enriched}/{enrichStats.enriched + enrichStats.failed}건 전문 확보</span>
+                {enrichStats.failed > 0 && (
+                  <span className="text-amber-600 ml-1">({enrichStats.failed}건 실패)</span>
+                )}
+              </>
             )}
           </p>
         </div>
@@ -194,7 +199,7 @@ export function ClusterPicker() {
         {isInitialLoading && filteredClusters.length === 0 && (
           <li className="px-4 py-6 text-center text-sm text-slate-400">
             <Loader2 size={16} className="inline animate-spin mr-1" />
-            기사 수집 중…
+            {loadingStatus || '기사 수집 중…'}
           </li>
         )}
         {!isInitialLoading && filteredClusters.length === 0 && (

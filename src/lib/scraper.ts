@@ -18,6 +18,10 @@ const JINA_TIMEOUT_MS = 15_000;
 const PROXY_TIMEOUT_MS = 12_000;
 const MAX_CONCURRENT = 3;
 const MIN_USEFUL_LENGTH = 100;
+const MAX_RETRIES = 2;
+
+/** Track URLs that have failed extraction, to avoid retrying indefinitely. */
+const failedUrls = new Map<string, number>();
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -290,6 +294,12 @@ function isKoreanSite(url: string): boolean {
 }
 
 export async function extractArticleText(url: string): Promise<ExtractResult> {
+  // Skip URLs that have already failed MAX_RETRIES times
+  const prevFailures = failedUrls.get(url) || 0;
+  if (prevFailures >= MAX_RETRIES) {
+    return { ok: false, error: 'skipped (max retries)' };
+  }
+
   // Korean sites: proxy first (better parsing, no rate limit), Jina fallback
   // Other sites: Jina first (universal), proxy fallback
   if (isKoreanSite(url)) {
@@ -301,6 +311,7 @@ export async function extractArticleText(url: string): Promise<ExtractResult> {
     if (jinaResult.ok) return jinaResult;
 
     console.warn(`[scraper] All extraction failed for ${url}`);
+    failedUrls.set(url, prevFailures + 1);
     return proxyResult;
   }
 
@@ -314,6 +325,7 @@ export async function extractArticleText(url: string): Promise<ExtractResult> {
   if (proxyResult.ok) return proxyResult;
 
   console.warn(`[scraper] All extraction failed for ${url}`);
+  failedUrls.set(url, prevFailures + 1);
   return proxyResult;
 }
 
@@ -341,6 +353,7 @@ export async function enrichArticlesWithFullText(
   articles: { title: string; link: string; fullText?: string; description: string; images?: ArticleImage[] }[],
   _naverClientId?: string,
   _naverClientSecret?: string,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<{ enriched: number; failed: number; skipped: number; updates: Map<string, { fullText: string; images?: ArticleImage[] }> }> {
   const candidates = articles.filter(
     a =>
@@ -348,7 +361,8 @@ export async function enrichArticlesWithFullText(
       a.link &&
       a.link.startsWith('http') &&
       !a.link.startsWith('manual://') &&
-      !a.link.startsWith('simulator://'),
+      !a.link.startsWith('simulator://') &&
+      (failedUrls.get(a.link) || 0) < MAX_RETRIES,
   );
 
   if (candidates.length === 0) {
@@ -379,6 +393,7 @@ export async function enrichArticlesWithFullText(
         }
       }),
     );
+    onProgress?.(enriched + failed, candidates.length);
   }
 
   return { enriched, failed, skipped, updates };

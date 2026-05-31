@@ -18,6 +18,7 @@ type Ctx = {
   refreshNow: () => Promise<void>;
   isRefreshing: boolean;
   isInitialLoading: boolean;
+  loadingStatus: string;
   lastRefreshedAt: number | null;
   enrichStats: { enriched: number; failed: number } | null;
   enrichMethod: 'naver' | 'jina' | 'none';
@@ -31,6 +32,7 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
   const [selectedArticle, setSelected] = useState<Article | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [loadingStatus, setLoadingStatus] = useState('초기화 중...');
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
   const [enrichStats, setEnrichStats] = useState<{ enriched: number; failed: number } | null>(null);
   const [enrichMethod, setEnrichMethod] = useState<'naver' | 'jina' | 'none'>('none');
@@ -78,6 +80,7 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
 
     if (hasNaver) {
       // ── Naver as primary source (articles arrive with fullText) ──
+      setLoadingStatus('네이버 검색 중...');
       const naverArticles = await fetchNaverArticles(
         naverQueriesRef.current,
         naverIdRef.current,
@@ -86,6 +89,7 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
       incoming.push(...naverArticles);
 
       // Also fetch RSS for supplementary sources (non-Korean, niche feeds)
+      setLoadingStatus('RSS 수집 중...');
       const enabled = sourcesRef.current.filter(s => s.enabled);
       const rssResults = await Promise.all(enabled.map(s => fetchRss(s, rss2jsonKeyRef.current)));
       incoming.push(...rssResults.flat());
@@ -97,11 +101,13 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
       }
     } else {
       // ── RSS only ──
+      setLoadingStatus('RSS 수집 중...');
       const enabled = sourcesRef.current.filter(s => s.enabled);
       const results = await Promise.all(enabled.map(s => fetchRss(s, rss2jsonKeyRef.current)));
       incoming = results.flat();
     }
 
+    setLoadingStatus('카테고리 분류 중...');
     // Classify categories
     for (const a of incoming) {
       if (!a.category) {
@@ -119,7 +125,11 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
            !a.link.startsWith('manual://') && !a.link.startsWith('simulator://'),
     );
     if (needsEnrichment.length > 0) {
-      enrichArticlesWithFullText(incoming, naverIdRef.current, naverSecretRef.current).then(stats => {
+      setLoadingStatus(`전문 추출 중 (0/${needsEnrichment.length})...`);
+      enrichArticlesWithFullText(incoming, naverIdRef.current, naverSecretRef.current, (done, total) => {
+        setLoadingStatus(`전문 추출 중 (${done}/${total})...`);
+      }).then(stats => {
+        setLoadingStatus('');
         setEnrichStats({
           enriched: initialEnriched + stats.enriched,
           failed: stats.failed,
@@ -205,7 +215,7 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
   }, [fetchClassifyAndEnrich]);
 
   return (
-    <ArticlesCtx.Provider value={{ articles, selectedArticle, selectArticle, addManualArticle, refreshNow: forceRefresh, isRefreshing, isInitialLoading, lastRefreshedAt, enrichStats, enrichMethod }}>
+    <ArticlesCtx.Provider value={{ articles, selectedArticle, selectArticle, addManualArticle, refreshNow: forceRefresh, isRefreshing, isInitialLoading, loadingStatus, lastRefreshedAt, enrichStats, enrichMethod }}>
       {children}
     </ArticlesCtx.Provider>
   );
