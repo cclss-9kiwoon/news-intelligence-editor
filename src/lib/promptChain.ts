@@ -95,9 +95,9 @@ function buildStoryUser(articles: Article[]): string {
  * On-demand full text extraction for articles missing fullText.
  * Retries extraction right before story generation so the AI gets maximum context.
  */
-async function enrichMissingFullText(articles: Article[]): Promise<void> {
+async function enrichMissingFullText(articles: Article[]): Promise<Article[]> {
   const missing = articles.filter(a => !a.fullText && a.link && a.link.startsWith('http'));
-  if (missing.length === 0) return;
+  if (missing.length === 0) return articles;
 
   console.log(`[promptChain] on-demand extraction for ${missing.length} articles missing fullText`);
   const patches = new Map<string, { fullText: string; images?: typeof missing[0]['images']; thumbnail?: string }>();
@@ -114,14 +114,17 @@ async function enrichMissingFullText(articles: Article[]): Promise<void> {
       }
     }),
   );
-  for (const article of articles) {
+  // Return new array with patches applied immutably
+  return articles.map(article => {
     const p = patches.get(article.link);
-    if (p) {
-      article.fullText = p.fullText;
-      if (p.images && !article.images) article.images = p.images;
-      if (p.thumbnail && !article.thumbnail) article.thumbnail = p.thumbnail;
-    }
-  }
+    if (!p) return article;
+    return {
+      ...article,
+      fullText: p.fullText,
+      ...(!article.images && p.images ? { images: p.images } : {}),
+      ...(!article.thumbnail && p.thumbnail ? { thumbnail: p.thumbnail } : {}),
+    };
+  });
 }
 
 export async function generateStory(
@@ -131,15 +134,15 @@ export async function generateStory(
 ): Promise<StoryOutput> {
   if (articles.length === 0) throw new Error('generateStory requires at least one article');
 
-  // On-demand: retry extraction for articles still missing fullText
-  await enrichMissingFullText(articles);
+  // On-demand: retry extraction for articles still missing fullText (immutable)
+  const enrichedArticles = await enrichMissingFullText(articles);
 
   const out = await chatJson<StoryOutput>({
     apiKey: settings.apiKey,
     baseUrl: settings.apiBaseUrl,
     model: settings.model,
     system: buildStorySystem(category, settings),
-    user: buildStoryUser(articles),
+    user: buildStoryUser(enrichedArticles),
     temperature: 0.5,
   });
 

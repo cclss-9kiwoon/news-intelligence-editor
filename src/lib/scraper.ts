@@ -341,7 +341,7 @@ export async function enrichArticlesWithFullText(
   articles: { title: string; link: string; fullText?: string; description: string; images?: ArticleImage[] }[],
   _naverClientId?: string,
   _naverClientSecret?: string,
-): Promise<{ enriched: number; failed: number; skipped: number }> {
+): Promise<{ enriched: number; failed: number; skipped: number; updates: Map<string, { fullText: string; images?: ArticleImage[] }> }> {
   const candidates = articles.filter(
     a =>
       !a.fullText &&
@@ -352,7 +352,7 @@ export async function enrichArticlesWithFullText(
   );
 
   if (candidates.length === 0) {
-    return { enriched: 0, failed: 0, skipped: articles.length };
+    return { enriched: 0, failed: 0, skipped: articles.length, updates: new Map() };
   }
 
   let enriched = 0;
@@ -381,14 +381,5 @@ export async function enrichArticlesWithFullText(
     );
   }
 
-  // Apply updates immutably — caller should use returned updates to merge into state
-  for (const article of articles) {
-    const patch = updates.get(article.link);
-    if (patch) {
-      article.fullText = patch.fullText;
-      if (patch.images) (article as any).images = patch.images;
-    }
-  }
-
-  return { enriched, failed, skipped };
+  return { enriched, failed, skipped, updates };
 }

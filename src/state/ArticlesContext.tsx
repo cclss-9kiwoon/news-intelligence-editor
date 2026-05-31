@@ -124,9 +124,18 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
           enriched: initialEnriched + stats.enriched,
           failed: stats.failed,
         });
-        if (stats.enriched > 0) {
+        if (stats.enriched > 0 && stats.updates.size > 0) {
           setEnrichMethod(getLastEnrichMethod());
-          setArticles(prev => dedupeAndMerge(prev, incoming, MAX_ARTICLES));
+          // Immutable merge: create new article objects with enriched data
+          setArticles(prev => prev.map(a => {
+            const patch = stats.updates.get(a.link);
+            if (!patch) return a;
+            return {
+              ...a,
+              fullText: patch.fullText,
+              ...(patch.images ? { images: patch.images } : {}),
+            };
+          }));
         }
       });
     }
