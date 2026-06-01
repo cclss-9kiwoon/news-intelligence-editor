@@ -74,13 +74,19 @@ export function ClusterPicker() {
             {enrichMethod === 'naver' ? '네이버 전문 수집 활성' : '전문 수집 활성'}
             {enrichStats && (
               <>
-                <span className="text-green-600 ml-1">· {enrichStats.enriched}/{enrichStats.enriched + enrichStats.failed}건 전문 확보</span>
+                <span className="text-green-600 ml-1">· {enrichStats.enriched}/{enrichStats.total}건 전문 확보</span>
                 {enrichStats.failed > 0 && (
                   <span className="text-amber-600 ml-1">({enrichStats.failed}건 실패)</span>
                 )}
               </>
             )}
           </p>
+          {loadingStatus && (
+            <p className="text-[10px] text-indigo-600 flex items-center gap-1">
+              <Loader2 size={10} className="animate-spin" />
+              {loadingStatus}
+            </p>
+          )}
         </div>
         <div className="flex gap-1">
           <button

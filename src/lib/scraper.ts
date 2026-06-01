@@ -339,39 +339,55 @@ export function getLastEnrichMethod(): EnrichMethod {
   return lastEnrichMethod;
 }
 
+export type EnrichResult = {
+  enriched: number;
+  failed: number;
+  skipped: number;
+  blocked: number;
+  total: number;
+  updates: Map<string, { fullText: string; images?: ArticleImage[] }>;
+};
+
 // ─── Main Enrichment Pipeline ───────────────────────────────────────
 
 /**
- * Enrich articles with full text — mutates articles in place.
+ * Enrich articles with full text and return immutable update patches.
  *
  * Pipeline:
  *   1. Jina Reader (universal, no API key)
  *   2. Fallback: HTML proxy
- *   3. Optional: Naver search enrichment (if credentials provided)
  */
 export async function enrichArticlesWithFullText(
   articles: { title: string; link: string; fullText?: string; description: string; images?: ArticleImage[] }[],
   _naverClientId?: string,
   _naverClientSecret?: string,
   onProgress?: (done: number, total: number) => void,
-): Promise<{ enriched: number; failed: number; skipped: number; updates: Map<string, { fullText: string; images?: ArticleImage[] }> }> {
-  const candidates = articles.filter(
+): Promise<EnrichResult> {
+  const eligible = articles.filter(
     a =>
       !a.fullText &&
       a.link &&
       a.link.startsWith('http') &&
       !a.link.startsWith('manual://') &&
-      !a.link.startsWith('simulator://') &&
-      (failedUrls.get(a.link) || 0) < MAX_RETRIES,
+      !a.link.startsWith('simulator://'),
   );
+  const blocked = eligible.filter(a => (failedUrls.get(a.link) || 0) >= MAX_RETRIES).length;
+  const candidates = eligible.filter(a => (failedUrls.get(a.link) || 0) < MAX_RETRIES);
 
   if (candidates.length === 0) {
-    return { enriched: 0, failed: 0, skipped: articles.length, updates: new Map() };
+    return {
+      enriched: 0,
+      failed: 0,
+      skipped: articles.length - eligible.length,
+      blocked,
+      total: eligible.length,
+      updates: new Map(),
+    };
   }
 
   let enriched = 0;
   let failed = 0;
-  const skipped = articles.length - candidates.length;
+  const skipped = articles.length - eligible.length;
 
   // Collect updates as a map (link → patch) instead of mutating in place
   const updates = new Map<string, { fullText: string; images?: ArticleImage[] }>();
@@ -393,8 +409,8 @@ export async function enrichArticlesWithFullText(
         }
       }),
     );
-    onProgress?.(enriched + failed, candidates.length);
+    onProgress?.(enriched + failed + blocked, eligible.length);
   }
 
-  return { enriched, failed, skipped, updates };
+  return { enriched, failed, skipped, blocked, total: eligible.length, updates };
 }

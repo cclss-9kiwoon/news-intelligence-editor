@@ -10,6 +10,13 @@ const HIDDEN_MULTIPLIER = 3;
 const MIN_POLL_MS = 60_000;
 const MAX_ARTICLES = 200;
 
+type EnrichStats = {
+  enriched: number;
+  failed: number;
+  skipped: number;
+  total: number;
+};
+
 type Ctx = {
   articles: Article[];
   selectedArticle: Article | null;
@@ -20,7 +27,7 @@ type Ctx = {
   isInitialLoading: boolean;
   loadingStatus: string;
   lastRefreshedAt: number | null;
-  enrichStats: { enriched: number; failed: number } | null;
+  enrichStats: EnrichStats | null;
   enrichMethod: 'naver' | 'jina' | 'none';
 };
 
@@ -34,7 +41,7 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [loadingStatus, setLoadingStatus] = useState('초기화 중...');
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
-  const [enrichStats, setEnrichStats] = useState<{ enriched: number; failed: number } | null>(null);
+  const [enrichStats, setEnrichStats] = useState<EnrichStats | null>(null);
   const [enrichMethod, setEnrichMethod] = useState<'naver' | 'jina' | 'none'>('none');
   const inFlightRef = useRef(false);
 
@@ -96,7 +103,12 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
 
       initialEnriched = naverArticles.filter(a => a.fullText).length;
       if (initialEnriched > 0) {
-        setEnrichStats({ enriched: initialEnriched, failed: naverArticles.length - initialEnriched });
+        setEnrichStats({
+          enriched: initialEnriched,
+          failed: naverArticles.length - initialEnriched,
+          skipped: 0,
+          total: naverArticles.length,
+        });
         setEnrichMethod('naver');
       }
     } else {
@@ -130,9 +142,12 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
         setLoadingStatus(`전문 추출 중 (${done}/${total})...`);
       }).then(stats => {
         setLoadingStatus('');
+        const total = initialEnriched + stats.total;
         setEnrichStats({
           enriched: initialEnriched + stats.enriched,
-          failed: stats.failed,
+          failed: stats.failed + stats.blocked,
+          skipped: stats.skipped,
+          total,
         });
         if (stats.enriched > 0 && stats.updates.size > 0) {
           setEnrichMethod(getLastEnrichMethod());
@@ -148,6 +163,8 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
           }));
         }
       });
+    } else {
+      setLoadingStatus('');
     }
   }, []);
 
