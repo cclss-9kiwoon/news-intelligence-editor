@@ -24,6 +24,11 @@ type DaumSearchResponse = {
   documents?: DaumSearchDocument[];
 };
 
+export type SearchConnectionResult = {
+  ok: boolean;
+  message: string;
+};
+
 function stripHtml(html: string): string {
   return html
     .replace(/<[^>]*>/g, '')
@@ -69,6 +74,34 @@ export async function searchDaum(
   } catch (err: any) {
     console.warn('[daum] search error:', err?.message || err);
     return [];
+  }
+}
+
+export async function testDaumConnection(restApiKey: string): Promise<SearchConnectionResult> {
+  if (!restApiKey) {
+    return { ok: false, message: 'REST API 키를 입력하세요.' };
+  }
+
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), SEARCH_TIMEOUT_MS);
+    const params = new URLSearchParams({ query: '연예', size: '1', sort: 'recency' });
+    const res = await fetch(`/api/daum-search?${params.toString()}`, {
+      signal: ctrl.signal,
+      headers: {
+        Authorization: `KakaoAK ${restApiKey}`,
+      },
+    });
+    clearTimeout(timer);
+
+    if (res.ok) return { ok: true, message: '연결됨' };
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, message: '키가 올바르지 않습니다.' };
+    }
+    return { ok: false, message: `검색 API 오류 (${res.status})` };
+  } catch (err: any) {
+    if (err?.name === 'AbortError') return { ok: false, message: '연결 시간이 초과됐습니다.' };
+    return { ok: false, message: '네트워크 오류' };
   }
 }
 
