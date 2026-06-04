@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useCampaigns } from '../../state/CampaignContext';
+import { HelpTip } from './HelpTip';
 import type { ChannelType, FormalityLevel } from '../../types';
 
 const CHANNEL_TYPES: { value: ChannelType; label: string; icon: string; desc: string }[] = [
@@ -44,7 +45,7 @@ export function GroupSetup({ onCreated, onCancel }: { onCreated: (groupId: strin
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-600">배포 채널 유형</label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-600">배포 채널 유형<HelpTip text="이 채널이 어떤 곳인지에 따라 주제 선정·작성 톤·검수 기준이 자동으로 달라집니다. 전문 보도 매체일수록 팩트·검수가 엄격, 개인 채널일수록 자유롭습니다." /></label>
           <div className="grid grid-cols-2 gap-2">
             {CHANNEL_TYPES.map(t => (
               <button key={t.value} onClick={() => setChannelType(t.value)}
@@ -58,7 +59,7 @@ export function GroupSetup({ onCreated, onCancel }: { onCreated: (groupId: strin
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium text-slate-600">전문성·격식 수준 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">④검수 엄격도 연동</span></label>
+          <label className="mb-1.5 block text-sm font-medium text-slate-600">전문성·격식 수준 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">④검수 엄격도 연동</span><HelpTip text="검수 엄격도를 결정합니다. 엄격 = 모든 검수 항목 위반 시 발행 차단 / 표준 = 위반 시 주의 표시 / 캐주얼 = 핵심만 검사, 톤 자유." /></label>
           <div className="flex gap-1.5">
             {FORMALITY.map(f => (
               <button key={f.value} onClick={() => setFormalityLevel(f.value)} title={f.desc}
@@ -72,15 +73,15 @@ export function GroupSetup({ onCreated, onCancel }: { onCreated: (groupId: strin
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-600">채널 성격</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">채널 성격<HelpTip text="이 채널이 무엇을 다루는 곳인지. 주제 선정·글 방향에 반영됩니다. (예: K-pop 전문 영문 매체)" /></label>
           <input className={inputCls} value={character} placeholder="예: K-pop 전문 영문 매체" onChange={e => setCharacter(e.target.value)} />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-600">타겟 독자</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">타겟 독자<HelpTip text="누가 읽는지. 주제 선정·톤·난이도에 반영됩니다. (예: 글로벌 K-pop 팬)" /></label>
           <input className={inputCls} value={audience} placeholder="예: 글로벌 K-pop 팬" onChange={e => setAudience(e.target.value)} />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-600">전반 톤·스타일</label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">전반 톤·스타일<HelpTip text="모든 기사의 문체 기본값입니다. (예: 팩트 중심, 중립적)" /></label>
           <input className={inputCls} value={toneBase} placeholder="예: 팩트 중심, 중립적, 속보형" onChange={e => setToneBase(e.target.value)} />
         </div>
         <p className="text-xs text-slate-400">배포 맥락은 하위 모든 캠페인에 상속됩니다.</p>
