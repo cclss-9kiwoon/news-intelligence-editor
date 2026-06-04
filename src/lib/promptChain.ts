@@ -2,6 +2,7 @@ import type { Article, Settings, Category, ConvertedResult, StoryOutput, Transla
 import { CONVERTED_RESULT_SCHEMA_VERSION } from '../types';
 import { chatJson } from './openai';
 import { extractArticleText } from './scraper';
+import { buildProjectRulesText } from './projectRules';
 
 // body에 남은 내부 섹션 라벨 줄("# 1. ...", "## 2. ...")을 제거하는 안전망
 export function sanitizeBody(body: string): string {
@@ -36,6 +37,14 @@ function buildStorySystem(category: Category, settings: Settings): string {
     sections.push('');
   }
 
+  // 3.5 프로젝트 포맷·정책 규칙 (SSOT — 검수 엔진과 공유)
+  const projectRules = buildProjectRulesText(settings.projectProfile);
+  if (projectRules.trim()) {
+    sections.push('[포맷·정책 규칙 — 반드시 준수]');
+    sections.push(projectRules);
+    sections.push('');
+  }
+
   // 4. 카테고리 (기존)
   sections.push(`[카테고리: ${category.label}]`);
   sections.push('[선별·정리 기준]');
@@ -66,6 +75,11 @@ function buildStorySystem(category: Category, settings: Settings): string {
   sections.push('- 원문에 없는 사실 추측·창작 금지. 핵심 엔티티(인물/장소/소속사) 누락 금지.');
   sections.push('- tags: 해시태그 문자열 배열(# 없이 키워드만). imagePrompt: 순수 영문(Midjourney 호환, 한국어 금지).');
   sections.push('- sourceFacts: 원문에서 추출한 핵심 사실 5~10개를 불릿 리스트 배열로. 각 항목은 한 줄 이내, "누가 무엇을 했다" 형식. 드래프트에 반영했는지 에디터가 대조할 용도.');
+
+  // 출력 언어 (프로젝트 프로필)
+  if (settings.projectProfile.outputLanguage === 'en') {
+    sections.push('- 출력 언어: summary·headline·body·tags를 자연스러운 영문으로 작성한다. 한국어 인명/작품명은 표준 로마자로 표기한다. sourceFacts는 한국어 유지(에디터 대조용).');
+  }
 
   // 7. 금지 표현
   if (promptConfig.bannedExpressions.trim()) {
