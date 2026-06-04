@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import type { Settings, ModelId, RssSource, ProviderId, Category, ArticleWindow, PromptConfig, ReferenceArticle } from '../types';
+import type { Settings, ModelId, RssSource, ProviderId, Category, ArticleWindow, PromptConfig, ReferenceArticle, ProjectProfile, FormatRules, ReviewRule } from '../types';
 import { PROVIDERS } from '../types';
-import { DEFAULT_SETTINGS, DEFAULT_PROMPT_CONFIG } from '../lib/defaultSettings';
+import { DEFAULT_SETTINGS, DEFAULT_PROMPT_CONFIG, DEFAULT_PROJECT_PROFILE } from '../lib/defaultSettings';
 import { loadJson, saveJson, STORAGE_KEYS, backupSettingsToFile, restoreSettingsFromFile } from '../lib/storage';
 
 type Ctx = {
@@ -31,6 +31,11 @@ type Ctx = {
   resetPromptConfigField: (field: keyof PromptConfig) => void;
   addReferenceArticle: (article: ReferenceArticle) => void;
   removeReferenceArticle: (id: string) => void;
+  updateProjectProfile: (patch: Partial<ProjectProfile>) => void;
+  updateFormatRules: (patch: Partial<FormatRules>) => void;
+  addReviewRule: () => void;
+  updateReviewRule: (id: string, patch: Partial<ReviewRule>) => void;
+  removeReviewRule: (id: string) => void;
   resetSettings: () => void;
 };
 
@@ -45,6 +50,12 @@ function mergeWithDefaults(stored: Partial<Settings>): Settings {
     activeCategoryId: stored.activeCategoryId || DEFAULT_SETTINGS.activeCategoryId,
     promptConfig: { ...DEFAULT_PROMPT_CONFIG, ...(stored.promptConfig || {}) },
     referenceArticles: stored.referenceArticles || [],
+    projectProfile: {
+      ...DEFAULT_PROJECT_PROFILE,
+      ...(stored.projectProfile || {}),
+      formatRules: { ...DEFAULT_PROJECT_PROFILE.formatRules, ...(stored.projectProfile?.formatRules || {}) },
+      reviewRules: stored.projectProfile?.reviewRules || DEFAULT_PROJECT_PROFILE.reviewRules,
+    },
   };
 }
 
@@ -132,6 +143,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }), []);
   const removeReferenceArticle = useCallback((id: string) =>
     setSettings(s => ({ ...s, referenceArticles: s.referenceArticles.filter(r => r.id !== id) })), []);
+  const updateProjectProfile = useCallback((patch: Partial<ProjectProfile>) =>
+    setSettings(s => ({ ...s, projectProfile: { ...s.projectProfile, ...patch } })), []);
+  const updateFormatRules = useCallback((patch: Partial<FormatRules>) =>
+    setSettings(s => ({ ...s, projectProfile: { ...s.projectProfile, formatRules: { ...s.projectProfile.formatRules, ...patch } } })), []);
+  const addReviewRule = useCallback(() =>
+    setSettings(s => {
+      const rule: ReviewRule = { id: `rule-${Date.now()}`, label: '새 검수 항목', instruction: '', severity: 'warn', enabled: true };
+      return { ...s, projectProfile: { ...s.projectProfile, reviewRules: [...s.projectProfile.reviewRules, rule] } };
+    }), []);
+  const updateReviewRule = useCallback((id: string, patch: Partial<ReviewRule>) =>
+    setSettings(s => ({ ...s, projectProfile: { ...s.projectProfile, reviewRules: s.projectProfile.reviewRules.map(r => r.id === id ? { ...r, ...patch } : r) } })), []);
+  const removeReviewRule = useCallback((id: string) =>
+    setSettings(s => ({ ...s, projectProfile: { ...s.projectProfile, reviewRules: s.projectProfile.reviewRules.filter(r => r.id !== id) } })), []);
   const resetSettings = useCallback(() => setSettings(DEFAULT_SETTINGS), []);
 
   const value: Ctx = {
@@ -141,6 +165,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setAlertSoundEnabled, setBrowserNotificationsEnabled,
     setNaverClientId, setNaverClientSecret, setNaverQueries,
     updatePromptConfig, resetPromptConfigField, addReferenceArticle, removeReferenceArticle,
+    updateProjectProfile, updateFormatRules, addReviewRule, updateReviewRule, removeReviewRule,
     resetSettings,
   };
   return <SettingsCtx.Provider value={value}>{children}</SettingsCtx.Provider>;

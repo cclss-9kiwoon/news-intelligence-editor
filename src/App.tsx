@@ -37,7 +37,7 @@ function AppShell() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50">
+    <div className="flex h-screen flex-col" style={{ background: 'linear-gradient(135deg, #f8faff 0%, #f5f5f7 50%, #fdf6ff 100%)' }}>
       <Header
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHistory={() => setHistoryOpen(true)}

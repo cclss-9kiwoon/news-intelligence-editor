@@ -59,58 +59,69 @@ export function ClusterPicker() {
 
   return (
     <aside data-tutorial="cluster-list" className="flex h-full min-h-0 flex-col overflow-hidden border-r border-slate-200 bg-white">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2">
-        <div>
-          <h2 className="text-sm font-semibold">
-            🗂 이슈 ({activeCategoryFilter ? `${filteredClusters.length}/${clusters.length}` : clusters.length}) · 기사 {totalArticles}
-          </h2>
-          {lastRefreshedAt && (
-            <p className="text-[10px] text-slate-400">
-              마지막 갱신: {new Date(lastRefreshedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-            </p>
-          )}
-          <p className="text-[10px] text-slate-400 flex items-center gap-1">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
-            {enrichMethod === 'naver' ? '네이버 전문 수집 활성' : '전문 수집 활성'}
-            {enrichStats && (
-              <>
-                <span className="text-green-600 ml-1">· {enrichStats.enriched}/{enrichStats.total}건 전문 확보</span>
-                {enrichStats.failed > 0 && (
-                  <span className="text-amber-600 ml-1">({enrichStats.failed}건 실패)</span>
-                )}
-              </>
-            )}
-          </p>
-          {loadingStatus && (
-            <p className="text-[10px] text-indigo-600 flex items-center gap-1">
-              <Loader2 size={10} className="animate-spin" />
-              {loadingStatus}
-            </p>
-          )}
+      <div className="border-b border-slate-100 px-4 py-3">
+        {/* 통계 */}
+        <div className="flex items-end justify-between mb-2">
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold tabular-nums text-slate-900">
+              {activeCategoryFilter ? filteredClusters.length : clusters.length}
+            </span>
+            <span className="text-xs font-medium text-slate-400">이슈</span>
+            <span className="text-slate-200">·</span>
+            <span className="text-lg font-semibold tabular-nums text-slate-600">{totalArticles}</span>
+            <span className="text-xs font-medium text-slate-400">기사</span>
+          </div>
+          <div className="flex gap-1">
+            <button
+              onClick={() => { resetSplits(); resetMerges(); }}
+              className="rounded p-1 hover:bg-slate-100 text-slate-500"
+              title="수동 분리·합치기 모두 되돌리기"
+            >
+              <Split size={14} />
+            </button>
+            <button
+              onClick={refreshNow}
+              disabled={isRefreshing}
+              className={'rounded p-1 hover:bg-slate-100' + (isRefreshing ? ' animate-spin text-indigo-600' : '')}
+              title="새로고침"
+            >
+              {isRefreshing ? <Loader2 size={14} /> : <RefreshCw size={14} />}
+            </button>
+            <button
+              onClick={() => setShowManual(v => !v)}
+              className="rounded p-1 hover:bg-slate-100"
+              title="직접 입력"
+            >
+              <Plus size={14} />
+            </button>
+          </div>
         </div>
-        <div className="flex gap-1">
-          <button
-            onClick={() => { resetSplits(); resetMerges(); }}
-            className="rounded p-1 hover:bg-slate-100 text-slate-500"
-            title="수동 분리·합치기 모두 되돌리기"
-          >
-            <Split size={14} />
-          </button>
-          <button
-            onClick={refreshNow}
-            disabled={isRefreshing}
-            className={'rounded p-1 hover:bg-slate-100' + (isRefreshing ? ' animate-spin text-indigo-600' : '')}
-            title="새로고침"
-          >
-            {isRefreshing ? <Loader2 size={14} /> : <RefreshCw size={14} />}
-          </button>
-          <button
-            onClick={() => setShowManual(v => !v)}
-            className="rounded p-1 hover:bg-slate-100"
-            title="직접 입력"
-          >
-            <Plus size={14} />
-          </button>
+        {/* 상태 인디케이터 */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="flex items-center gap-1 text-[10px] text-slate-500">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+            {enrichMethod === 'naver' ? '네이버 전문 수집' : '전문 수집'}
+          </span>
+          {enrichStats && (
+            <span className="flex items-center gap-1 text-[10px]">
+              <span className="font-semibold text-green-600">{enrichStats.enriched}/{enrichStats.total}</span>
+              <span className="text-slate-400">확보</span>
+              {enrichStats.failed > 0 && (
+                <span className="text-amber-500">({enrichStats.failed} 실패)</span>
+              )}
+            </span>
+          )}
+          {lastRefreshedAt && (
+            <span className="text-[10px] text-slate-400">
+              {new Date(lastRefreshedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })} 갱신
+            </span>
+          )}
+          {loadingStatus && (
+            <span className="flex items-center gap-1 text-[10px] text-indigo-500">
+              <Loader2 size={9} className="animate-spin" />
+              {loadingStatus}
+            </span>
+          )}
         </div>
       </div>
 

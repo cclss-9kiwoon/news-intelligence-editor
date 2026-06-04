@@ -4,6 +4,7 @@ import { useSettings } from '../state/SettingsContext';
 import { useHistory } from '../state/HistoryContext';
 import { PROVIDERS, type ProviderId, type ArticleWindow, type PromptConfig } from '../types';
 import { extractArticleText } from '../lib/scraper';
+import { ProjectProfileTab } from './ProjectProfileTab';
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -27,7 +28,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const [showNaverKey, setShowNaverKey] = useState(false);
   const [newRssName, setNewRssName] = useState('');
   const [newRssUrl, setNewRssUrl] = useState('');
-  const [tab, setTab] = useState<'ai' | 'rss' | 'alerts' | 'category' | 'prompt'>('ai');
+  const [tab, setTab] = useState<'ai' | 'rss' | 'alerts' | 'category' | 'prompt' | 'project'>('ai');
   const [categoryOpen, setCategoryOpen] = useState<Record<string, boolean>>({});
   const [refUrl, setRefUrl] = useState('');
   const [refFetching, setRefFetching] = useState(false);
@@ -80,6 +81,10 @@ export function SettingsModal({ open, onClose }: Props) {
             onClick={() => setTab('alerts')}
             className={'px-3 py-2 text-sm font-medium border-b-2 ' + (tab === 'alerts' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700')}
           >🔔 알림</button>
+          <button
+            onClick={() => setTab('project')}
+            className={'px-3 py-2 text-sm font-medium border-b-2 ' + (tab === 'project' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700')}
+          >📋 프로젝트</button>
           <button
             onClick={() => setTab('prompt')}
             className={'px-3 py-2 text-sm font-medium border-b-2 ' + (tab === 'prompt' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700')}
@@ -408,6 +413,10 @@ export function SettingsModal({ open, onClose }: Props) {
               변환 이력 전체 삭제
             </button>
           </section>
+        </div>
+
+        <div className={tab === 'project' ? '' : 'hidden'}>
+          <ProjectProfileTab />
         </div>
 
         <div className={'space-y-6 p-5 ' + (tab === 'prompt' ? '' : 'hidden')}>

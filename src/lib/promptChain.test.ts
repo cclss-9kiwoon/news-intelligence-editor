@@ -3,7 +3,7 @@ import { generateStory, sanitizeBody, buildInitialResult } from './promptChain';
 import * as openai from './openai';
 import type { Settings, Article, Category, StoryOutput } from '../types';
 import { DEFAULT_CATEGORIES } from './defaultCategories';
-import { DEFAULT_PROMPT_CONFIG } from './defaultSettings';
+import { DEFAULT_PROMPT_CONFIG, DEFAULT_PROJECT_PROFILE } from './defaultSettings';
 
 const CATEGORY: Category = DEFAULT_CATEGORIES.find(c => c.id === 'screen')!;
 
@@ -28,6 +28,7 @@ const SETTINGS: Settings = {
   naverQueries: ['연예'],
   promptConfig: DEFAULT_PROMPT_CONFIG,
   referenceArticles: [],
+  projectProfile: DEFAULT_PROJECT_PROFILE,
 };
 
 const ARTICLE_A: Article = {

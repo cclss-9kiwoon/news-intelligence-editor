@@ -101,19 +101,19 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
           <select
             value={settings.activeCategoryId}
             onChange={e => setActiveCategoryId(e.target.value)}
-            className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs"
+            className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-colors"
             title="카테고리(렌즈) 선택"
           >
             {settings.categories.map(c => (
               <option key={c.id} value={c.id}>{c.label}</option>
             ))}
           </select>
-          <label className="flex items-center gap-1 text-xs text-slate-500">
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold">{PROVIDERS[settings.provider].name}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="rounded-md bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700">{PROVIDERS[settings.provider].name}</span>
             <select
               value={settings.model}
               onChange={e => setModel(e.target.value)}
-              className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs"
+              className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-colors"
               title="모델 선택"
             >
               {PROVIDERS[settings.provider].models.map(m => (
@@ -123,14 +123,14 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
                 <option value={settings.model}>{settings.model} (custom)</option>
               )}
             </select>
-          </label>
+          </div>
           <button
             disabled={!selectedCluster || isBusy}
             onClick={triggerAnalyze}
-            className="flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:from-indigo-700 hover:to-violet-700 disabled:opacity-40 transition-all"
           >
-            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {isBusy ? '평가 & 종합 중…' : '✨ 가치 평가 & 종합'}
+            {isBusy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+            {isBusy ? '평가 & 종합 중…' : '가치 평가 & 종합'}
           </button>
         </div>
       </div>
@@ -209,11 +209,15 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
           </div>
         </div>
 
-        <div data-tutorial="draft-panel" className="flex min-h-0 flex-col gap-2 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3">
+        <div data-tutorial="draft-panel" className="flex min-h-0 flex-col gap-2.5 overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
           {!currentResult && !isBusy && (
-            <p className="text-sm text-slate-400">
-              이슈를 선택하고 카테고리를 고른 뒤 [✨ 가치 평가 & 종합]을 누르면 아래 필드가 채워집니다.
-            </p>
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50">
+                <Sparkles size={18} className="text-indigo-400" />
+              </div>
+              <p className="text-sm font-medium text-slate-600">이슈를 선택하고 카테고리를 고른 뒤</p>
+              <p className="text-xs text-slate-400 mt-1">[가치 평가 & 종합]을 누르면 채워집니다.</p>
+            </div>
           )}
           {currentResult && (
             <div className="flex items-center justify-between">
@@ -256,16 +260,16 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
             </div>
           )}
           {FIELD_META.map(({ key, label, placeholder, rows }) => (
-            <div key={key} className="flex flex-col">
-              <div className="mb-0.5 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</span>
+            <div key={key} className="flex flex-col rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</span>
                 <button
                   onClick={() => doCopy(key)}
                   disabled={!currentResult}
-                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                  className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium text-slate-400 hover:bg-white hover:text-slate-700 hover:shadow-sm disabled:opacity-30 transition-all"
                   title={`${label} 복사`}
                 >
-                  {copiedField === key ? <Check size={12} /> : <Copy size={12} />}
+                  {copiedField === key ? <Check size={11} /> : <Copy size={11} />}
                   {copiedField === key ? '복사됨' : '복사'}
                 </button>
               </div>
@@ -274,7 +278,7 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
                 onChange={e => onFieldChange(key, e.target.value)}
                 rows={rows}
                 placeholder={placeholder}
-                className="resize-y rounded border border-slate-200 p-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+                className="resize-y rounded-md border border-slate-200 bg-white p-2 text-sm text-slate-800 placeholder-slate-300 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-colors"
               />
             </div>
           ))}

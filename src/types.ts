@@ -99,6 +99,65 @@ export type PromptConfig = {
   bannedExpressions: string;
 };
 
+// ─── Project Profile (포맷·검수 규칙 SSOT) ───────────────────────────
+// 생성 프롬프트 + 검수 엔진이 동일하게 읽는 단일 진실 소스(SSOT).
+// 구조화 규칙(formatRules)은 regex 자동검수 가능, styleGuide/reviewRules는 LLM 해석.
+
+export type QuoteStyle = 'double' | 'single';
+export type HeadlineCasing = 'lower-minor' | 'title' | 'sentence' | 'none';
+export type ArtistMarkup = 'strong' | 'link' | 'plain';
+export type ImageMarkup = 'img-direct' | 'figure';
+export type OutputLanguage = 'ko' | 'en' | 'both';
+
+/** 구조화 포맷 규칙 — 기계 검수(regex) 가능 */
+export type FormatRules = {
+  quoteSong: QuoteStyle;        // 곡명/트랙명
+  quoteWork: QuoteStyle;        // 앨범/EP/쇼/드라마/투어명
+  quoteQuotation: QuoteStyle;   // 인용구
+  headlineCasing: HeadlineCasing;
+  artistMarkup: ArtistMarkup;   // 본문 아티스트명 마크업
+  imageMarkup: ImageMarkup;     // 이미지 배치 방식
+  noEditorialClosing: boolean;  // 클로징 에디토리얼 첨언 금지
+  bodyMinChars: number;         // 본문 최소 길이 (0=무제한)
+  bodyMaxChars: number;         // 본문 최대 길이 (0=무제한)
+};
+
+/** 커스텀 검수 항목 — LLM이 해석해서 검사 */
+export type ReviewRule = {
+  id: string;
+  label: string;
+  instruction: string;          // LLM 검수 지시 내용
+  severity: 'block' | 'warn';   // block=발행 차단, warn=경고만
+  enabled: boolean;
+};
+
+export type ProjectProfile = {
+  publicationName: string;      // 매체/프로젝트명
+  outputLanguage: OutputLanguage;
+  allowedMedia: string[];       // 허용 소스 매체 (비면 전체 허용)
+  bannedMedia: string[];        // 금지 소스 매체
+  formatRules: FormatRules;
+  styleGuide: string;           // 자유 가이드라인 (위로 안 잡히는 규칙)
+  reviewRules: ReviewRule[];    // 커스텀 LLM 검수 항목
+};
+
+// ─── Review 결과 ────────────────────────────────────────────────────
+
+export type ReviewFinding = {
+  ruleId: string;
+  label: string;
+  severity: 'block' | 'warn';
+  message: string;              // 무엇이 어긋났는지
+  field?: 'headline' | 'body' | 'tags' | 'imagePrompt';
+  source: 'rule' | 'llm';       // 규칙기반 vs LLM 검수
+};
+
+export type ReviewResult = {
+  passed: boolean;              // block 0건이면 true
+  findings: ReviewFinding[];
+  checkedAt: number;
+};
+
 export type ReferenceArticle = {
   id: string;
   url: string;
@@ -171,4 +230,5 @@ export type Settings = {
   naverQueries: string[];
   promptConfig: PromptConfig;
   referenceArticles: ReferenceArticle[];
+  projectProfile: ProjectProfile;
 };
