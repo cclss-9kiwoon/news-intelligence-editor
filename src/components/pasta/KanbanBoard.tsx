@@ -56,8 +56,9 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
                   <TaskCard key={t.id} task={t} onOpen={() => onOpenTask(t.id)} onDelete={() => deleteTask(t.id)} onRetry={() => retryTask(t.id)} />
                 ))}
                 {colTasks.length === 0 && (
-                  <div className="mt-1 rounded-xl border-2 border-dashed border-slate-200/80 py-10 text-center text-xs text-slate-300">
-                    비어 있음
+                  <div className="mt-1 flex flex-col items-center gap-1.5 rounded-2xl border-2 border-dashed border-slate-200/70 py-10 text-center">
+                    <span className="pasta-float text-lg opacity-50">🍃</span>
+                    <span className="text-xs text-slate-300">비어 있음</span>
                   </div>
                 )}
               </div>
@@ -79,7 +80,7 @@ function TaskCard({ task, onOpen, onDelete, onRetry }: { task: Task; onOpen: () 
   return (
     <div
       onClick={onOpen}
-      className="cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md hover:border-slate-300 hover:-translate-y-0.5 transition-all"
+      className="pasta-springy cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-semibold leading-snug text-slate-800 line-clamp-2">📰 {task.title}</p>

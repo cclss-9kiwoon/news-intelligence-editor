@@ -68,14 +68,14 @@ export function PastaShell({ onOpenCampaign }: { onOpenCampaign: (campaignId: st
 function EmptyState({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="flex h-full flex-col items-center justify-center text-center">
-      <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-900 text-3xl">🍝</div>
+      <div className="pasta-float pasta-pop mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-900 text-3xl shadow-lg shadow-slate-900/10">🍝</div>
       <h2 className="text-xl font-bold text-slate-800">첫 배포 그룹을 만들어 시작하세요</h2>
       <p className="mt-2 max-w-sm text-sm text-slate-500">
         그룹(회사/매체)을 만들고 캠페인을 추가하면, 기사 수집부터 초안 작성까지 자동으로 흐릅니다.
       </p>
       <button
         onClick={onCreate}
-        className="mt-6 rounded-full bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-700 transition-colors"
+        className="pasta-springy mt-6 rounded-full bg-slate-900 px-6 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-700 hover:shadow-md"
       >+ 배포 그룹 만들기</button>
     </div>
   );
@@ -84,7 +84,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
 function TemplatePlaceholder() {
   return (
     <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
-      <div className="mb-3 text-4xl">📄</div>
+      <div className="pasta-float mb-3 text-4xl">📄</div>
       <h2 className="text-lg font-bold text-slate-600">템플릿</h2>
       <p className="mt-1 text-sm">캠페인 설정 프리셋 — 곧 제공됩니다.</p>
     </div>
