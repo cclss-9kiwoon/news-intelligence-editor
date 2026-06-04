@@ -68,7 +68,7 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
         <p className="mb-4 text-xs text-slate-400">채널 정체성. 하위 모든 캠페인에 상속됩니다.</p>
         <div className="space-y-4">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-600">배포 채널 유형</label>
+            <label className="mb-1.5 block text-sm font-medium text-slate-600">배포 채널 유형<InfoTip text="이 채널이 어떤 곳인지에 따라 주제 선정·작성 톤·검수 기준이 자동으로 달라집니다. 전문 보도 매체일수록 팩트와 검수가 엄격하고, 개인 채널일수록 자유롭습니다." /></label>
             <div className="grid grid-cols-2 gap-2">
               {CHANNEL_TYPES.map(t => (
                 <button key={t.value} onClick={() => updateGroupProfile(group.id, { channelType: t.value })}
@@ -79,7 +79,7 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
             </div>
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-600">전문성·격식 수준 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">④검수 엄격도 연동</span></label>
+            <label className="mb-1.5 block text-sm font-medium text-slate-600">전문성·격식 수준 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">④검수 엄격도 연동</span><InfoTip text="검수 엄격도를 결정합니다. 엄격 = 모든 검수 항목 위반 시 발행 차단 / 표준 = 위반 시 주의 표시 / 캐주얼 = 핵심만 검사, 톤 자유." /></label>
             <div className="flex gap-1.5">
               {FORMALITY.map(f => (
                 <button key={f.value} onClick={() => updateGroupProfile(group.id, { formalityLevel: f.value })}
@@ -92,7 +92,7 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">소스 검증 강도 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">①서칭 연동</span></label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">소스 검증 강도 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">①서칭 연동</span><InfoTip text="기사 출처를 얼마나 깐깐하게 보는지. 교차검증 = 서로 다른 원문 2곳 이상 확인된 사실만 / 표준 = 균형 / 느슨 = 2차 매체·SNS 인용도 허용." /></label>
               <div className="flex gap-1">
                 {SOURCE_STRICTNESS.map(ss => (
                   <button key={ss.value} onClick={() => updateGroupProfile(group.id, { sourceStrictness: ss.value })}
@@ -103,21 +103,21 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
               </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">언어 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">②③ 연동</span></label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">언어 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">②③ 연동</span><InfoTip text="채널 언어. 주제 인지도 판단 기준 언어권과 기사 출력 언어를 결정합니다. (예: ko=한국어, en=영어)" /></label>
               <input className={inputCls} value={p.language} placeholder="ko / en" onChange={e => updateGroupProfile(group.id, { language: e.target.value })} />
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-600">채널 성격</label>
+            <label className="mb-1 block text-sm font-medium text-slate-600">채널 성격<InfoTip text="이 채널이 무엇을 다루는 곳인지. 어떤 주제를 고르고 어떤 방향으로 쓸지에 반영됩니다. (예: K-pop 전문 영문 매체)" /></label>
             <input className={inputCls} value={p.character} placeholder="예: K-pop 전문 영문 매체" onChange={e => updateGroupProfile(group.id, { character: e.target.value })} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">타겟 독자</label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">타겟 독자<InfoTip text="누가 읽는지. 주제 선정 기준과 글의 톤·난이도에 반영됩니다. (예: 글로벌 K-pop 팬)" /></label>
               <input className={inputCls} value={p.audience} placeholder="예: 글로벌 K-pop 팬" onChange={e => updateGroupProfile(group.id, { audience: e.target.value })} />
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">전반 톤·스타일</label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">전반 톤·스타일<InfoTip text="생성되는 모든 기사의 문체 기본값입니다. (예: 팩트 중심, 중립적)" /></label>
               <input className={inputCls} value={p.toneBase} placeholder="예: 팩트 중심, 중립적" onChange={e => updateGroupProfile(group.id, { toneBase: e.target.value })} />
             </div>
           </div>
@@ -151,5 +151,15 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
         )}
       </div>
     </div>
+  );
+}
+
+// (?) 아이콘 + hover 툴팁 — 각 설정 항목이 무엇에 영향 주는지 설명
+function InfoTip({ text }: { text: string }) {
+  return (
+    <span
+      title={text}
+      className="ml-1 inline-flex h-3.5 w-3.5 cursor-help items-center justify-center rounded-full bg-slate-200 align-middle text-[9px] font-bold text-slate-500 hover:bg-slate-300"
+    >?</span>
   );
 }
