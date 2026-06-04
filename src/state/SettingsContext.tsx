@@ -159,18 +159,22 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setSettings(s => ({ ...s, projectProfile: { ...s.projectProfile, reviewRules: s.projectProfile.reviewRules.filter(r => r.id !== id) } })), []);
   const resetSettings = useCallback(() => setSettings(DEFAULT_SETTINGS), []);
   // Pasta: 캠페인 스코프 설정을 현재 Settings에 주입 (계정 전역 필드는 유지)
-  const applyCampaignSettings = useCallback((cs: CampaignSettings) => setSettings(s => ({
-    ...s,
-    rssSources: cs.source.rssSources,
-    naverQueries: cs.source.naverQueries,
-    articleWindow: cs.source.articleWindow,
-    clusterThreshold: cs.source.clusterThreshold,
-    promptConfig: cs.promptConfig,
-    referenceArticles: cs.referenceArticles,
-    projectProfile: cs.projectProfile,
-    categories: cs.categories,
-    activeCategoryId: cs.activeCategoryId,
-  })), []);
+  const applyCampaignSettings = useCallback((cs: CampaignSettings) => setSettings(s => {
+    // deep copy: Settings와 Campaign이 같은 객체를 공유하면 한쪽 수정이 다른 쪽 오염
+    const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
+    return {
+      ...s,
+      rssSources: clone(cs.source.rssSources),
+      naverQueries: [...cs.source.naverQueries],
+      articleWindow: cs.source.articleWindow,
+      clusterThreshold: cs.source.clusterThreshold,
+      promptConfig: clone(cs.promptConfig),
+      referenceArticles: clone(cs.referenceArticles),
+      projectProfile: clone(cs.projectProfile),
+      categories: clone(cs.categories),
+      activeCategoryId: cs.activeCategoryId,
+    };
+  }), []);
 
   const value: Ctx = {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,

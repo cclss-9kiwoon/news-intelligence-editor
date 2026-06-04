@@ -32,17 +32,18 @@ type Ctx = {
 const CampaignCtx = createContext<Ctx | null>(null);
 
 export function CampaignProvider({ children }: { children: ReactNode }) {
-  const [groups, setGroups] = useState<Group[]>(() => {
-    const stored = loadJson<Group[] | null>(GROUPS_KEY, null);
-    if (stored && stored.length > 0) return stored;
-    return makeSeedData().groups;
-  });
-  const [campaigns, setCampaigns] = useState<Campaign[]>(() => {
+  // 그룹/캠페인을 함께 시드하여 groupId 정합성 보장 (독립 로드 시 고아 캠페인 방지)
+  const [{ initGroups, initCampaigns }] = useState(() => {
     const storedG = loadJson<Group[] | null>(GROUPS_KEY, null);
     const storedC = loadJson<Campaign[] | null>(CAMPAIGNS_KEY, null);
-    if (storedG && storedG.length > 0) return storedC ?? [];
-    return makeSeedData().campaigns;
+    if (storedG && storedG.length > 0) {
+      return { initGroups: storedG, initCampaigns: storedC ?? [] };
+    }
+    const seed = makeSeedData();
+    return { initGroups: seed.groups, initCampaigns: seed.campaigns };
   });
+  const [groups, setGroups] = useState<Group[]>(initGroups);
+  const [campaigns, setCampaigns] = useState<Campaign[]>(initCampaigns);
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(
     () => loadJson<string | null>(ACTIVE_KEY, null),
   );
@@ -73,7 +74,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const addChannel = useCallback((groupId: string, channel: Omit<Channel, 'id'>) => {
     setGroups(prev => prev.map(g =>
       g.id === groupId
-        ? { ...g, channels: [...g.channels, { ...channel, id: `ch_${Date.now().toString(36)}` }] }
+        ? { ...g, channels: [...g.channels, { ...channel, id: `ch_${crypto.randomUUID()}` }] }
         : g,
     ));
   }, []);

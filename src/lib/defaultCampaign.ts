@@ -6,10 +6,8 @@ import {
 } from './defaultSettings';
 import { DEFAULT_CATEGORIES } from './defaultCategories';
 
-let idCounter = 0;
 function newId(prefix: string): string {
-  idCounter += 1;
-  return `${prefix}_${Date.now().toString(36)}_${idCounter}`;
+  return `${prefix}_${crypto.randomUUID()}`;
 }
 
 export const DEFAULT_SOURCE_CONFIG: SourceConfig = {

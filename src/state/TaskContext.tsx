@@ -27,7 +27,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   const addTask = useCallback((task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = Date.now();
-    const full: Task = { ...task, id: `task_${now.toString(36)}_${Math.floor(Math.random() * 1e4)}`, createdAt: now, updatedAt: now };
+    const full: Task = { ...task, id: `task_${crypto.randomUUID()}`, createdAt: now, updatedAt: now };
     setTasks(prev => [...prev, full]);
     return full;
   }, []);

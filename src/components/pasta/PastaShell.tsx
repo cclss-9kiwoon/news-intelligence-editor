@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCampaigns } from '../../state/CampaignContext';
 import { CampaignSidebar } from './CampaignSidebar';
 import { CampaignSettingsPanel } from './CampaignSettingsPanel';
@@ -8,6 +8,13 @@ export function PastaShell({ onOpenCampaign }: { onOpenCampaign: (campaignId: st
   const { groups, campaigns } = useCampaigns();
   const [selCampaign, setSelCampaign] = useState<string | null>(campaigns[0]?.id ?? null);
   const [selGroup, setSelGroup] = useState<string | null>(null);
+
+  // 캠페인 비동기 로드 후 미선택이면 첫 캠페인 자동 선택
+  useEffect(() => {
+    if (selCampaign === null && selGroup === null && campaigns.length > 0) {
+      setSelCampaign(campaigns[0].id);
+    }
+  }, [campaigns, selCampaign, selGroup]);
 
   const campaign = campaigns.find(c => c.id === selCampaign) ?? null;
   const group = groups.find(g => g.id === selGroup) ?? null;
