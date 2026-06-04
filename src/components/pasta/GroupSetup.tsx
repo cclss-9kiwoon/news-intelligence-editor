@@ -84,7 +84,7 @@ export function GroupSetup({ onCreated, onCancel }: { onCreated: (groupId: strin
           <label className="mb-1 block text-sm font-medium text-slate-600">전반 톤·스타일<HelpTip text="모든 기사의 문체 기본값입니다. (예: 팩트 중심, 중립적)" /></label>
           <input className={inputCls} value={toneBase} placeholder="예: 팩트 중심, 중립적, 속보형" onChange={e => setToneBase(e.target.value)} />
         </div>
-        <p className="text-xs text-slate-400">배포 맥락은 하위 모든 캠페인에 상속됩니다.</p>
+        <p className="text-xs text-slate-400">이 설정은 그룹의 모든 캠페인에 자동 적용됩니다.</p>
 
         <div className="flex gap-2 pt-1">
           <button onClick={save} disabled={!name.trim()}

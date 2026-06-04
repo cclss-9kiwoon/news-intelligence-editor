@@ -292,7 +292,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
         <Section title="📌 주제 검수" desc="어떤 주제를 고르나 + 쓸 만한 소스가 모였나" auto onSave={() => saveAndNext(2)} saved={savedSteps.has(2)}>
           <PromptField label="주제 선정 기준" value={s.topicReview.selectionCriteria}
             onChange={v => setTopic({ selectionCriteria: v })} onReset={() => setTopic({ selectionCriteria: '' })} rows={3} />
-          <PromptField label="중복·앵글 회피 규칙" value={s.topicReview.dedupeRules}
+          <PromptField label="같은 내용 중복 피하기" value={s.topicReview.dedupeRules}
             onChange={v => setTopic({ dedupeRules: v })} onReset={() => setTopic({ dedupeRules: '' })} rows={3} />
           <PromptField label="우선순위" value={s.topicReview.priority}
             onChange={v => setTopic({ priority: v })} onReset={() => setTopic({ priority: '' })} rows={2} />

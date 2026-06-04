@@ -72,7 +72,7 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
       {/* 배포 맥락 (profile) 편집 — 캠페인에 상속 */}
       <div className="mb-5 rounded-2xl border border-white/70 bg-white/70 p-5 shadow-sm backdrop-blur-md">
         <h3 className="mb-1 font-bold text-slate-800">🎯 배포 맥락</h3>
-        <p className="mb-4 text-xs text-slate-400">채널 정체성. 하위 모든 캠페인에 상속됩니다.</p>
+        <p className="mb-4 text-xs text-slate-400">채널 정체성. 이 그룹의 모든 캠페인에 자동 적용됩니다.</p>
         <div className="space-y-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-600">배포 채널 유형<HelpTip text="이 채널이 어떤 곳인지에 따라 주제 선정·작성 톤·검수 기준이 자동으로 달라집니다. 전문 보도 매체일수록 팩트와 검수가 엄격하고, 개인 채널일수록 자유롭습니다." /></label>
