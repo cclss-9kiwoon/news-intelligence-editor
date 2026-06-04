@@ -23,6 +23,8 @@ export const DEFAULT_SOURCE_CONFIG: SourceConfig = {
 export const DEFAULT_GROUP_PROFILE: GroupProfile = {
   channelType: 'news_media',
   formalityLevel: 'standard',
+  sourceStrictness: 'standard',
+  language: 'ko',
   character: '',
   audience: '',
   toneBase: '',
@@ -113,15 +115,15 @@ export function migrateGroup(raw: any): Group {
   const TARGET_MAP: Record<string, GroupProfile['channelType']> = {
     media: 'news_media', blog: 'creator_newsletter', medium: 'creator_newsletter', other: 'news_media',
   };
-  const profile: GroupProfile = p.channelType
-    ? p  // 이미 신 구조
-    : {
-        channelType: TARGET_MAP[p.targetType] ?? 'news_media',
-        formalityLevel: 'standard',
-        character: p.identity ?? p.character ?? '',
-        audience: p.audience ?? '',
-        toneBase: p.toneBase ?? '',
-      };
+  const profile: GroupProfile = {
+    channelType: p.channelType ?? TARGET_MAP[p.targetType] ?? 'news_media',
+    formalityLevel: p.formalityLevel ?? 'standard',
+    sourceStrictness: p.sourceStrictness ?? 'standard',
+    language: p.language ?? 'ko',
+    character: p.character ?? p.identity ?? '',
+    audience: p.audience ?? '',
+    toneBase: p.toneBase ?? '',
+  };
   return {
     id: raw.id,
     name: raw.name ?? '새 그룹',

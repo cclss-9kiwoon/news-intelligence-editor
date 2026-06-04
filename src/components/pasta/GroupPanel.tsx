@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import { useCampaigns } from '../../state/CampaignContext';
-import type { Group, ChannelType, FormalityLevel } from '../../types';
+import type { Group, ChannelType, FormalityLevel, SourceStrictness } from '../../types';
 
 const CHANNEL_TYPES: { value: ChannelType; label: string; icon: string }[] = [
   { value: 'news_media', label: '전문 보도 매체', icon: '📰' },
   { value: 'vertical_curation', label: '버티컬/큐레이션', icon: '🎯' },
   { value: 'brand_corporate', label: '브랜드/기업', icon: '🏢' },
   { value: 'creator_newsletter', label: '개인/뉴스레터', icon: '✍️' },
+];
+const SOURCE_STRICTNESS: { value: SourceStrictness; label: string }[] = [
+  { value: 'cross_verified', label: '교차검증' },
+  { value: 'standard', label: '표준' },
+  { value: 'loose', label: '느슨' },
 ];
 const FORMALITY: { value: FormalityLevel; label: string; active: string; dot: string }[] = [
   { value: 'strict',   label: '엄격',   active: 'border-amber-400 bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
@@ -83,6 +88,23 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
                   {f.label}
                 </button>
               ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">소스 검증 강도 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">①서칭 연동</span></label>
+              <div className="flex gap-1">
+                {SOURCE_STRICTNESS.map(ss => (
+                  <button key={ss.value} onClick={() => updateGroupProfile(group.id, { sourceStrictness: ss.value })}
+                    className={`flex-1 rounded-lg border px-1.5 py-1.5 text-xs font-medium transition-colors ${p.sourceStrictness === ss.value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                    {ss.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">언어 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">②③ 연동</span></label>
+              <input className={inputCls} value={p.language} placeholder="ko / en" onChange={e => updateGroupProfile(group.id, { language: e.target.value })} />
             </div>
           </div>
           <div>

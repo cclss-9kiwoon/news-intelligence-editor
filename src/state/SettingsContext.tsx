@@ -169,9 +169,28 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     } else if (groupProfile?.formalityLevel === 'casual') {
       reviewRules = reviewRules.map(r => ({ ...r, severity: 'warn' as const }));
     }
-    const formalityNote = groupProfile
-      ? `[격식 수준] ${groupProfile.formalityLevel === 'strict' ? '엄격 — 표기·팩트·소스 규칙 철저히 준수, 위반 시 발행 차단' : groupProfile.formalityLevel === 'casual' ? '캐주얼 — 핵심 규칙만, 톤 자유롭게' : '표준'}`
-      : '';
+    // ── 상속 매트릭스: 그룹 노브 → ②③④ 자동 전파 (styleGuide 텍스트로 구조화) ──
+    const matrix: string[] = [];
+    if (groupProfile) {
+      // formalityLevel → ④검수 + ③에디토리얼 + ②우선
+      if (groupProfile.formalityLevel === 'strict') {
+        matrix.push('[격식: 엄격] ③에디토리얼·1인칭·주관 금지. ②고인지도·팩트 우선. ④표기·팩트·소스 규칙 위반 시 발행 차단.');
+      } else if (groupProfile.formalityLevel === 'casual') {
+        matrix.push('[격식: 캐주얼] ③주관·1인칭·취향 표현 허용, 롱폼 OK. ④핵심 규칙만 검수.');
+      } else {
+        matrix.push('[격식: 표준] 균형. 팩트 중심이되 과한 제약 없음.');
+      }
+      // sourceStrictness → ①서칭 소스 교차검증 강도
+      if (groupProfile.sourceStrictness === 'cross_verified') {
+        matrix.push('[소스: 교차검증] 서로 다른 원문 2곳+ 교차검증된 팩트만 사용. 2차매체·SNS 인용 불가.');
+      } else if (groupProfile.sourceStrictness === 'loose') {
+        matrix.push('[소스: 느슨] 2차매체·SNS 인용 허용. 단일 소스 가능.');
+      }
+      // language → ②인지도 기준 언어권 + ③출력
+      matrix.push(`[언어: ${groupProfile.language}] 주제 인지도는 ${groupProfile.language} 언어권 기준. 출력 언어 ${groupProfile.language}.`);
+    }
+    // language가 출력 언어 결정 (그룹 우선, 없으면 캠페인 생성 설정)
+    const outputLanguage = (groupProfile?.language === 'en' ? 'en' : groupProfile?.language === 'ko' ? 'ko' : cs.generation.outputLanguage);
     return {
       ...s,
       rssSources: clone(cs.searching.rssSources),
@@ -184,13 +203,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       activeCategoryId: cs.activeCategoryId,
       projectProfile: {
         publicationName: groupProfile?.character || s.projectProfile.publicationName,
-        outputLanguage: cs.generation.outputLanguage,
+        outputLanguage,
         allowedMedia: clone(cs.finalReview.allowedMedia),
         bannedMedia: clone(cs.finalReview.bannedMedia),
         formatRules: clone(cs.generation.formatRules),
         styleGuide: [
           groupProfile ? `[배포 맥락] ${groupProfile.character} · 타겟: ${groupProfile.audience} · 톤: ${groupProfile.toneBase}` : '',
-          formalityNote,
+          ...matrix,
           cs.generation.styleGuide,
         ].filter(Boolean).join('\n'),
         reviewRules,

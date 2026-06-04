@@ -220,10 +220,14 @@ export type ArticleWindow = '1h' | '24h' | '7d' | '30d' | 'breaking';
 export type ChannelType = 'news_media' | 'vertical_curation' | 'brand_corporate' | 'creator_newsletter';
 // 전문성·격식 수준 → ④결과물검수 엄격도에 직접 연동.
 export type FormalityLevel = 'strict' | 'standard' | 'casual';
+// 소스 검증 강도 → ①서칭 소스정책에 상속.
+export type SourceStrictness = 'cross_verified' | 'standard' | 'loose';
 
 export type GroupProfile = {
   channelType: ChannelType;     // 배포 채널 유형
   formalityLevel: FormalityLevel; // 격식 수준 (검수 엄격도 연동)
+  sourceStrictness: SourceStrictness; // 소스 검증 강도 (서칭 상속)
+  language: string;             // 채널 언어 'ko'|'en'|... (주제선정 + 출력)
   character: string;            // 채널 성격 "이 채널이 어떤 곳인가"
   audience: string;             // 타겟 독자
   toneBase: string;             // 전반 톤·스타일 베이스
