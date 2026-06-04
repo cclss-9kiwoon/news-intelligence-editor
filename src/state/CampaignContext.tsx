@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import type { Group, Campaign, CampaignSettings, Channel } from '../types';
 import { loadJson, saveJson } from '../lib/storage';
-import { makeGroup, makeCampaign, makeSeedData } from '../lib/defaultCampaign';
+import { makeGroup, makeCampaign } from '../lib/defaultCampaign';
 
 const GROUPS_KEY = 'pasta:groups';
 const CAMPAIGNS_KEY = 'pasta:campaigns';
@@ -14,7 +14,7 @@ type Ctx = {
   activeCampaign: Campaign | null;
 
   // group CRUD
-  addGroup: (name: string) => Group;
+  addGroup: (name: string, channels?: Omit<Channel, 'id'>[]) => Group;
   renameGroup: (id: string, name: string) => void;
   deleteGroup: (id: string) => void;
   addChannel: (groupId: string, channel: Omit<Channel, 'id'>) => void;
@@ -32,16 +32,11 @@ type Ctx = {
 const CampaignCtx = createContext<Ctx | null>(null);
 
 export function CampaignProvider({ children }: { children: ReactNode }) {
-  // 그룹/캠페인을 함께 시드하여 groupId 정합성 보장 (독립 로드 시 고아 캠페인 방지)
-  const [{ initGroups, initCampaigns }] = useState(() => {
-    const storedG = loadJson<Group[] | null>(GROUPS_KEY, null);
-    const storedC = loadJson<Campaign[] | null>(CAMPAIGNS_KEY, null);
-    if (storedG && storedG.length > 0) {
-      return { initGroups: storedG, initCampaigns: storedC ?? [] };
-    }
-    const seed = makeSeedData();
-    return { initGroups: seed.groups, initCampaigns: seed.campaigns };
-  });
+  // 빈 상태로 시작 (자동 시드 없음). 첫 진입 = 그룹 0개 온보딩.
+  const [{ initGroups, initCampaigns }] = useState(() => ({
+    initGroups: loadJson<Group[]>(GROUPS_KEY, []),
+    initCampaigns: loadJson<Campaign[]>(CAMPAIGNS_KEY, []),
+  }));
   const [groups, setGroups] = useState<Group[]>(initGroups);
   const [campaigns, setCampaigns] = useState<Campaign[]>(initCampaigns);
   const [activeCampaignId, setActiveCampaignId] = useState<string | null>(
@@ -56,8 +51,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const activeCampaign = campaigns.find(c => c.id === activeCampaignId) ?? null;
 
   // ── group CRUD ──
-  const addGroup = useCallback((name: string) => {
-    const g = makeGroup(name);
+  const addGroup = useCallback((name: string, channels: Omit<Channel, 'id'>[] = []) => {
+    const g = makeGroup(name, channels);
     setGroups(prev => [...prev, g]);
     return g;
   }, []);

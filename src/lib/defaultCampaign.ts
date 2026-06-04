@@ -1,4 +1,4 @@
-import type { Group, Campaign, CampaignSettings, SourceConfig } from '../types';
+import type { Group, Campaign, CampaignSettings, SourceConfig, Channel } from '../types';
 import {
   DEFAULT_RSS_SOURCES,
   DEFAULT_PROMPT_CONFIG,
@@ -31,11 +31,11 @@ export function makeDefaultCampaignSettings(): CampaignSettings {
   };
 }
 
-export function makeGroup(name: string): Group {
+export function makeGroup(name: string, channels: Omit<Channel, 'id'>[] = []): Group {
   return {
     id: newId('grp'),
     name: name || '새 그룹',
-    channels: [],
+    channels: channels.map(c => ({ ...c, id: `ch_${crypto.randomUUID()}` })),
     createdAt: Date.now(),
   };
 }
@@ -50,11 +50,4 @@ export function makeCampaign(groupId: string, name: string): Campaign {
     createdAt: now,
     updatedAt: now,
   };
-}
-
-/** 최초 실행 시 기본 그룹 1개 + 캠페인 1개 시드 */
-export function makeSeedData(): { groups: Group[]; campaigns: Campaign[] } {
-  const group = makeGroup('allkpop');
-  const campaign = makeCampaign(group.id, 'K-pop 컴백 속보');
-  return { groups: [group], campaigns: [campaign] };
 }
