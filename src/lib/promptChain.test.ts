@@ -26,6 +26,8 @@ const SETTINGS: Settings = {
   naverClientId: '',
   naverClientSecret: '',
   naverQueries: ['연예'],
+  daumRestApiKey: '',
+  daumQueries: ['연예'],
   promptConfig: DEFAULT_PROMPT_CONFIG,
   referenceArticles: [],
   projectProfile: DEFAULT_PROJECT_PROFILE,

@@ -5,6 +5,7 @@ import { useSettings } from './SettingsContext';
 import { classifyArticleCategory } from '../lib/clustering';
 import { enrichArticlesWithFullText, getLastEnrichMethod } from '../lib/scraper';
 import { fetchNaverArticles } from '../lib/naver';
+import { fetchDaumArticles } from '../lib/daum';
 
 const HIDDEN_MULTIPLIER = 3;
 const MIN_POLL_MS = 60_000;
@@ -57,6 +58,10 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
   useEffect(() => { naverSecretRef.current = settings.naverClientSecret; }, [settings.naverClientSecret]);
   const naverQueriesRef = useRef(settings.naverQueries);
   useEffect(() => { naverQueriesRef.current = settings.naverQueries; }, [settings.naverQueries]);
+  const daumKeyRef = useRef(settings.daumRestApiKey);
+  useEffect(() => { daumKeyRef.current = settings.daumRestApiKey; }, [settings.daumRestApiKey]);
+  const daumQueriesRef = useRef(settings.daumQueries);
+  useEffect(() => { daumQueriesRef.current = settings.daumQueries; }, [settings.daumQueries]);
 
   useEffect(() => {
     if (settings.naverClientId && settings.naverClientSecret) {
@@ -81,35 +86,35 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
    */
   const fetchClassifyAndEnrich = useCallback(async () => {
     const hasNaver = !!(naverIdRef.current && naverSecretRef.current);
+    const hasDaum = !!daumKeyRef.current;
 
     let incoming: Article[] = [];
     let initialEnriched = 0;
 
-    if (hasNaver) {
-      // ── Naver as primary source (articles arrive with fullText) ──
-      setLoadingStatus('네이버 검색 중...');
-      const naverArticles = await fetchNaverArticles(
-        naverQueriesRef.current,
-        naverIdRef.current,
-        naverSecretRef.current,
-      );
-      incoming.push(...naverArticles);
-
-      // Also fetch RSS for supplementary sources (non-Korean, niche feeds)
-      setLoadingStatus('RSS 수집 중...');
+    if (hasNaver || hasDaum) {
+      setLoadingStatus('검색 API + RSS 수집 중...');
       const enabled = sourcesRef.current.filter(s => s.enabled);
-      const rssResults = await Promise.all(enabled.map(s => fetchRss(s, rss2jsonKeyRef.current)));
-      incoming.push(...rssResults.flat());
+      const [naverArticles, daumArticles, rssResults] = await Promise.all([
+        hasNaver
+          ? fetchNaverArticles(naverQueriesRef.current, naverIdRef.current, naverSecretRef.current)
+          : Promise.resolve([]),
+        hasDaum
+          ? fetchDaumArticles(daumQueriesRef.current, daumKeyRef.current)
+          : Promise.resolve([]),
+        Promise.all(enabled.map(s => fetchRss(s, rss2jsonKeyRef.current))),
+      ]);
+      incoming.push(...naverArticles, ...daumArticles, ...rssResults.flat());
 
-      initialEnriched = naverArticles.filter(a => a.fullText).length;
+      const searchArticles = [...naverArticles, ...daumArticles];
+      initialEnriched = searchArticles.filter(a => a.fullText).length;
       if (initialEnriched > 0) {
         setEnrichStats({
           enriched: initialEnriched,
-          failed: naverArticles.length - initialEnriched,
+          failed: searchArticles.length - initialEnriched,
           skipped: 0,
-          total: naverArticles.length,
+          total: searchArticles.length,
         });
-        setEnrichMethod('naver');
+        setEnrichMethod(hasNaver ? 'naver' : 'jina');
       }
     } else {
       // ── RSS only ──

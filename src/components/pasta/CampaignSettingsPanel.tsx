@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useCampaigns } from '../../state/CampaignContext';
-import type { Campaign, SourceConfig, TopicReviewConfig, GenerationConfig, FinalReviewConfig, ArticleWindow } from '../../types';
+import { useSettings } from '../../state/SettingsContext';
+import type { Campaign, SourceConfig, TopicReviewConfig, GenerationConfig, FinalReviewConfig, ArticleWindow, SearchProviderConfig, SearchProviderId } from '../../types';
 import { DEFAULT_PROMPT_CONFIG } from '../../lib/defaultSettings';
 import { makeAllkpopCampaignSettings } from '../../lib/allkpopPreset';
 
@@ -23,6 +24,14 @@ const STEPS: { n: Step; label: string; short: string; auto: boolean; active: str
 
 export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign; onOpen: () => void }) {
   const { renameCampaign, updateCampaignSettings, groups } = useCampaigns();
+  const {
+    settings,
+    setNaverClientId,
+    setNaverClientSecret,
+    setNaverQueries,
+    setDaumRestApiKey,
+    setDaumQueries,
+  } = useSettings();
   const [step, setStep] = useState<Step>(1);
   const [savedSteps, setSavedSteps] = useState<Set<Step>>(new Set());
   const s = campaign.settings;
@@ -36,6 +45,30 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
 
   const setSearching = (patch: Partial<SourceConfig>) =>
     updateCampaignSettings(campaign.id, { searching: { ...s.searching, ...patch } });
+  const searchProviders = s.searching.searchProviders ?? [
+    ...s.searching.naverQueries.map(query => ({ provider: 'naver' as const, enabled: true, query })),
+    ...((s.searching.daumQueries ?? []).map(query => ({ provider: 'daum' as const, enabled: false, query }))),
+  ];
+  const setSearchProviders = (providers: SearchProviderConfig[]) => {
+    const naverQueries = providers.filter(p => p.provider === 'naver' && p.enabled).map(p => p.query).filter(Boolean);
+    const daumQueries = providers.filter(p => p.provider === 'daum' && p.enabled).map(p => p.query).filter(Boolean);
+    setSearching({
+      searchProviders: providers,
+      naverQueries,
+      daumQueries,
+    });
+    setNaverQueries(naverQueries);
+    setDaumQueries(daumQueries);
+  };
+  const updateSearchProvider = (idx: number, patch: Partial<SearchProviderConfig>) => {
+    setSearchProviders(searchProviders.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
+  };
+  const addSearchProvider = (provider: SearchProviderId) => {
+    setSearchProviders([...searchProviders, { provider, enabled: true, query: '' }]);
+  };
+  const removeSearchProvider = (idx: number) => {
+    setSearchProviders(searchProviders.filter((_, i) => i !== idx));
+  };
   const setTopic = (patch: Partial<TopicReviewConfig>) =>
     updateCampaignSettings(campaign.id, { topicReview: { ...s.topicReview, ...patch } });
   const setGen = (patch: Partial<GenerationConfig>) =>
@@ -107,6 +140,74 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
       {/* ① 서칭 */}
       {step === 1 && (
         <Section title="📌 서칭" desc="어디서 어떤 기사를 가져올지" auto onSave={() => saveAndNext(1)} saved={savedSteps.has(1)}>
+          <Field label="검색 API">
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-white/60 p-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-500">네이버 Client ID</label>
+                  <input
+                    className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm font-mono"
+                    value={settings.naverClientId}
+                    onChange={e => setNaverClientId(e.target.value)}
+                    placeholder="Naver Client ID"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-slate-500">네이버 Client Secret</label>
+                  <input
+                    type="password"
+                    className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm font-mono"
+                    value={settings.naverClientSecret}
+                    onChange={e => setNaverClientSecret(e.target.value)}
+                    placeholder="Naver Client Secret"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="mb-1 block text-xs font-semibold text-slate-500">Kakao REST API Key (다음 검색)</label>
+                  <input
+                    type="password"
+                    className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm font-mono"
+                    value={settings.daumRestApiKey}
+                    onChange={e => setDaumRestApiKey(e.target.value)}
+                    placeholder="Kakao REST API Key"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                {searchProviders.map((provider, idx) => (
+                  <div key={`${provider.provider}-${idx}`} className="grid grid-cols-[auto_96px_1fr_auto] items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={provider.enabled}
+                      onChange={e => updateSearchProvider(idx, { enabled: e.target.checked })}
+                    />
+                    <select
+                      value={provider.provider}
+                      onChange={e => updateSearchProvider(idx, { provider: e.target.value as SearchProviderId })}
+                      className="rounded-lg border border-slate-200 bg-white/80 px-2 py-2 text-sm"
+                    >
+                      <option value="naver">네이버</option>
+                      <option value="daum">다음</option>
+                    </select>
+                    <input
+                      className="rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
+                      value={provider.query}
+                      onChange={e => updateSearchProvider(idx, { query: e.target.value })}
+                      placeholder="검색어"
+                    />
+                    <button
+                      onClick={() => removeSearchProvider(idx)}
+                      className="rounded-lg border border-slate-200 px-2 py-2 text-xs text-slate-500 hover:bg-slate-50"
+                    >삭제</button>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => addSearchProvider('naver')} className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">+ 네이버 검색어</button>
+                <button onClick={() => addSearchProvider('daum')} className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">+ 다음 검색어</button>
+              </div>
+            </div>
+          </Field>
           <Field label="RSS 소스">
             <div className="space-y-1">
               {s.searching.rssSources.map(src => (
@@ -118,11 +219,6 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
               ))}
             </div>
           </Field>
-          <Field label="네이버 검색어 (쉼표)">
-            <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
-              value={s.searching.naverQueries.join(', ')}
-              onChange={e => setSearching({ naverQueries: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
-          </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="포함 키워드 (쉼표)">
               <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="컴백, 앨범, 차트"
@@ -133,6 +229,18 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
               <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="정치, 경제"
                 value={s.searching.excludeKeywords.join(', ')}
                 onChange={e => setSearching({ excludeKeywords: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="허용 소스 매체 (쉼표)">
+              <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="디스패치, 스타뉴스"
+                value={(s.searching.allowedSources ?? []).join(', ')}
+                onChange={e => setSearching({ allowedSources: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
+            </Field>
+            <Field label="차단 소스 매체 (쉼표)">
+              <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="Soompi, Koreaboo"
+                value={(s.searching.bannedSources ?? []).join(', ')}
+                onChange={e => setSearching({ bannedSources: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-4">

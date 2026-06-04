@@ -12,7 +12,17 @@ function newId(prefix: string): string {
 
 export const DEFAULT_SOURCE_CONFIG: SourceConfig = {
   rssSources: DEFAULT_RSS_SOURCES,
+  searchProviders: [
+    { provider: 'naver', enabled: true, query: '연예' },
+    { provider: 'naver', enabled: true, query: 'K-pop 아이돌' },
+    { provider: 'naver', enabled: true, query: '한국 드라마 영화' },
+    { provider: 'daum', enabled: false, query: '연예' },
+    { provider: 'daum', enabled: false, query: 'K-pop 아이돌' },
+  ],
   naverQueries: ['연예', 'K-pop 아이돌', '한국 드라마 영화'],
+  daumQueries: ['연예', 'K-pop 아이돌', '한국 드라마 영화'],
+  allowedSources: [],
+  bannedSources: [],
   articleWindow: '24h',
   clusterThreshold: 0.35,
   topicKeywords: [],
@@ -34,7 +44,11 @@ const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
 
 export function makeDefaultCampaignSettings(): CampaignSettings {
   return {
-    searching: { ...DEFAULT_SOURCE_CONFIG, rssSources: DEFAULT_RSS_SOURCES.map(s => ({ ...s })) },
+    searching: {
+      ...DEFAULT_SOURCE_CONFIG,
+      rssSources: DEFAULT_RSS_SOURCES.map(s => ({ ...s })),
+      searchProviders: DEFAULT_SOURCE_CONFIG.searchProviders.map(p => ({ ...p })),
+    },
     topicReview: {
       selectionCriteria: '최신성 우선, 인지도 높은 주제, 다양성 확보.',
       dedupeRules: '같은 스토리/앵글 중복 금지. 이미 다룬 주제는 다른 앵글일 때만 허용.',
@@ -82,14 +96,17 @@ export function makeCampaign(groupId: string, name: string): Campaign {
 // 구버전: { source, promptConfig, referenceArticles, projectProfile, categories, activeCategoryId }
 export function migrateCampaignSettings(raw: any): CampaignSettings {
   if (!raw) return makeDefaultCampaignSettings();
-  // 이미 4단계 구조면 그대로
-  if (raw.searching && raw.generation && raw.finalReview && raw.topicReview) {
-    return raw as CampaignSettings;
-  }
   const def = makeDefaultCampaignSettings();
+  // 이미 4단계 구조면 searching 신규 필드(searchProviders 등)만 기본값 보강
+  if (raw.searching && raw.generation && raw.finalReview && raw.topicReview) {
+    return {
+      ...raw,
+      searching: { ...def.searching, ...raw.searching },
+    } as CampaignSettings;
+  }
   const pp = raw.projectProfile ?? {};
   return {
-    searching: raw.source ?? def.searching,
+    searching: { ...def.searching, ...(raw.source ?? {}) },
     topicReview: def.topicReview,
     generation: {
       promptConfig: raw.promptConfig ?? def.generation.promptConfig,

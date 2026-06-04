@@ -27,6 +27,8 @@ type Ctx = {
   setNaverClientId: (k: string) => void;
   setNaverClientSecret: (k: string) => void;
   setNaverQueries: (q: string[]) => void;
+  setDaumRestApiKey: (k: string) => void;
+  setDaumQueries: (q: string[]) => void;
   updatePromptConfig: (field: keyof PromptConfig, value: string) => void;
   resetPromptConfigField: (field: keyof PromptConfig) => void;
   addReferenceArticle: (article: ReferenceArticle) => void;
@@ -62,7 +64,7 @@ function mergeWithDefaults(stored: Partial<Settings>): Settings {
 
 /** Check if stored settings have any real user config (API keys, etc.) */
 function hasUserConfig(s: Partial<Settings>): boolean {
-  return !!(s.apiKey || s.naverClientId || s.naverClientSecret || s.rss2jsonApiKey);
+  return !!(s.apiKey || s.naverClientId || s.naverClientSecret || s.daumRestApiKey || s.rss2jsonApiKey);
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
@@ -132,6 +134,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const setNaverClientId = useCallback((k: string) => setSettings(s => ({ ...s, naverClientId: k })), []);
   const setNaverClientSecret = useCallback((k: string) => setSettings(s => ({ ...s, naverClientSecret: k })), []);
   const setNaverQueries = useCallback((q: string[]) => setSettings(s => ({ ...s, naverQueries: q })), []);
+  const setDaumRestApiKey = useCallback((k: string) => setSettings(s => ({ ...s, daumRestApiKey: k })), []);
+  const setDaumQueries = useCallback((q: string[]) => setSettings(s => ({ ...s, daumQueries: q })), []);
   const updatePromptConfig = useCallback((field: keyof PromptConfig, value: string) =>
     setSettings(s => ({ ...s, promptConfig: { ...s.promptConfig, [field]: value } })), []);
   const resetPromptConfigField = useCallback((field: keyof PromptConfig) =>
@@ -222,7 +226,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setModel, setActiveCategoryId, addCategory, updateCategory, removeCategory, setArticleWindow,
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold, setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled,
-    setNaverClientId, setNaverClientSecret, setNaverQueries,
+    setNaverClientId, setNaverClientSecret, setNaverQueries, setDaumRestApiKey, setDaumQueries,
     updatePromptConfig, resetPromptConfigField, addReferenceArticle, removeReferenceArticle,
     updateProjectProfile, updateFormatRules, addReviewRule, updateReviewRule, removeReviewRule,
     resetSettings, applyCampaignSettings,

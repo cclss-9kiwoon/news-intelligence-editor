@@ -111,7 +111,18 @@ export function makeAllkpopCampaignSettings(): CampaignSettings {
     ...base,
     searching: {
       ...base.searching,
+      searchProviders: [
+        { provider: 'naver', enabled: true, query: 'K-pop 아이돌' },
+        { provider: 'naver', enabled: true, query: '컴백 앨범' },
+        { provider: 'naver', enabled: true, query: '차트 빌보드' },
+        { provider: 'naver', enabled: true, query: '콘서트 투어' },
+        { provider: 'daum', enabled: true, query: 'K-pop 아이돌' },
+        { provider: 'daum', enabled: true, query: '컴백 앨범' },
+      ],
       naverQueries: ['K-pop 아이돌', '컴백 앨범', '차트 빌보드', '콘서트 투어'],
+      daumQueries: ['K-pop 아이돌', '컴백 앨범'],
+      allowedSources: [...ALLKPOP_TOPIC_RULES.allowedSources],
+      bannedSources: [...ALLKPOP_TOPIC_RULES.bannedSources],
       minMediaCount: ALLKPOP_TOPIC_RULES.minMediaCount,
     },
     topicReview: {

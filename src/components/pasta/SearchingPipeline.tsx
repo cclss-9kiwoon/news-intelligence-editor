@@ -5,9 +5,20 @@ import { useSettings } from '../../state/SettingsContext';
 import { useTasks } from '../../state/TaskContext';
 import { generateStory } from '../../lib/promptChain';
 import { reviewDraft } from '../../lib/review';
+import { normalizeLink } from '../../lib/rss';
 import type { Campaign, TaskSource, Category } from '../../types';
 
 const SOURCE_REVIEW_TIMEOUT_MS = 90_000; // 전문 수집 대기 상한
+
+function sourceMatches(source: string, rules: string[]): boolean {
+  if (rules.length === 0) return false;
+  const normalized = source.toLowerCase();
+  return rules.some(rule => normalized.includes(rule.toLowerCase()));
+}
+
+function originalKey(link: string): string {
+  return normalizeLink(link).replace(/^https?:\/\/m\./, 'https://www.');
+}
 
 /**
  * Pasta 자동 파이프라인: 서칭 → 주제 검수 → 아티클 제작 자동 전환.
@@ -39,15 +50,19 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     tasks.filter(t => t.campaignId === campaign.id)
       .forEach(t => t.sources.forEach(s => claimedArticleIds.add(s.articleId)));
 
-    const { minMediaCount, topicKeywords, excludeKeywords } = campaign.settings.searching;
+    const { minMediaCount, topicKeywords, excludeKeywords, allowedSources = [], bannedSources = [] } = campaign.settings.searching;
 
     for (const cluster of clusters) {
       if (cluster.articleIds.some(id => claimedArticleIds.has(id))) continue;
-      const clusterArticles = articles.filter(a => cluster.articleIds.includes(a.id));
+      const clusterArticles = articles
+        .filter(a => cluster.articleIds.includes(a.id))
+        .filter(a => allowedSources.length === 0 || sourceMatches(a.source, allowedSources))
+        .filter(a => !sourceMatches(a.source, bannedSources));
       if (clusterArticles.length === 0) continue;
 
+      const distinctOriginalCount = new Set(clusterArticles.map(a => originalKey(a.link))).size;
       const mediaCount = new Set(clusterArticles.map(a => a.source)).size;
-      if (mediaCount < minMediaCount) continue;
+      if (Math.min(mediaCount, distinctOriginalCount) < minMediaCount) continue;
 
       const haystack = clusterArticles.map(a => `${a.title} ${a.description}`).join(' ').toLowerCase();
       if (topicKeywords.length > 0 && !topicKeywords.some(k => haystack.includes(k.toLowerCase()))) continue;

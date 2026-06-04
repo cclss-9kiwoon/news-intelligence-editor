@@ -87,6 +87,8 @@ export const DEFAULT_SETTINGS: Settings = {
   naverClientId: '',
   naverClientSecret: '',
   naverQueries: ['연예', 'K-pop 아이돌', '한국 드라마 영화'],
+  daumRestApiKey: '',
+  daumQueries: ['연예', 'K-pop 아이돌', '한국 드라마 영화'],
   promptConfig: DEFAULT_PROMPT_CONFIG,
   referenceArticles: [],
   projectProfile: DEFAULT_PROJECT_PROFILE,

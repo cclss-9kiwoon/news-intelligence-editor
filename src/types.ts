@@ -208,6 +208,13 @@ export type ConvertedResult = StoryOutput & {
 };
 
 export type ArticleWindow = '1h' | '24h' | '7d' | '30d' | 'breaking';
+export type SearchProviderId = 'naver' | 'daum';
+
+export type SearchProviderConfig = {
+  provider: SearchProviderId;
+  enabled: boolean;
+  query: string;
+};
 
 // ─── Pasta: Group / Campaign 계층 ───────────────────────────────────
 // Hydra 모듈화. 그룹(회사) → 캠페인(아티클 종류) → [태스크는 Phase 2 칸반].
@@ -243,7 +250,11 @@ export type Group = {
 /** 캠페인 소스 설정 — 어디서 어떤 기사를 가져올지 */
 export type SourceConfig = {
   rssSources: RssSource[];
+  searchProviders: SearchProviderConfig[];
   naverQueries: string[];
+  daumQueries: string[];
+  allowedSources: string[];
+  bannedSources: string[];
   articleWindow: ArticleWindow;
   clusterThreshold: number;
   topicKeywords: string[];   // 포함 키워드 (비면 전체)
@@ -346,6 +357,8 @@ export type Settings = {
   naverClientId: string;
   naverClientSecret: string;
   naverQueries: string[];
+  daumRestApiKey: string;
+  daumQueries: string[];
   promptConfig: PromptConfig;
   referenceArticles: ReferenceArticle[];
   projectProfile: ProjectProfile;
