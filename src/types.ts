@@ -209,6 +209,56 @@ export type ConvertedResult = StoryOutput & {
 
 export type ArticleWindow = '1h' | '24h' | '7d' | '30d' | 'breaking';
 
+// ─── Pasta: Group / Campaign 계층 ───────────────────────────────────
+// Hydra 모듈화. 그룹(회사) → 캠페인(아티클 종류) → [태스크는 Phase 2 칸반].
+// 계정 전역 설정(provider/apiKey/model 등)은 Settings에 유지.
+// 캠페인 스코프 설정(소스/포맷/프롬프트)은 CampaignSettings에 분리.
+
+export type ChannelType = 'x' | 'instagram' | 'youtube' | 'web';
+
+export type Channel = {
+  id: string;
+  type: ChannelType;
+  handle: string;            // @handle, URL 등
+};
+
+export type Group = {
+  id: string;
+  name: string;              // 회사/매체명 (allkpop, 스포츠조선 등)
+  channels: Channel[];       // 발행 시 배포 대상
+  createdAt: number;
+};
+
+/** 캠페인 소스 설정 — 어디서 어떤 기사를 가져올지 */
+export type SourceConfig = {
+  rssSources: RssSource[];
+  naverQueries: string[];
+  articleWindow: ArticleWindow;
+  clusterThreshold: number;
+  topicKeywords: string[];   // 포함 키워드 (비면 전체)
+  excludeKeywords: string[]; // 제외 키워드
+  minMediaCount: number;     // 태스크 생성 최소 매체 수
+};
+
+/** 캠페인 단위 설정 — 소스 + 아티클 포맷 */
+export type CampaignSettings = {
+  source: SourceConfig;
+  promptConfig: PromptConfig;
+  referenceArticles: ReferenceArticle[];
+  projectProfile: ProjectProfile;
+  categories: Category[];
+  activeCategoryId: string;
+};
+
+export type Campaign = {
+  id: string;
+  groupId: string;
+  name: string;              // 아티클 종류 ("tier 3 아티클", "K-pop 컴백 속보")
+  settings: CampaignSettings;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type Settings = {
   provider: ProviderId;
   apiKey: string;

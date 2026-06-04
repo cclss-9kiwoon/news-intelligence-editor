@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import type { Settings, ModelId, RssSource, ProviderId, Category, ArticleWindow, PromptConfig, ReferenceArticle, ProjectProfile, FormatRules, ReviewRule } from '../types';
+import type { Settings, ModelId, RssSource, ProviderId, Category, ArticleWindow, PromptConfig, ReferenceArticle, ProjectProfile, FormatRules, ReviewRule, CampaignSettings } from '../types';
 import { PROVIDERS } from '../types';
 import { DEFAULT_SETTINGS, DEFAULT_PROMPT_CONFIG, DEFAULT_PROJECT_PROFILE } from '../lib/defaultSettings';
 import { loadJson, saveJson, STORAGE_KEYS, backupSettingsToFile, restoreSettingsFromFile } from '../lib/storage';
@@ -37,6 +37,7 @@ type Ctx = {
   updateReviewRule: (id: string, patch: Partial<ReviewRule>) => void;
   removeReviewRule: (id: string) => void;
   resetSettings: () => void;
+  applyCampaignSettings: (cs: CampaignSettings) => void;
 };
 
 const SettingsCtx = createContext<Ctx | null>(null);
@@ -157,6 +158,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const removeReviewRule = useCallback((id: string) =>
     setSettings(s => ({ ...s, projectProfile: { ...s.projectProfile, reviewRules: s.projectProfile.reviewRules.filter(r => r.id !== id) } })), []);
   const resetSettings = useCallback(() => setSettings(DEFAULT_SETTINGS), []);
+  // Pasta: 캠페인 스코프 설정을 현재 Settings에 주입 (계정 전역 필드는 유지)
+  const applyCampaignSettings = useCallback((cs: CampaignSettings) => setSettings(s => ({
+    ...s,
+    rssSources: cs.source.rssSources,
+    naverQueries: cs.source.naverQueries,
+    articleWindow: cs.source.articleWindow,
+    clusterThreshold: cs.source.clusterThreshold,
+    promptConfig: cs.promptConfig,
+    referenceArticles: cs.referenceArticles,
+    projectProfile: cs.projectProfile,
+    categories: cs.categories,
+    activeCategoryId: cs.activeCategoryId,
+  })), []);
 
   const value: Ctx = {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
@@ -166,7 +180,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setNaverClientId, setNaverClientSecret, setNaverQueries,
     updatePromptConfig, resetPromptConfigField, addReferenceArticle, removeReferenceArticle,
     updateProjectProfile, updateFormatRules, addReviewRule, updateReviewRule, removeReviewRule,
-    resetSettings,
+    resetSettings, applyCampaignSettings,
   };
   return <SettingsCtx.Provider value={value}>{children}</SettingsCtx.Provider>;
 }
