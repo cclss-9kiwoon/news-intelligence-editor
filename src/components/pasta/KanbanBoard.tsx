@@ -77,8 +77,15 @@ function TaskCard({ task, onOpen, onDelete }: { task: Task; onOpen: () => void; 
         >🗑</button>
       </div>
 
+      {/* 발행됨 뱃지 — Hydra 배포 완료 */}
+      {task.published && (
+        <span className="mt-2 mr-1 inline-flex items-center gap-1 rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-mono font-semibold text-white">
+          📤 발행됨
+        </span>
+      )}
+
       {/* Verified 뱃지 — 검수 통과 결과물 */}
-      {verified && (
+      {!task.published && verified && (
         <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-mono font-semibold text-green-700">
           <svg className="h-3 w-3" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm3.54 6.54l-4 4a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 1 1 1.06-1.06L7 8.94l3.47-3.47a.75.75 0 1 1 1.07 1.07z" />
