@@ -316,6 +316,7 @@ export type Task = {
   draft?: StoryOutput;       // 아티클 제작 결과
   review?: ReviewResult;     // 검수 결과
   error?: string;
+  produceAttempts?: number;  // 제작 시도 횟수 (자동 재시도용)
   published?: boolean;       // 발행 완료 (Hydra 배포 훅)
   discardReason?: DiscardReason;  // 폐기 사유
   createdAt: number;

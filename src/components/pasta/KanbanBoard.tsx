@@ -18,8 +18,9 @@ const COLUMNS: ColMeta[] = [
 ];
 
 export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; onOpenTask: (taskId: string) => void }) {
-  const { tasks: allTasks, deleteTask } = useTasks();
+  const { tasks: allTasks, deleteTask, updateTask } = useTasks();
   const tasks = useMemo(() => allTasks.filter(t => t.campaignId === campaignId), [allTasks, campaignId]);
+  const retryTask = (id: string) => updateTask(id, { error: undefined, produceAttempts: 0, status: 'producing' });
 
   return (
     <div className="h-full overflow-hidden" style={{ background: 'radial-gradient(ellipse 80% 80% at top left, #C5E3F6 0%, transparent 55%), radial-gradient(ellipse at bottom center, #FBE2BC 0%, transparent 55%), radial-gradient(ellipse at right, #F0D5F7 0%, transparent 55%), #FCF4E8' }}>
@@ -43,7 +44,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
               </div>
               <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-4">
                 {colTasks.map(t => (
-                  <TaskCard key={t.id} task={t} onOpen={() => onOpenTask(t.id)} onDelete={() => deleteTask(t.id)} />
+                  <TaskCard key={t.id} task={t} onOpen={() => onOpenTask(t.id)} onDelete={() => deleteTask(t.id)} onRetry={() => retryTask(t.id)} />
                 ))}
                 {colTasks.length === 0 && (
                   <div className="mt-1 rounded-xl border-2 border-dashed border-slate-200/80 py-10 text-center text-xs text-slate-300">
@@ -59,10 +60,12 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   );
 }
 
-function TaskCard({ task, onOpen, onDelete }: { task: Task; onOpen: () => void; onDelete: () => void }) {
+function TaskCard({ task, onOpen, onDelete, onRetry }: { task: Task; onOpen: () => void; onDelete: () => void; onRetry: () => void }) {
   const fullTextCount = task.sources.filter(s => s.hasFullText).length;
-
+  const mediaCount = new Set(task.sources.map(s => s.source)).size;
   const verified = task.status === 'final_review' && task.review?.passed;
+  const attempts = task.produceAttempts ?? 0;
+  const retrying = task.status === 'producing' && !task.draft && !task.error && attempts >= 1;
 
   return (
     <div
@@ -95,14 +98,19 @@ function TaskCard({ task, onOpen, onDelete }: { task: Task; onOpen: () => void; 
       )}
 
       <div className="mt-2 space-y-0.5 text-xs font-mono text-slate-500">
-        {task.status === 'searching' && (
-          <p>원문 {task.sources.length}건 · {new Date(task.createdAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}</p>
+        {/* #2 카드 메타: 원문 매체 · 서브 건수 · 경과 시간 */}
+        {(task.status === 'searching' || task.status === 'topic_review') && (
+          <p>
+            원문: {task.sources[0]?.source ?? '—'}
+            {mediaCount > 1 && <span className="text-slate-700 font-semibold"> · 서브 {mediaCount - 1}곳</span>}
+            {' · '}{relTime(task.createdAt)}
+          </p>
         )}
-        {task.status === 'topic_review' && (
+        {task.status === 'topic_review' && !task.error && (
           <p>전문 수집: {fullTextCount}/{task.sources.length}건 · 이미지 {task.imageCount}장</p>
         )}
-        {task.status === 'producing' && (
-          <p>{task.draft ? `초안 ${task.draft.body.length}자` : '제작 중...'}</p>
+        {task.status === 'producing' && !task.error && (
+          <p>{task.draft ? `초안 ${task.draft.body.length}자` : retrying ? `초안 생성 재시도 중 (${attempts + 1}/3)` : '초안 생성 중...'}</p>
         )}
         {task.status === 'final_review' && task.draft && (
           <>
@@ -113,8 +121,26 @@ function TaskCard({ task, onOpen, onDelete }: { task: Task; onOpen: () => void; 
             )}
           </>
         )}
-        {task.error && <p className="text-red-500">⚠ {task.error}</p>}
+        {/* #1 실패 UX: 사람 읽을 메시지 + 다시 시도 버튼 */}
+        {task.error && (
+          <div className="mt-1 rounded-lg bg-red-50 px-2 py-1.5">
+            <p className="text-red-600">{task.error}</p>
+            <button
+              onClick={e => { e.stopPropagation(); onRetry(); }}
+              className="mt-1 rounded-md bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-red-700"
+            >↻ 다시 시도</button>
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+function relTime(ts: number): string {
+  const min = Math.floor((Date.now() - ts) / 60000);
+  if (min < 1) return '방금';
+  if (min < 60) return `${min}분 전`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}시간 전`;
+  return `${Math.floor(h / 24)}일 전`;
 }

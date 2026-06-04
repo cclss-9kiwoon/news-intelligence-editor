@@ -29,7 +29,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
   const myTasks = tasks.filter(t => t.campaignId === campaign.id);
   // deps용 시그니처 (태스크 추가/삭제/상태변경 모두 반영)
-  const taskSig = myTasks.map(t => `${t.id}:${t.status}:${t.draft ? 1 : 0}:${t.error ? 1 : 0}`).join(',');
+  const taskSig = myTasks.map(t => `${t.id}:${t.status}:${t.draft ? 1 : 0}:${t.error ? 1 : 0}:${t.produceAttempts ?? 0}`).join(',');
 
   // ── 1. 서칭: 클러스터 → 태스크 생성 ──
   useEffect(() => {
@@ -115,15 +115,26 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         ?? settings.categories[0]
         ?? { id: 'default', label: '기본', criteria: '', tone: '' };
 
+      const attempt = (t.produceAttempts ?? 0) + 1;
+      const MAX_ATTEMPTS = 3;
+
       generateStory(srcArticles, settings, category)
         .then(async draft => {
           let review;
           try { review = await reviewDraft(draft, settings); } catch { review = undefined; }
-          if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review' });
+          if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review', produceAttempts: attempt });
         })
-        .catch(err => {
-          if (mountedRef.current) {
-            updateTask(t.id, { error: `제작 실패: ${err instanceof Error ? err.message : String(err)}` });
+        .catch(() => {
+          if (!mountedRef.current) return;
+          if (attempt < MAX_ATTEMPTS) {
+            // 자동 재시도: producing 유지, attempts만 증가 (다음 사이클에 재실행)
+            updateTask(t.id, { produceAttempts: attempt });
+          } else {
+            // 최종 실패: 사람 읽을 메시지 + raw 에러 별도 보관
+            updateTask(t.id, {
+              error: '초안 생성 실패 — AI 응답을 처리하지 못했습니다. 다시 시도하거나 수동 워크벤치를 이용하세요.',
+              produceAttempts: attempt,
+            });
           }
         })
         .finally(() => { producingRef.current.delete(t.id); });
