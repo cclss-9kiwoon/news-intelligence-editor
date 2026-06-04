@@ -277,6 +277,23 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                 <button onClick={() => addSearchProvider('naver')} className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">+ 네이버 검색어</button>
                 <button onClick={() => addSearchProvider('daum')} className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">+ 다음 검색어</button>
               </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                <p className="mb-3 text-xs leading-relaxed text-slate-500">
+                  검색 API(네이버/다음)로 들어온 기사의 원문 매체를 거릅니다. 허용 목록이 있으면 그 매체만, 차단 목록은 항상 제외. RSS는 직접 선택한 피드라 대부분 통과됩니다.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="허용 소스 매체 (쉼표)">
+                    <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="디스패치, 스타뉴스"
+                      value={(s.searching.allowedSources ?? []).join(', ')}
+                      onChange={e => setSearching({ allowedSources: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
+                  </Field>
+                  <Field label="차단 소스 매체 (쉼표)">
+                    <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="Soompi, Koreaboo"
+                      value={(s.searching.bannedSources ?? []).join(', ')}
+                      onChange={e => setSearching({ bannedSources: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
+                  </Field>
+                </div>
+              </div>
             </div>
           </Field>
           <Field label="RSS 소스">
@@ -300,18 +317,6 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
               <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="정치, 경제"
                 value={s.searching.excludeKeywords.join(', ')}
                 onChange={e => setSearching({ excludeKeywords: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
-            </Field>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="허용 소스 매체 (쉼표)">
-              <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="디스패치, 스타뉴스"
-                value={(s.searching.allowedSources ?? []).join(', ')}
-                onChange={e => setSearching({ allowedSources: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
-            </Field>
-            <Field label="차단 소스 매체 (쉼표)">
-              <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="Soompi, Koreaboo"
-                value={(s.searching.bannedSources ?? []).join(', ')}
-                onChange={e => setSearching({ bannedSources: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
