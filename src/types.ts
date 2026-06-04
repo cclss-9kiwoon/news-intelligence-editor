@@ -266,6 +266,8 @@ export type TaskSource = {
   hasFullText: boolean;
 };
 
+export type DiscardReason = 'low_quality' | 'off_topic' | 'duplicate' | 'other';
+
 export type Task = {
   id: string;
   campaignId: string;
@@ -277,6 +279,8 @@ export type Task = {
   draft?: StoryOutput;       // 아티클 제작 결과
   review?: ReviewResult;     // 검수 결과
   error?: string;
+  published?: boolean;       // 발행 완료 (Hydra 배포 훅)
+  discardReason?: DiscardReason;  // 폐기 사유
   createdAt: number;
   updatedAt: number;
 };
