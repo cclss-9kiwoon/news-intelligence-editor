@@ -27,7 +27,7 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
   if (!task) {
     return (
       <div className="flex h-full items-center justify-center text-slate-400">
-        태스크를 찾을 수 없습니다. <button onClick={onBack} className="ml-2 underline">돌아가기</button>
+        기사 건을 찾을 수 없습니다. <button onClick={onBack} className="ml-2 underline">돌아가기</button>
       </div>
     );
   }
@@ -75,7 +75,7 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
   };
 
   const discard = (reason: DiscardReason) => {
-    if (!confirm(`이 태스크를 폐기하시겠습니까? (사유: ${DISCARD_REASONS.find(r => r.value === reason)?.label})`)) return;
+    if (!confirm(`이 기사 건을 폐기하시겠습니까? (사유: ${DISCARD_REASONS.find(r => r.value === reason)?.label})`)) return;
     deleteTask(task.id);
     onBack();
   };

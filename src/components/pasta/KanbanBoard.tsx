@@ -85,7 +85,7 @@ function TaskCard({ task, onOpen, onDelete, onRetry }: { task: Task; onOpen: () 
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-semibold leading-snug text-slate-800 line-clamp-2">📰 {task.title}</p>
         <button
-          onClick={e => { e.stopPropagation(); if (confirm('태스크 삭제?')) onDelete(); }}
+          onClick={e => { e.stopPropagation(); if (confirm('이 기사 건을 삭제할까요?')) onDelete(); }}
           className="shrink-0 text-slate-300 hover:text-red-500 transition-colors"
         >🗑</button>
       </div>

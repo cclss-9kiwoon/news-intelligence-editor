@@ -5,6 +5,9 @@ import type { Campaign, SourceConfig, TopicReviewConfig, GenerationConfig, Final
 import { DEFAULT_PROMPT_CONFIG } from '../../lib/defaultSettings';
 import { makeAllkpopCampaignSettings } from '../../lib/allkpopPreset';
 import { extractArticleText } from '../../lib/scraper';
+import { testNaverConnection } from '../../lib/naver';
+import { testDaumConnection } from '../../lib/daum';
+import { HelpTip } from './HelpTip';
 import type { ReferenceArticle } from '../../types';
 
 const WINDOWS: { value: ArticleWindow; label: string }[] = [
@@ -16,6 +19,7 @@ const WINDOWS: { value: ArticleWindow; label: string }[] = [
 ];
 
 type Step = 1 | 2 | 3 | 4;
+type ApiStatus = { state: 'idle' | 'testing' | 'ok' | 'error'; message: string };
 // 칸반 단계 컬러 체계와 1:1 — 자동(서칭/주제검수/생성)=블루, 결과물검수=앰버
 const STEPS: { n: Step; label: string; short: string; auto: boolean; active: string; dot: string }[] = [
   { n: 1, label: '서칭',        short: '①', auto: true,  active: 'bg-blue-500',  dot: 'bg-blue-500' },
@@ -38,6 +42,8 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
   const [savedSteps, setSavedSteps] = useState<Set<Step>>(new Set());
   const [refUrl, setRefUrl] = useState('');
   const [extracting, setExtracting] = useState(false);
+  const [naverStatus, setNaverStatus] = useState<ApiStatus>({ state: 'idle', message: '미확인' });
+  const [daumStatus, setDaumStatus] = useState<ApiStatus>({ state: 'idle', message: '미확인' });
   const s = campaign.settings;
   const group = groups.find(g => g.id === campaign.groupId);
 
@@ -64,6 +70,18 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
   };
   const removeReference = (id: string) =>
     setGen({ referenceArticles: s.generation.referenceArticles.filter(r => r.id !== id) });
+
+  const testNaver = async () => {
+    setNaverStatus({ state: 'testing', message: '확인 중...' });
+    const result = await testNaverConnection(settings.naverClientId, settings.naverClientSecret);
+    setNaverStatus({ state: result.ok ? 'ok' : 'error', message: result.message });
+  };
+
+  const testDaum = async () => {
+    setDaumStatus({ state: 'testing', message: '확인 중...' });
+    const result = await testDaumConnection(settings.daumRestApiKey);
+    setDaumStatus({ state: result.ok ? 'ok' : 'error', message: result.message });
+  };
 
   // 설정은 onChange로 이미 자동 저장됨. 이 버튼은 단계 확정 + 다음 단계 전환 + 연결선 진행.
   const saveAndNext = (n: Step) => {
@@ -172,7 +190,10 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
             <div className="space-y-3 rounded-xl border border-slate-200 bg-white/60 p-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-500">네이버 Client ID</label>
+                  <label className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-500">
+                    <span>네이버 Client ID</span>
+                    <a href="https://developers.naver.com/apps/#/register" target="_blank" rel="noopener" className="font-normal text-slate-400 hover:text-indigo-600">발급받기 ↗</a>
+                  </label>
                   <input
                     className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm font-mono"
                     value={settings.naverClientId}
@@ -181,7 +202,10 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-500">네이버 Client Secret</label>
+                  <label className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-500">
+                    <span>네이버 Client Secret</span>
+                    <a href="https://developers.naver.com/apps/#/register" target="_blank" rel="noopener" className="font-normal text-slate-400 hover:text-indigo-600">발급받기 ↗</a>
+                  </label>
                   <input
                     type="password"
                     className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm font-mono"
@@ -190,8 +214,19 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                     placeholder="Naver Client Secret"
                   />
                 </div>
+                <div className="col-span-2 flex items-center gap-2">
+                  <button
+                    onClick={testNaver}
+                    disabled={naverStatus.state === 'testing'}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-white disabled:opacity-50"
+                  >연결 테스트</button>
+                  <ApiStatusBadge status={naverStatus} />
+                </div>
                 <div className="col-span-2">
-                  <label className="mb-1 block text-xs font-semibold text-slate-500">Kakao REST API Key (다음 검색)</label>
+                  <label className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-500">
+                    <span>Kakao REST API Key (다음 검색)</span>
+                    <a href="https://developers.kakao.com/console/app" target="_blank" rel="noopener" className="font-normal text-slate-400 hover:text-indigo-600">발급받기 ↗</a>
+                  </label>
                   <input
                     type="password"
                     className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm font-mono"
@@ -199,6 +234,14 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                     onChange={e => setDaumRestApiKey(e.target.value)}
                     placeholder="Kakao REST API Key"
                   />
+                </div>
+                <div className="col-span-2 flex items-center gap-2">
+                  <button
+                    onClick={testDaum}
+                    disabled={daumStatus.state === 'testing'}
+                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-white disabled:opacity-50"
+                  >연결 테스트</button>
+                  <ApiStatusBadge status={daumStatus} />
                 </div>
               </div>
               <div className="space-y-2">
@@ -278,7 +321,26 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                 {WINDOWS.map(w => <option key={w.value} value={w.value}>{w.label}</option>)}
               </select>
             </Field>
-            <Field label="태스크 생성 최소 매체 수">
+            <Field label={<span>주제 묶는 기준 <HelpTip text="비슷한 기사를 같은 주제로 묶는 기준. 느슨하면 큰 덩어리로, 엄격하면 잘게 나뉩니다." /></span>}>
+              <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-slate-200 bg-white/80 text-sm">
+                {([
+                  { label: '느슨하게', value: 0.25 },
+                  { label: '보통', value: 0.35 },
+                  { label: '엄격하게', value: 0.50 },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.label}
+                    onClick={() => setSearching({ clusterThreshold: opt.value })}
+                    className={`px-3 py-2 font-semibold transition-colors ${
+                      Math.abs(s.searching.clusterThreshold - opt.value) < 0.01
+                        ? 'bg-blue-500 text-white'
+                        : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >{opt.label}</button>
+                ))}
+              </div>
+            </Field>
+            <Field label="기사 건 생성 최소 매체 수">
               <input type="number" min={1} max={10} className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
                 value={s.searching.minMediaCount}
                 onChange={e => setSearching({ minMediaCount: Math.max(1, Number(e.target.value) || 1) })} />
@@ -410,7 +472,21 @@ function Section({ title, desc, children, onSave, saved, isLast, auto }: {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function ApiStatusBadge({ status }: { status: ApiStatus }) {
+  const icon = status.state === 'ok' ? '✅' : status.state === 'error' ? '❌' : '⚪';
+  const tone = status.state === 'ok'
+    ? 'bg-green-50 text-green-700 border-green-200'
+    : status.state === 'error'
+      ? 'bg-red-50 text-red-700 border-red-200'
+      : 'bg-slate-50 text-slate-500 border-slate-200';
+  return (
+    <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>
+      {icon} {status.message}
+    </span>
+  );
+}
+
+function Field({ label, children }: { label: React.ReactNode; children: React.ReactNode }) {
   return (
     <div>
       <label className="mb-1 block text-sm font-medium text-slate-600">{label}</label>
