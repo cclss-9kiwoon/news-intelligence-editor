@@ -37,7 +37,7 @@ type Ctx = {
   updateReviewRule: (id: string, patch: Partial<ReviewRule>) => void;
   removeReviewRule: (id: string) => void;
   resetSettings: () => void;
-  applyCampaignSettings: (cs: CampaignSettings) => void;
+  applyCampaignSettings: (cs: CampaignSettings, groupProfile?: { identity: string; audience: string; toneBase: string }) => void;
 };
 
 const SettingsCtx = createContext<Ctx | null>(null);
@@ -159,20 +159,34 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setSettings(s => ({ ...s, projectProfile: { ...s.projectProfile, reviewRules: s.projectProfile.reviewRules.filter(r => r.id !== id) } })), []);
   const resetSettings = useCallback(() => setSettings(DEFAULT_SETTINGS), []);
   // Pasta: 캠페인 스코프 설정을 현재 Settings에 주입 (계정 전역 필드는 유지)
-  const applyCampaignSettings = useCallback((cs: CampaignSettings) => setSettings(s => {
-    // deep copy: Settings와 Campaign이 같은 객체를 공유하면 한쪽 수정이 다른 쪽 오염
+  // 4단계 CampaignSettings → 평면 Settings 브리지. 그룹 배포맥락(profile)도 주입.
+  const applyCampaignSettings = useCallback((cs: CampaignSettings, groupProfile?: { identity: string; audience: string; toneBase: string }) => setSettings(s => {
     const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
     return {
       ...s,
-      rssSources: clone(cs.source.rssSources),
-      naverQueries: [...cs.source.naverQueries],
-      articleWindow: cs.source.articleWindow,
-      clusterThreshold: cs.source.clusterThreshold,
-      promptConfig: clone(cs.promptConfig),
-      referenceArticles: clone(cs.referenceArticles),
-      projectProfile: clone(cs.projectProfile),
+      // ① 서칭
+      rssSources: clone(cs.searching.rssSources),
+      naverQueries: [...cs.searching.naverQueries],
+      articleWindow: cs.searching.articleWindow,
+      clusterThreshold: cs.searching.clusterThreshold,
+      // ③ 생성
+      promptConfig: clone(cs.generation.promptConfig),
+      referenceArticles: clone(cs.generation.referenceArticles),
       categories: clone(cs.categories),
       activeCategoryId: cs.activeCategoryId,
+      // projectProfile = ③생성 표기 + ④검수 규칙 + 그룹 배포맥락 합성
+      projectProfile: {
+        publicationName: groupProfile?.identity || s.projectProfile.publicationName,
+        outputLanguage: cs.generation.outputLanguage,
+        allowedMedia: clone(cs.finalReview.allowedMedia),
+        bannedMedia: clone(cs.finalReview.bannedMedia),
+        formatRules: clone(cs.generation.formatRules),
+        styleGuide: [
+          groupProfile ? `[배포 맥락] ${groupProfile.identity} · 타겟: ${groupProfile.audience} · 톤: ${groupProfile.toneBase}` : '',
+          cs.generation.styleGuide,
+        ].filter(Boolean).join('\n'),
+        reviewRules: clone(cs.finalReview.reviewRules),
+      },
     };
   }), []);
 

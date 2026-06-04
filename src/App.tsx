@@ -103,12 +103,13 @@ function PastaRouter() {
   const [mode, setMode] = useState<'pasta' | 'kanban' | 'workspace' | 'workbench'>('pasta');
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const { applyCampaignSettings } = useSettings();
-  const { campaigns, setActiveCampaign, activeCampaign } = useCampaigns();
+  const { campaigns, groups, setActiveCampaign, activeCampaign } = useCampaigns();
 
   const openCampaign = (campaignId: string) => {
     const c = campaigns.find(x => x.id === campaignId);
     if (!c) return;
-    applyCampaignSettings(c.settings);   // 캠페인 설정을 Settings에 주입
+    const g = groups.find(x => x.id === c.groupId);
+    applyCampaignSettings(c.settings, g?.profile);   // 캠페인 설정 + 그룹 배포맥락 주입
     setActiveCampaign(campaignId);
     setMode('kanban');
   };

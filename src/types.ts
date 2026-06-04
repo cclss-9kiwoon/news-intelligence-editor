@@ -214,11 +214,21 @@ export type ArticleWindow = '1h' | '24h' | '7d' | '30d' | 'breaking';
 // 계정 전역 설정(provider/apiKey/model 등)은 Settings에 유지.
 // 캠페인 스코프 설정(소스/포맷/프롬프트)은 CampaignSettings에 분리.
 
-// 채널(배포 대상)은 Hydra 소관. Pasta(아티클 생산)는 그룹=이름만 가진
-// 캠페인 컨테이너. 채널 개념 없음.
+// 채널(배포 대상)은 Hydra 소관. 그룹은 "배포 맥락"(어떤 매체/플랫폼 성격인가)을
+// 정의하고 하위 캠페인에 상속. 채널(어느 SNS 계정인가)은 제외.
+export type GroupTargetType = 'media' | 'blog' | 'medium' | 'other';
+
+export type GroupProfile = {
+  targetType: GroupTargetType;  // 배포 대상 유형
+  identity: string;             // 플랫폼 성격 "K-pop 전문 영문 매체"
+  audience: string;             // 타겟 독자 "글로벌 K-pop 팬"
+  toneBase: string;             // 전반 톤·스타일 베이스
+};
+
 export type Group = {
   id: string;
   name: string;              // 회사/매체명 (allkpop, 스포츠조선 등)
+  profile: GroupProfile;     // 배포 맥락 (캠페인 상속)
   createdAt: number;
 };
 
@@ -233,12 +243,35 @@ export type SourceConfig = {
   minMediaCount: number;     // 태스크 생성 최소 매체 수
 };
 
-/** 캠페인 단위 설정 — 소스 + 아티클 포맷 */
-export type CampaignSettings = {
-  source: SourceConfig;
-  promptConfig: PromptConfig;
+/** ② 주제 검수 설정 — 어떤 주제를 고르나 */
+export type TopicReviewConfig = {
+  selectionCriteria: string;  // 주제 선정 기준 (최신성/인지도/다양성)
+  dedupeRules: string;        // 중복·앵글 회피 규칙
+  priority: string;           // 우선순위
+};
+
+/** ③ 생성 설정 — 어떻게 쓰나 */
+export type GenerationConfig = {
+  promptConfig: PromptConfig;       // 에디터 역할/발행 가이드/작업 지침/금지 표현
+  formatRules: FormatRules;         // 표기 규칙 (인용부호/마크업)
   referenceArticles: ReferenceArticle[];
-  projectProfile: ProjectProfile;
+  styleGuide: string;               // 자유 가이드라인
+  outputLanguage: OutputLanguage;
+};
+
+/** ④ 결과물 검수 설정 — 무엇을 검수하나 */
+export type FinalReviewConfig = {
+  reviewRules: ReviewRule[];        // 커스텀 LLM 검수 항목 (block=자동차단, warn=사람판단)
+  allowedMedia: string[];
+  bannedMedia: string[];
+};
+
+/** 캠페인 단위 설정 — 칸반 4단계 구조 */
+export type CampaignSettings = {
+  searching: SourceConfig;          // ① 서칭
+  topicReview: TopicReviewConfig;   // ② 주제 검수
+  generation: GenerationConfig;     // ③ 생성
+  finalReview: FinalReviewConfig;   // ④ 결과물 검수
   categories: Category[];
   activeCategoryId: string;
 };
@@ -254,10 +287,10 @@ export type Campaign = {
 
 // ─── Pasta Phase 2: 칸반 태스크 ─────────────────────────────────────
 // 태스크 = 개별 기사 건. 캠페인 안에서 4단계 칸반으로 흐름.
-//   searching → source_review → producing → final_review
+//   searching → topic_review → producing → final_review
 // 서칭~제작은 자동, 결과물 검수는 사람.
 
-export type TaskStatus = 'searching' | 'source_review' | 'producing' | 'final_review';
+export type TaskStatus = 'searching' | 'topic_review' | 'producing' | 'final_review';
 
 export type TaskSource = {
   articleId: string;

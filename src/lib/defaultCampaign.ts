@@ -1,4 +1,4 @@
-import type { Group, Campaign, CampaignSettings, SourceConfig } from '../types';
+import type { Group, GroupProfile, Campaign, CampaignSettings, SourceConfig } from '../types';
 import {
   DEFAULT_RSS_SOURCES,
   DEFAULT_PROMPT_CONFIG,
@@ -20,21 +20,45 @@ export const DEFAULT_SOURCE_CONFIG: SourceConfig = {
   minMediaCount: 2,
 };
 
+export const DEFAULT_GROUP_PROFILE: GroupProfile = {
+  targetType: 'media',
+  identity: '',
+  audience: '',
+  toneBase: '',
+};
+
+const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
+
 export function makeDefaultCampaignSettings(): CampaignSettings {
   return {
-    source: { ...DEFAULT_SOURCE_CONFIG, rssSources: DEFAULT_RSS_SOURCES.map(s => ({ ...s })) },
-    promptConfig: { ...DEFAULT_PROMPT_CONFIG },
-    referenceArticles: [],
-    projectProfile: JSON.parse(JSON.stringify(DEFAULT_PROJECT_PROFILE)),
+    searching: { ...DEFAULT_SOURCE_CONFIG, rssSources: DEFAULT_RSS_SOURCES.map(s => ({ ...s })) },
+    topicReview: {
+      selectionCriteria: '최신성 우선, 인지도 높은 주제, 다양성 확보.',
+      dedupeRules: '같은 스토리/앵글 중복 금지. 이미 다룬 주제는 다른 앵글일 때만 허용.',
+      priority: '속보 > 발표 > 차트/마일스톤 > 일반.',
+    },
+    generation: {
+      promptConfig: { ...DEFAULT_PROMPT_CONFIG },
+      formatRules: clone(DEFAULT_PROJECT_PROFILE.formatRules),
+      referenceArticles: [],
+      styleGuide: DEFAULT_PROJECT_PROFILE.styleGuide,
+      outputLanguage: DEFAULT_PROJECT_PROFILE.outputLanguage,
+    },
+    finalReview: {
+      reviewRules: clone(DEFAULT_PROJECT_PROFILE.reviewRules),
+      allowedMedia: [],
+      bannedMedia: [],
+    },
     categories: DEFAULT_CATEGORIES.map(c => ({ ...c })),
     activeCategoryId: DEFAULT_CATEGORIES[0]?.id ?? 'music',
   };
 }
 
-export function makeGroup(name: string): Group {
+export function makeGroup(name: string, profile?: Partial<GroupProfile>): Group {
   return {
     id: newId('grp'),
     name: name || '새 그룹',
+    profile: { ...DEFAULT_GROUP_PROFILE, ...(profile ?? {}) },
     createdAt: Date.now(),
   };
 }
@@ -48,5 +72,45 @@ export function makeCampaign(groupId: string, name: string): Campaign {
     settings: makeDefaultCampaignSettings(),
     createdAt: now,
     updatedAt: now,
+  };
+}
+
+// ── 마이그레이션: 구버전 평면 CampaignSettings → 4단계 ──
+// 구버전: { source, promptConfig, referenceArticles, projectProfile, categories, activeCategoryId }
+export function migrateCampaignSettings(raw: any): CampaignSettings {
+  if (!raw) return makeDefaultCampaignSettings();
+  // 이미 4단계 구조면 그대로
+  if (raw.searching && raw.generation && raw.finalReview && raw.topicReview) {
+    return raw as CampaignSettings;
+  }
+  const def = makeDefaultCampaignSettings();
+  const pp = raw.projectProfile ?? {};
+  return {
+    searching: raw.source ?? def.searching,
+    topicReview: def.topicReview,
+    generation: {
+      promptConfig: raw.promptConfig ?? def.generation.promptConfig,
+      formatRules: pp.formatRules ?? def.generation.formatRules,
+      referenceArticles: raw.referenceArticles ?? [],
+      styleGuide: pp.styleGuide ?? '',
+      outputLanguage: pp.outputLanguage ?? 'ko',
+    },
+    finalReview: {
+      reviewRules: pp.reviewRules ?? def.finalReview.reviewRules,
+      allowedMedia: pp.allowedMedia ?? [],
+      bannedMedia: pp.bannedMedia ?? [],
+    },
+    categories: raw.categories ?? def.categories,
+    activeCategoryId: raw.activeCategoryId ?? def.activeCategoryId,
+  };
+}
+
+// 구버전 group(profile 없음) → profile 보강
+export function migrateGroup(raw: any): Group {
+  return {
+    id: raw.id,
+    name: raw.name ?? '새 그룹',
+    profile: raw.profile ?? { ...DEFAULT_GROUP_PROFILE },
+    createdAt: raw.createdAt ?? Date.now(),
   };
 }

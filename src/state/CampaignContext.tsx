@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import type { Group, Campaign, CampaignSettings } from '../types';
 import { loadJson, saveJson } from '../lib/storage';
-import { makeGroup, makeCampaign } from '../lib/defaultCampaign';
+import { makeGroup, makeCampaign, migrateCampaignSettings, migrateGroup } from '../lib/defaultCampaign';
 
 const GROUPS_KEY = 'pasta:groups';
 const CAMPAIGNS_KEY = 'pasta:campaigns';
@@ -14,7 +14,8 @@ type Ctx = {
   activeCampaign: Campaign | null;
 
   // group CRUD
-  addGroup: (name: string) => Group;
+  addGroup: (name: string, profile?: Partial<import('../types').GroupProfile>) => Group;
+  updateGroupProfile: (id: string, patch: Partial<import('../types').GroupProfile>) => void;
   renameGroup: (id: string, name: string) => void;
   deleteGroup: (id: string) => void;
 
@@ -31,9 +32,13 @@ const CampaignCtx = createContext<Ctx | null>(null);
 
 export function CampaignProvider({ children }: { children: ReactNode }) {
   // 빈 상태로 시작 (자동 시드 없음). 첫 진입 = 그룹 0개 온보딩.
+  // 로드 시 마이그레이션: 구버전 group(profile 없음)/평면 CampaignSettings → 최신 구조.
   const [{ initGroups, initCampaigns }] = useState(() => ({
-    initGroups: loadJson<Group[]>(GROUPS_KEY, []),
-    initCampaigns: loadJson<Campaign[]>(CAMPAIGNS_KEY, []),
+    initGroups: loadJson<any[]>(GROUPS_KEY, []).map(migrateGroup),
+    initCampaigns: loadJson<any[]>(CAMPAIGNS_KEY, []).map((c: any) => ({
+      ...c,
+      settings: migrateCampaignSettings(c.settings),
+    })),
   }));
   const [groups, setGroups] = useState<Group[]>(initGroups);
   const [campaigns, setCampaigns] = useState<Campaign[]>(initCampaigns);
@@ -49,10 +54,14 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const activeCampaign = campaigns.find(c => c.id === activeCampaignId) ?? null;
 
   // ── group CRUD ──
-  const addGroup = useCallback((name: string) => {
-    const g = makeGroup(name);
+  const addGroup = useCallback((name: string, profile?: Partial<import('../types').GroupProfile>) => {
+    const g = makeGroup(name, profile);
     setGroups(prev => [...prev, g]);
     return g;
+  }, []);
+
+  const updateGroupProfile = useCallback((id: string, patch: Partial<import('../types').GroupProfile>) => {
+    setGroups(prev => prev.map(g => (g.id === id ? { ...g, profile: { ...g.profile, ...patch } } : g)));
   }, []);
 
   const renameGroup = useCallback((id: string, name: string) => {
@@ -93,7 +102,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   return (
     <CampaignCtx.Provider value={{
       groups, campaigns, activeCampaignId, activeCampaign,
-      addGroup, renameGroup, deleteGroup,
+      addGroup, updateGroupProfile, renameGroup, deleteGroup,
       addCampaign, renameCampaign, deleteCampaign, updateCampaignSettings,
       setActiveCampaign,
     }}>

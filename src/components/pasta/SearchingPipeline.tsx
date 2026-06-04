@@ -10,7 +10,7 @@ import type { Campaign, TaskSource, Category } from '../../types';
 const SOURCE_REVIEW_TIMEOUT_MS = 90_000; // 전문 수집 대기 상한
 
 /**
- * Pasta 자동 파이프라인: 서칭 → 소스 검수 → 아티클 제작 자동 전환.
+ * Pasta 자동 파이프라인: 서칭 → 주제 검수 → 아티클 제작 자동 전환.
  * 렌더링 없는 로직 컴포넌트. 칸반 모드의 Provider 트리 안에 위치.
  * 결과물 검수(final_review)는 사람이 처리.
  */
@@ -39,7 +39,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     tasks.filter(t => t.campaignId === campaign.id)
       .forEach(t => t.sources.forEach(s => claimedArticleIds.add(s.articleId)));
 
-    const { minMediaCount, topicKeywords, excludeKeywords } = campaign.settings.source;
+    const { minMediaCount, topicKeywords, excludeKeywords } = campaign.settings.searching;
 
     for (const cluster of clusters) {
       if (cluster.articleIds.some(id => claimedArticleIds.has(id))) continue;
@@ -67,18 +67,18 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusters, articles, taskSig, campaign.id]);
 
-  // ── 2. 서칭 → 소스 검수 (즉시 전환) ──
+  // ── 2. 서칭 → 주제 검수 (즉시 전환) ──
   useEffect(() => {
     for (const t of myTasks) {
-      if (t.status === 'searching') moveTask(t.id, 'source_review');
+      if (t.status === 'searching') moveTask(t.id, 'topic_review');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSig]);
 
-  // ── 3. 소스 검수: 전문 확인 → 제작 전환 / 탈락 ──
+  // ── 3. 주제 검수: 주제 선정 판단(topicReview) + 전문 수집 확인 → 제작 전환 / 탈락 ──
   useEffect(() => {
     for (const t of myTasks) {
-      if (t.status !== 'source_review') continue;
+      if (t.status !== 'topic_review') continue;
       if (t.error) continue; // 이미 탈락 처리된 태스크는 skip (중복 에러 방지)
 
       const refreshed = t.sources.map(s => {
