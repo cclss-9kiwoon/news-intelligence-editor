@@ -19,6 +19,7 @@ import { TutorialOverlay } from './components/TutorialOverlay';
 import { VerticalSplitter } from './components/VerticalSplitter';
 import { PastaShell } from './components/pasta/PastaShell';
 import { KanbanBoard } from './components/pasta/KanbanBoard';
+import { SearchingPipeline } from './components/pasta/SearchingPipeline';
 import { loadJson, saveJson } from './lib/storage';
 
 const COLLAPSE_KEY = 'nie:workbench-collapsed';
@@ -114,33 +115,32 @@ function PastaRouter() {
     return <PastaShell onOpenCampaign={openCampaign} />;
   }
 
-  if (mode === 'kanban' && activeCampaign) {
-    return (
-      <div className="flex h-screen flex-col bg-white">
-        <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-800 px-4 py-1.5 text-xs text-white">
-          <button onClick={() => setMode('pasta')} className="rounded px-2 py-0.5 hover:bg-gray-700">← 캠페인 목록</button>
-          <span className="text-gray-400">|</span>
-          <span className="text-gray-300">🍝 캠페인:</span>
-          <span className="font-medium">{activeCampaign.name}</span>
-          <button onClick={() => setMode('workbench')} className="ml-auto rounded bg-gray-600 px-2 py-0.5 hover:bg-gray-500">수동 워크벤치 →</button>
-        </div>
-        <div className="min-h-0 flex-1">
-          <KanbanBoard campaignId={activeCampaign.id} onOpenTask={() => setMode('workbench')} />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <HistoryProvider>
       <ArticlesProvider>
         <ClustersProvider>
           <ConversionProvider>
             <BreakingProvider>
-              <AppShell
-                onBackToPasta={() => setMode(activeCampaign ? 'kanban' : 'pasta')}
-                campaignName={activeCampaign?.name ?? '—'}
-              />
+              {mode === 'kanban' && activeCampaign ? (
+                <div className="flex h-screen flex-col bg-white">
+                  <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-800 px-4 py-1.5 text-xs text-white">
+                    <button onClick={() => setMode('pasta')} className="rounded px-2 py-0.5 hover:bg-gray-700">← 캠페인 목록</button>
+                    <span className="text-gray-400">|</span>
+                    <span className="text-gray-300">🍝 캠페인:</span>
+                    <span className="font-medium">{activeCampaign.name}</span>
+                    <button onClick={() => setMode('workbench')} className="ml-auto rounded bg-gray-600 px-2 py-0.5 hover:bg-gray-500">수동 워크벤치 →</button>
+                  </div>
+                  <div className="min-h-0 flex-1">
+                    <SearchingPipeline campaign={activeCampaign} />
+                    <KanbanBoard campaignId={activeCampaign.id} onOpenTask={() => setMode('workbench')} />
+                  </div>
+                </div>
+              ) : (
+                <AppShell
+                  onBackToPasta={() => setMode(activeCampaign ? 'kanban' : 'pasta')}
+                  campaignName={activeCampaign?.name ?? '—'}
+                />
+              )}
             </BreakingProvider>
           </ConversionProvider>
         </ClustersProvider>

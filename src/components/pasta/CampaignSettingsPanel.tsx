@@ -26,16 +26,16 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
       {/* 헤더 */}
       <div className="mb-6 flex items-start justify-between">
         <div className="flex-1">
-          <p className="text-xs text-gray-400">🏢 {group?.name ?? '—'}</p>
+          <p className="text-xs font-mono uppercase tracking-wide text-slate-400">🏢 {group?.name ?? '—'}</p>
           <input
-            className="mt-1 w-full max-w-lg border-b border-transparent text-2xl font-bold hover:border-gray-300 focus:border-blue-500 focus:outline-none"
+            className="mt-1 w-full max-w-lg border-b border-transparent bg-transparent text-2xl font-bold text-slate-900 hover:border-slate-300 focus:border-indigo-500 focus:outline-none"
             value={campaign.name}
             onChange={e => renameCampaign(campaign.id, e.target.value)}
           />
         </div>
         <button
           onClick={onOpen}
-          className="rounded-lg bg-blue-600 px-5 py-2 text-white hover:bg-blue-700"
+          className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-700 transition-colors"
         >이 캠페인으로 작업 →</button>
       </div>
 
@@ -53,7 +53,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                       x.id === src.id ? { ...x, enabled: e.target.checked } : x),
                   })}
                 />
-                <span className={src.enabled ? 'text-gray-800' : 'text-gray-400'}>{src.name}</span>
+                <span className={src.enabled ? 'text-slate-800' : 'text-slate-400'}>{src.name}</span>
               </label>
             ))}
           </div>
@@ -70,7 +70,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
         <div className="grid grid-cols-2 gap-4">
           <Field label="포함 키워드 (쉼표)">
             <input
-              className="w-full rounded border px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-colors"
               placeholder="컴백, 앨범, 차트"
               value={s.source.topicKeywords.join(', ')}
               onChange={e => setSource({ topicKeywords: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })}
@@ -78,7 +78,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
           </Field>
           <Field label="제외 키워드 (쉼표)">
             <input
-              className="w-full rounded border px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-colors"
               placeholder="정치, 경제"
               value={s.source.excludeKeywords.join(', ')}
               onChange={e => setSource({ excludeKeywords: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })}
@@ -89,7 +89,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
         <div className="grid grid-cols-2 gap-4">
           <Field label="시간 윈도우">
             <select
-              className="w-full rounded border px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-colors"
               value={s.source.articleWindow}
               onChange={e => setSource({ articleWindow: e.target.value as ArticleWindow })}
             >
@@ -99,7 +99,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
           <Field label="태스크 생성 최소 매체 수">
             <input
               type="number" min={1} max={10}
-              className="w-full rounded border px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-colors"
               value={s.source.minMediaCount}
               onChange={e => setSource({ minMediaCount: Math.max(1, Number(e.target.value) || 1) })}
             />
@@ -140,9 +140,9 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
 
 function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
   return (
-    <div className="mb-6 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-      <h3 className="font-semibold text-gray-800">{title}</h3>
-      <p className="mb-4 text-xs text-gray-400">{desc}</p>
+    <div className="mb-5 rounded-2xl border border-white/70 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+      <h3 className="font-bold text-slate-800">{title}</h3>
+      <p className="mb-4 text-xs text-slate-400">{desc}</p>
       <div className="space-y-4">{children}</div>
     </div>
   );
@@ -151,7 +151,7 @@ function Section({ title, desc, children }: { title: string; desc: string; child
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-gray-600">{label}</label>
+      <label className="mb-1 block text-sm font-medium text-slate-600">{label}</label>
       {children}
     </div>
   );
@@ -163,11 +163,11 @@ function PromptField({ label, value, onChange, onReset, rows }: {
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
-        <label className="text-sm font-medium text-gray-600">{label}</label>
-        <button onClick={onReset} className="text-xs text-blue-600 hover:underline">기본값 복원</button>
+        <label className="text-sm font-medium text-slate-600">{label}</label>
+        <button onClick={onReset} className="text-xs text-indigo-500 hover:underline">기본값 복원</button>
       </div>
       <textarea
-        className="w-full rounded border px-3 py-2 text-sm font-mono"
+        className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm font-mono focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-colors"
         rows={rows}
         value={value}
         onChange={e => onChange(e.target.value)}
