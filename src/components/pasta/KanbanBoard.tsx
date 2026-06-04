@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useTasks } from '../../state/TaskContext';
+import { useArticles } from '../../state/ArticlesContext';
 import type { Task, TaskStatus } from '../../types';
 
 type ColMeta = {
@@ -19,12 +20,20 @@ const COLUMNS: ColMeta[] = [
 
 export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; onOpenTask: (taskId: string) => void }) {
   const { tasks: allTasks, deleteTask, updateTask } = useTasks();
+  const { isRefreshing, loadingStatus, lastRefreshedAt, articles } = useArticles();
   const tasks = useMemo(() => allTasks.filter(t => t.campaignId === campaignId), [allTasks, campaignId]);
   const retryTask = (id: string) => updateTask(id, { error: undefined, produceAttempts: 0, status: 'producing' });
 
   return (
-    <div className="h-full overflow-hidden" style={{ background: 'radial-gradient(ellipse 80% 80% at top left, #C5E3F6 0%, transparent 55%), radial-gradient(ellipse at bottom center, #FBE2BC 0%, transparent 55%), radial-gradient(ellipse at right, #F0D5F7 0%, transparent 55%), #FCF4E8' }}>
-      <div className="grid h-full grid-cols-4 gap-5 px-8 py-6">
+    <div className="flex h-full flex-col overflow-hidden" style={{ background: 'radial-gradient(ellipse 80% 80% at top left, #C5E3F6 0%, transparent 55%), radial-gradient(ellipse at bottom center, #FBE2BC 0%, transparent 55%), radial-gradient(ellipse at right, #F0D5F7 0%, transparent 55%), #FCF4E8' }}>
+      {/* #3 단계 가시성: 자동 수집 상태 바 */}
+      <div className="flex items-center gap-2 px-8 pt-4 text-xs text-slate-500">
+        <span className={`inline-flex h-2 w-2 rounded-full ${isRefreshing ? 'animate-pulse bg-blue-500' : 'bg-slate-300'}`} />
+        {isRefreshing
+          ? <span className="font-medium text-slate-600">{loadingStatus || '자동 수집 중...'}</span>
+          : <span>자동 진행 대기 · 수집된 기사 {articles.length}건{lastRefreshedAt ? ` · 마지막 ${relTime(lastRefreshedAt)}` : ''}</span>}
+      </div>
+      <div className="grid min-h-0 flex-1 grid-cols-4 gap-5 px-8 pb-6 pt-3">
         {COLUMNS.map(col => {
           const colTasks = tasks.filter(t => t.status === col.status);
           return (
