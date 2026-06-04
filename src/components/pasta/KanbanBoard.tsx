@@ -27,11 +27,17 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'radial-gradient(ellipse 80% 80% at top left, #C5E3F6 0%, transparent 55%), radial-gradient(ellipse at bottom center, #FBE2BC 0%, transparent 55%), radial-gradient(ellipse at right, #F0D5F7 0%, transparent 55%), #FCF4E8' }}>
       {/* #3 단계 가시성: 자동 수집 상태 바 */}
-      <div className="flex items-center gap-2 px-8 pt-4 text-xs text-slate-500">
-        <span className={`inline-flex h-2 w-2 rounded-full ${isRefreshing ? 'animate-pulse bg-blue-500' : 'bg-slate-300'}`} />
-        {isRefreshing
-          ? <span className="font-medium text-slate-600">{loadingStatus || '자동 수집 중...'}</span>
-          : <span>자동 진행 대기 · 수집된 기사 {articles.length}건{lastRefreshedAt ? ` · 마지막 ${relTime(lastRefreshedAt)}` : ''}</span>}
+      <div className="px-8 pt-4">
+        <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs backdrop-blur-md transition-colors ${
+          isRefreshing
+            ? 'border-blue-200/70 bg-blue-50/70 text-blue-700'
+            : 'border-white/60 bg-white/55 text-slate-500'
+        }`}>
+          <span className={`inline-flex h-2 w-2 rounded-full ${isRefreshing ? 'animate-pulse bg-blue-500' : 'bg-slate-300'}`} />
+          {isRefreshing
+            ? <span className="font-semibold">{loadingStatus || '자동 수집 중...'}</span>
+            : <span>자동 진행 대기 · 수집 {articles.length}건{lastRefreshedAt ? ` · 마지막 ${relTime(lastRefreshedAt)}` : ''}</span>}
+        </span>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-4 gap-5 px-8 pb-6 pt-3">
         {COLUMNS.map(col => {
