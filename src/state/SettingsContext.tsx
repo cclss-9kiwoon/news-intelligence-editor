@@ -195,10 +195,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
     // language가 출력 언어 결정 (그룹 우선, 없으면 캠페인 생성 설정)
     const outputLanguage = (groupProfile?.language === 'en' ? 'en' : groupProfile?.language === 'ko' ? 'ko' : cs.generation.outputLanguage);
+    // searchProviders(SOT)에서 provider별 활성 검색어 도출. 없으면 레거시 queries 폴백.
+    const providers = cs.searching.searchProviders ?? [];
+    const naverQueries = providers.length
+      ? providers.filter(p => p.provider === 'naver' && p.enabled).map(p => p.query)
+      : [...cs.searching.naverQueries];
+    const daumQueries = providers.length
+      ? providers.filter(p => p.provider === 'daum' && p.enabled).map(p => p.query)
+      : [...(cs.searching.daumQueries ?? [])];
     return {
       ...s,
       rssSources: clone(cs.searching.rssSources),
-      naverQueries: [...cs.searching.naverQueries],
+      naverQueries: naverQueries.length ? naverQueries : [...cs.searching.naverQueries],
+      daumQueries: daumQueries.length ? daumQueries : [...(cs.searching.daumQueries ?? [])],
       articleWindow: cs.searching.articleWindow,
       clusterThreshold: cs.searching.clusterThreshold,
       promptConfig: clone(cs.generation.promptConfig),
