@@ -128,12 +128,13 @@ function PastaRouter() {
                 <CampaignWorkspace taskId={openTaskId} onBack={() => setMode('kanban')} />
               ) : mode === 'kanban' && activeCampaign ? (
                 <div className="flex h-screen flex-col bg-white">
-                  <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-800 px-4 py-1.5 text-xs text-white">
-                    <button onClick={() => setMode('pasta')} className="rounded px-2 py-0.5 hover:bg-gray-700">← 캠페인 목록</button>
-                    <span className="text-gray-400">|</span>
-                    <span className="text-gray-300">🍝 캠페인:</span>
-                    <span className="font-medium">{activeCampaign.name}</span>
-                    <button onClick={() => setMode('workbench')} className="ml-auto rounded bg-gray-600 px-2 py-0.5 hover:bg-gray-500">수동 워크벤치 →</button>
+                  <div className="flex items-center gap-3 border-b border-slate-200 bg-white/80 backdrop-blur-md px-5 py-2.5 text-sm">
+                    <button onClick={() => setMode('pasta')} className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">← 캠페인 목록</button>
+                    <span className="flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900 text-xs">🍝</span>
+                      <span className="font-bold text-slate-900">{activeCampaign.name}</span>
+                    </span>
+                    <button onClick={() => setMode('workbench')} className="ml-auto rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 transition-colors">수동 워크벤치 →</button>
                   </div>
                   <div className="min-h-0 flex-1">
                     <KanbanBoard campaignId={activeCampaign.id} onOpenTask={(taskId) => { setOpenTaskId(taskId); setMode('workspace'); }} />

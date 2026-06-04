@@ -22,37 +22,39 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   const tasks = useMemo(() => allTasks.filter(t => t.campaignId === campaignId), [allTasks, campaignId]);
 
   return (
-    <div className="grid h-full grid-cols-4 gap-3 overflow-hidden p-4" style={{ background: 'radial-gradient(ellipse 80% 80% at top left, #C5E3F6 0%, transparent 55%), radial-gradient(ellipse at bottom center, #FBE2BC 0%, transparent 55%), radial-gradient(ellipse at right, #F0D5F7 0%, transparent 55%), #FCF4E8' }}>
-      {COLUMNS.map(col => {
-        const colTasks = tasks.filter(t => t.status === col.status);
-        return (
-          <div key={col.status} className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/60 bg-white/55 backdrop-blur-md shadow-sm">
-            <div className={`h-1 w-full ${col.bar}`} />
-            <div className="flex items-center justify-between px-3 py-2">
-              <span className="text-sm font-bold text-slate-700">{col.label}</span>
-              <div className="flex items-center gap-1.5">
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-mono font-semibold ${col.badge}`}>
-                  {col.auto ? '자동' : '사람'}
-                </span>
-                <span className="flex items-center gap-1 text-xs font-mono text-slate-400">
-                  <span className={`h-1.5 w-1.5 rounded-full ${col.dot}`} />
-                  {colTasks.length}
-                </span>
+    <div className="h-full overflow-hidden" style={{ background: 'radial-gradient(ellipse 80% 80% at top left, #C5E3F6 0%, transparent 55%), radial-gradient(ellipse at bottom center, #FBE2BC 0%, transparent 55%), radial-gradient(ellipse at right, #F0D5F7 0%, transparent 55%), #FCF4E8' }}>
+      <div className="grid h-full grid-cols-4 gap-5 px-8 py-6">
+        {COLUMNS.map(col => {
+          const colTasks = tasks.filter(t => t.status === col.status);
+          return (
+            <div key={col.status} className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/60 bg-white/55 backdrop-blur-md shadow-sm">
+              <div className={`h-1.5 w-full ${col.bar}`} />
+              <div className="flex items-center justify-between px-4 py-3.5">
+                <span className="text-[15px] font-bold text-slate-800">{col.label}</span>
+                <div className="flex items-center gap-2">
+                  <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wide ${col.badge}`}>
+                    {col.auto ? '자동' : '사람'}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs font-mono font-semibold text-slate-500">
+                    <span className={`h-2 w-2 rounded-full ${col.dot}`} />
+                    {colTasks.length}
+                  </span>
+                </div>
+              </div>
+              <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-4">
+                {colTasks.map(t => (
+                  <TaskCard key={t.id} task={t} onOpen={() => onOpenTask(t.id)} onDelete={() => deleteTask(t.id)} />
+                ))}
+                {colTasks.length === 0 && (
+                  <div className="mt-1 rounded-xl border-2 border-dashed border-slate-200/80 py-10 text-center text-xs text-slate-300">
+                    비어 있음
+                  </div>
+                )}
               </div>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-              {colTasks.map(t => (
-                <TaskCard key={t.id} task={t} onOpen={() => onOpenTask(t.id)} onDelete={() => deleteTask(t.id)} />
-              ))}
-              {colTasks.length === 0 && (
-                <div className="rounded-lg border-2 border-dashed border-slate-200 py-6 text-center text-xs text-slate-300">
-                  비어 있음
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -65,10 +67,10 @@ function TaskCard({ task, onOpen, onDelete }: { task: Task; onOpen: () => void; 
   return (
     <div
       onClick={onOpen}
-      className="cursor-pointer rounded-xl border border-slate-200 bg-white p-3 shadow-sm hover:shadow-md hover:border-slate-300 transition-all"
+      className="cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md hover:border-slate-300 hover:-translate-y-0.5 transition-all"
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold text-slate-800 line-clamp-2">📰 {task.title}</p>
+        <p className="text-sm font-semibold leading-snug text-slate-800 line-clamp-2">📰 {task.title}</p>
         <button
           onClick={e => { e.stopPropagation(); if (confirm('태스크 삭제?')) onDelete(); }}
           className="shrink-0 text-slate-300 hover:text-red-500 transition-colors"
