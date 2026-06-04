@@ -20,6 +20,7 @@ import { VerticalSplitter } from './components/VerticalSplitter';
 import { PastaShell } from './components/pasta/PastaShell';
 import { KanbanBoard } from './components/pasta/KanbanBoard';
 import { SearchingPipeline } from './components/pasta/SearchingPipeline';
+import { CampaignWorkspace } from './components/pasta/CampaignWorkspace';
 import { loadJson, saveJson } from './lib/storage';
 
 const COLLAPSE_KEY = 'nie:workbench-collapsed';
@@ -64,7 +65,7 @@ function AppShell({ onBackToPasta, campaignName }: { onBackToPasta: () => void; 
       )}
       <div className="grid flex-1 min-h-0 grid-cols-[340px_1fr] overflow-hidden">
         <ClusterPicker />
-        <div className="flex min-h-0 flex-col overflow-hidden" style={{ background: 'radial-gradient(ellipse at top left, #D6EAF8 0%, transparent 45%), radial-gradient(ellipse at bottom center, #FDE8C0 0%, transparent 50%), radial-gradient(ellipse at right, #F5E0F8 0%, transparent 45%), #FDF6EC' }}>
+        <div className="flex min-h-0 flex-col overflow-hidden" style={{ background: 'radial-gradient(ellipse 80% 80% at top left, #C5E3F6 0%, transparent 55%), radial-gradient(ellipse at bottom center, #FBE2BC 0%, transparent 55%), radial-gradient(ellipse at right, #F0D5F7 0%, transparent 55%), #FCF4E8' }}>
           <VerticalSplitter
             storageKey="nie:workbench-split"
             defaultTopFraction={0.62}
@@ -99,7 +100,8 @@ function AppShell({ onBackToPasta, campaignName }: { onBackToPasta: () => void; 
 }
 
 function PastaRouter() {
-  const [mode, setMode] = useState<'pasta' | 'kanban' | 'workbench'>('pasta');
+  const [mode, setMode] = useState<'pasta' | 'kanban' | 'workspace' | 'workbench'>('pasta');
+  const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const { applyCampaignSettings } = useSettings();
   const { campaigns, setActiveCampaign, activeCampaign } = useCampaigns();
 
@@ -121,7 +123,10 @@ function PastaRouter() {
         <ClustersProvider>
           <ConversionProvider>
             <BreakingProvider>
-              {mode === 'kanban' && activeCampaign ? (
+              {activeCampaign && <SearchingPipeline campaign={activeCampaign} />}
+              {mode === 'workspace' && openTaskId ? (
+                <CampaignWorkspace taskId={openTaskId} onBack={() => setMode('kanban')} />
+              ) : mode === 'kanban' && activeCampaign ? (
                 <div className="flex h-screen flex-col bg-white">
                   <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-800 px-4 py-1.5 text-xs text-white">
                     <button onClick={() => setMode('pasta')} className="rounded px-2 py-0.5 hover:bg-gray-700">← 캠페인 목록</button>
@@ -131,8 +136,7 @@ function PastaRouter() {
                     <button onClick={() => setMode('workbench')} className="ml-auto rounded bg-gray-600 px-2 py-0.5 hover:bg-gray-500">수동 워크벤치 →</button>
                   </div>
                   <div className="min-h-0 flex-1">
-                    <SearchingPipeline campaign={activeCampaign} />
-                    <KanbanBoard campaignId={activeCampaign.id} onOpenTask={() => setMode('workbench')} />
+                    <KanbanBoard campaignId={activeCampaign.id} onOpenTask={(taskId) => { setOpenTaskId(taskId); setMode('workspace'); }} />
                   </div>
                 </div>
               ) : (

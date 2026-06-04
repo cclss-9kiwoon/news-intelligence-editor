@@ -7,7 +7,7 @@ import { GroupSetup } from './GroupSetup';
 
 type View = 'campaign' | 'group' | 'new-group' | 'template' | 'empty';
 
-const GRADIENT = 'radial-gradient(ellipse at top left, #D6EAF8 0%, transparent 45%), radial-gradient(ellipse at bottom center, #FDE8C0 0%, transparent 50%), radial-gradient(ellipse at right, #F5E0F8 0%, transparent 45%), #FDF6EC';
+const GRADIENT = 'radial-gradient(ellipse 80% 80% at top left, #C5E3F6 0%, transparent 55%), radial-gradient(ellipse at bottom center, #FBE2BC 0%, transparent 55%), radial-gradient(ellipse at right, #F0D5F7 0%, transparent 55%), #FCF4E8';
 
 export function PastaShell({ onOpenCampaign }: { onOpenCampaign: (campaignId: string) => void }) {
   const { groups, campaigns } = useCampaigns();

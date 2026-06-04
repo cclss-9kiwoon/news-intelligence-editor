@@ -22,7 +22,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   const tasks = useMemo(() => allTasks.filter(t => t.campaignId === campaignId), [allTasks, campaignId]);
 
   return (
-    <div className="grid h-full grid-cols-4 gap-3 overflow-hidden p-4" style={{ background: 'radial-gradient(ellipse at top left, #D6EAF8 0%, transparent 50%), radial-gradient(ellipse at bottom right, #F5E0F8 0%, transparent 50%), #FDF6EC' }}>
+    <div className="grid h-full grid-cols-4 gap-3 overflow-hidden p-4" style={{ background: 'radial-gradient(ellipse 80% 80% at top left, #C5E3F6 0%, transparent 55%), radial-gradient(ellipse at bottom center, #FBE2BC 0%, transparent 55%), radial-gradient(ellipse at right, #F0D5F7 0%, transparent 55%), #FCF4E8' }}>
       {COLUMNS.map(col => {
         const colTasks = tasks.filter(t => t.status === col.status);
         return (
