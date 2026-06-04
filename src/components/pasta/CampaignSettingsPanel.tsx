@@ -13,11 +13,12 @@ const WINDOWS: { value: ArticleWindow; label: string }[] = [
 ];
 
 type Step = 1 | 2 | 3 | 4;
-const STEPS: { n: Step; label: string }[] = [
-  { n: 1, label: '① 서칭' },
-  { n: 2, label: '② 주제 검수' },
-  { n: 3, label: '③ 생성' },
-  { n: 4, label: '④ 결과물 검수' },
+// 칸반 단계 컬러 체계와 1:1 — 자동(서칭/주제검수/생성)=블루, 결과물검수=앰버
+const STEPS: { n: Step; label: string; short: string; auto: boolean; active: string; dot: string }[] = [
+  { n: 1, label: '서칭',        short: '①', auto: true,  active: 'bg-blue-500',  dot: 'bg-blue-500' },
+  { n: 2, label: '주제 검수',    short: '②', auto: true,  active: 'bg-blue-500',  dot: 'bg-blue-500' },
+  { n: 3, label: '생성',        short: '③', auto: true,  active: 'bg-blue-500',  dot: 'bg-blue-500' },
+  { n: 4, label: '결과물 검수',  short: '④', auto: false, active: 'bg-amber-500', dot: 'bg-amber-500' },
 ];
 
 export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign; onOpen: () => void }) {
@@ -61,16 +62,36 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
         </div>
       </div>
 
-      {/* 4단계 스텝 탭 (칸반 단계와 1:1) */}
-      <div className="mb-5 flex gap-1 rounded-xl bg-white/50 p-1 backdrop-blur-md">
-        {STEPS.map(st => (
-          <button
-            key={st.n}
-            onClick={() => setStep(st.n)}
-            className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-              step === st.n ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-white/70'
-            }`}
-          >{st.label}</button>
+      {/* 4단계 스텝 인디케이터 (칸반 단계와 1:1, 컬러 동일) */}
+      <div className="mb-5 flex items-center rounded-2xl border border-white/60 bg-white/55 px-4 py-3 backdrop-blur-md">
+        {STEPS.map((st, i) => (
+          <div key={st.n} className="flex flex-1 items-center last:flex-none">
+            <button onClick={() => setStep(st.n)} className="flex items-center gap-2.5 group">
+              {/* 번호 원형 */}
+              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all ${
+                step === st.n
+                  ? `${st.active} text-white shadow-sm`
+                  : step > st.n
+                    ? `${st.dot} text-white opacity-60`
+                    : 'bg-white text-slate-400 border border-slate-200'
+              }`}>
+                {step > st.n ? '✓' : st.short}
+              </span>
+              {/* 라벨 + 자동/사람 */}
+              <span className="flex flex-col items-start leading-tight">
+                <span className={`text-sm font-semibold transition-colors ${step === st.n ? 'text-slate-900' : 'text-slate-400 group-hover:text-slate-600'}`}>
+                  {st.label}
+                </span>
+                <span className={`text-[9px] font-mono uppercase tracking-wide ${st.auto ? 'text-blue-500' : 'text-amber-500'}`}>
+                  {st.auto ? 'AUTO' : 'HUMAN'}
+                </span>
+              </span>
+            </button>
+            {/* 연결선 (마지막 제외) */}
+            {i < STEPS.length - 1 && (
+              <div className={`mx-3 h-0.5 flex-1 rounded-full transition-colors ${step > st.n ? st.dot : 'bg-slate-200'}`} />
+            )}
+          </div>
         ))}
       </div>
 
