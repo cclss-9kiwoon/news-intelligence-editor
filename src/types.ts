@@ -214,18 +214,11 @@ export type ArticleWindow = '1h' | '24h' | '7d' | '30d' | 'breaking';
 // 계정 전역 설정(provider/apiKey/model 등)은 Settings에 유지.
 // 캠페인 스코프 설정(소스/포맷/프롬프트)은 CampaignSettings에 분리.
 
-export type ChannelType = 'x' | 'instagram' | 'youtube' | 'web';
-
-export type Channel = {
-  id: string;
-  type: ChannelType;
-  handle: string;            // @handle, URL 등
-};
-
+// 채널(배포 대상)은 Hydra 소관. Pasta(아티클 생산)는 그룹=이름만 가진
+// 캠페인 컨테이너. 채널 개념 없음.
 export type Group = {
   id: string;
   name: string;              // 회사/매체명 (allkpop, 스포츠조선 등)
-  channels: Channel[];       // 발행 시 배포 대상
   createdAt: number;
 };
 

@@ -1,4 +1,4 @@
-import type { Group, Campaign, CampaignSettings, SourceConfig, Channel } from '../types';
+import type { Group, Campaign, CampaignSettings, SourceConfig } from '../types';
 import {
   DEFAULT_RSS_SOURCES,
   DEFAULT_PROMPT_CONFIG,
@@ -31,11 +31,10 @@ export function makeDefaultCampaignSettings(): CampaignSettings {
   };
 }
 
-export function makeGroup(name: string, channels: Omit<Channel, 'id'>[] = []): Group {
+export function makeGroup(name: string): Group {
   return {
     id: newId('grp'),
     name: name || '새 그룹',
-    channels: channels.map(c => ({ ...c, id: `ch_${crypto.randomUUID()}` })),
     createdAt: Date.now(),
   };
 }

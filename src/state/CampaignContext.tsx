@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
-import type { Group, Campaign, CampaignSettings, Channel } from '../types';
+import type { Group, Campaign, CampaignSettings } from '../types';
 import { loadJson, saveJson } from '../lib/storage';
 import { makeGroup, makeCampaign } from '../lib/defaultCampaign';
 
@@ -14,11 +14,9 @@ type Ctx = {
   activeCampaign: Campaign | null;
 
   // group CRUD
-  addGroup: (name: string, channels?: Omit<Channel, 'id'>[]) => Group;
+  addGroup: (name: string) => Group;
   renameGroup: (id: string, name: string) => void;
   deleteGroup: (id: string) => void;
-  addChannel: (groupId: string, channel: Omit<Channel, 'id'>) => void;
-  removeChannel: (groupId: string, channelId: string) => void;
 
   // campaign CRUD
   addCampaign: (groupId: string, name: string) => Campaign;
@@ -51,8 +49,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const activeCampaign = campaigns.find(c => c.id === activeCampaignId) ?? null;
 
   // ── group CRUD ──
-  const addGroup = useCallback((name: string, channels: Omit<Channel, 'id'>[] = []) => {
-    const g = makeGroup(name, channels);
+  const addGroup = useCallback((name: string) => {
+    const g = makeGroup(name);
     setGroups(prev => [...prev, g]);
     return g;
   }, []);
@@ -64,20 +62,6 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   const deleteGroup = useCallback((id: string) => {
     setGroups(prev => prev.filter(g => g.id !== id));
     setCampaigns(prev => prev.filter(c => c.groupId !== id));
-  }, []);
-
-  const addChannel = useCallback((groupId: string, channel: Omit<Channel, 'id'>) => {
-    setGroups(prev => prev.map(g =>
-      g.id === groupId
-        ? { ...g, channels: [...g.channels, { ...channel, id: `ch_${crypto.randomUUID()}` }] }
-        : g,
-    ));
-  }, []);
-
-  const removeChannel = useCallback((groupId: string, channelId: string) => {
-    setGroups(prev => prev.map(g =>
-      g.id === groupId ? { ...g, channels: g.channels.filter(c => c.id !== channelId) } : g,
-    ));
   }, []);
 
   // ── campaign CRUD ──
@@ -109,7 +93,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   return (
     <CampaignCtx.Provider value={{
       groups, campaigns, activeCampaignId, activeCampaign,
-      addGroup, renameGroup, deleteGroup, addChannel, removeChannel,
+      addGroup, renameGroup, deleteGroup,
       addCampaign, renameCampaign, deleteCampaign, updateCampaignSettings,
       setActiveCampaign,
     }}>

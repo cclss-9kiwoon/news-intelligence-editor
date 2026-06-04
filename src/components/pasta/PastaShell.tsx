@@ -52,7 +52,7 @@ export function PastaShell({ onOpenCampaign }: { onOpenCampaign: (campaignId: st
         ) : view === 'template' ? (
           <TemplatePlaceholder />
         ) : view === 'group' && group ? (
-          <GroupPanel group={group} />
+          <GroupPanel group={group} onOpenCampaign={(id) => { setSelCampaign(id); setView('campaign'); }} />
         ) : campaign ? (
           <CampaignSettingsPanel campaign={campaign} onOpen={() => onOpenCampaign(campaign.id)} />
         ) : (
