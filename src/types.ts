@@ -259,6 +259,35 @@ export type Campaign = {
   updatedAt: number;
 };
 
+// ─── Pasta Phase 2: 칸반 태스크 ─────────────────────────────────────
+// 태스크 = 개별 기사 건. 캠페인 안에서 4단계 칸반으로 흐름.
+//   searching → source_review → producing → final_review
+// 서칭~제작은 자동, 결과물 검수는 사람.
+
+export type TaskStatus = 'searching' | 'source_review' | 'producing' | 'final_review';
+
+export type TaskSource = {
+  articleId: string;
+  title: string;
+  source: string;            // 매체명
+  hasFullText: boolean;
+};
+
+export type Task = {
+  id: string;
+  campaignId: string;
+  status: TaskStatus;
+  title: string;             // 대표 제목
+  clusterId: string;         // 원본 클러스터
+  sources: TaskSource[];     // 원문 + 서브 소스
+  imageCount: number;        // 수집된 이미지 수
+  draft?: StoryOutput;       // 아티클 제작 결과
+  review?: ReviewResult;     // 검수 결과
+  error?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export type Settings = {
   provider: ProviderId;
   apiKey: string;

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { SettingsProvider, useSettings } from './state/SettingsContext';
 import { CampaignProvider, useCampaigns } from './state/CampaignContext';
+import { TaskProvider } from './state/TaskContext';
 import { HistoryProvider } from './state/HistoryContext';
 import { ArticlesProvider } from './state/ArticlesContext';
 import { ClustersProvider } from './state/ClustersContext';
@@ -17,6 +18,7 @@ import { GuideModal } from './components/GuideModal';
 import { TutorialOverlay } from './components/TutorialOverlay';
 import { VerticalSplitter } from './components/VerticalSplitter';
 import { PastaShell } from './components/pasta/PastaShell';
+import { KanbanBoard } from './components/pasta/KanbanBoard';
 import { loadJson, saveJson } from './lib/storage';
 
 const COLLAPSE_KEY = 'nie:workbench-collapsed';
@@ -96,7 +98,7 @@ function AppShell({ onBackToPasta, campaignName }: { onBackToPasta: () => void; 
 }
 
 function PastaRouter() {
-  const [mode, setMode] = useState<'pasta' | 'workbench'>('pasta');
+  const [mode, setMode] = useState<'pasta' | 'kanban' | 'workbench'>('pasta');
   const { applyCampaignSettings } = useSettings();
   const { campaigns, setActiveCampaign, activeCampaign } = useCampaigns();
 
@@ -105,11 +107,28 @@ function PastaRouter() {
     if (!c) return;
     applyCampaignSettings(c.settings);   // 캠페인 설정을 Settings에 주입
     setActiveCampaign(campaignId);
-    setMode('workbench');
+    setMode('kanban');
   };
 
   if (mode === 'pasta') {
     return <PastaShell onOpenCampaign={openCampaign} />;
+  }
+
+  if (mode === 'kanban' && activeCampaign) {
+    return (
+      <div className="flex h-screen flex-col bg-white">
+        <div className="flex items-center gap-2 border-b border-gray-200 bg-gray-800 px-4 py-1.5 text-xs text-white">
+          <button onClick={() => setMode('pasta')} className="rounded px-2 py-0.5 hover:bg-gray-700">← 캠페인 목록</button>
+          <span className="text-gray-400">|</span>
+          <span className="text-gray-300">🍝 캠페인:</span>
+          <span className="font-medium">{activeCampaign.name}</span>
+          <button onClick={() => setMode('workbench')} className="ml-auto rounded bg-gray-600 px-2 py-0.5 hover:bg-gray-500">수동 워크벤치 →</button>
+        </div>
+        <div className="min-h-0 flex-1">
+          <KanbanBoard campaignId={activeCampaign.id} onOpenTask={() => setMode('workbench')} />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -119,7 +138,7 @@ function PastaRouter() {
           <ConversionProvider>
             <BreakingProvider>
               <AppShell
-                onBackToPasta={() => setMode('pasta')}
+                onBackToPasta={() => setMode(activeCampaign ? 'kanban' : 'pasta')}
                 campaignName={activeCampaign?.name ?? '—'}
               />
             </BreakingProvider>
@@ -134,7 +153,9 @@ export default function App() {
   return (
     <SettingsProvider>
       <CampaignProvider>
-        <PastaRouter />
+        <TaskProvider>
+          <PastaRouter />
+        </TaskProvider>
       </CampaignProvider>
     </SettingsProvider>
   );
