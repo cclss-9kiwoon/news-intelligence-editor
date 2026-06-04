@@ -20,13 +20,24 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   const { settings } = useSettings();
   const { tasks, addTask, updateTask, moveTask } = useTasks();
   const producingRef = useRef<Set<string>>(new Set());
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const myTasks = tasks.filter(t => t.campaignId === campaign.id);
+  // deps용 시그니처 (태스크 추가/삭제/상태변경 모두 반영)
+  const taskSig = myTasks.map(t => `${t.id}:${t.status}:${t.draft ? 1 : 0}:${t.error ? 1 : 0}`).join(',');
 
   // ── 1. 서칭: 클러스터 → 태스크 생성 ──
   useEffect(() => {
+    // 최신 tasks로 claimed 재계산 (삭제된 태스크는 즉시 미점유 → 정상 재생성 가능,
+    // 단 같은 사이클 내 생성분은 로컬 set으로 중복 방지)
     const claimedArticleIds = new Set<string>();
-    myTasks.forEach(t => t.sources.forEach(s => claimedArticleIds.add(s.articleId)));
+    tasks.filter(t => t.campaignId === campaign.id)
+      .forEach(t => t.sources.forEach(s => claimedArticleIds.add(s.articleId)));
 
     const { minMediaCount, topicKeywords, excludeKeywords } = campaign.settings.source;
 
@@ -54,22 +65,22 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       cluster.articleIds.forEach(id => claimedArticleIds.add(id));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clusters, articles, campaign.id]);
+  }, [clusters, articles, taskSig, campaign.id]);
 
   // ── 2. 서칭 → 소스 검수 (즉시 전환) ──
   useEffect(() => {
     for (const t of myTasks) {
-      if (t.status !== 'searching') continue;
-      moveTask(t.id, 'source_review');
+      if (t.status === 'searching') moveTask(t.id, 'source_review');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myTasks.map(t => `${t.id}:${t.status}`).join(',')]);
+  }, [taskSig]);
 
   // ── 3. 소스 검수: 전문 확인 → 제작 전환 / 탈락 ──
   useEffect(() => {
     for (const t of myTasks) {
       if (t.status !== 'source_review') continue;
-      // 현재 articles로 전문 수집 상태 갱신
+      if (t.error) continue; // 이미 탈락 처리된 태스크는 skip (중복 에러 방지)
+
       const refreshed = t.sources.map(s => {
         const a = articles.find(x => x.id === s.articleId);
         return a ? { ...s, hasFullText: !!a.fullText } : s;
@@ -83,14 +94,13 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       if (fullTextCount > 0) {
         updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
       } else if (Date.now() - t.createdAt > SOURCE_REVIEW_TIMEOUT_MS) {
-        // 탈락: 전문 수집 0건 (검수 포인트 2)
-        updateTask(t.id, { sources: refreshed, status: 'source_review', error: '전문 수집 실패 (소스 0건)' });
+        updateTask(t.id, { sources: refreshed, error: '전문 수집 실패 (소스 0건)' });
       } else if (changed) {
         updateTask(t.id, { sources: refreshed, imageCount });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myTasks.map(t => t.id + t.status).join(','), articles]);
+  }, [taskSig, articles]);
 
   // ── 4. 아티클 제작: LLM 생성 → 결과물 검수 전환 ──
   useEffect(() => {
@@ -109,16 +119,17 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         .then(async draft => {
           let review;
           try { review = await reviewDraft(draft, settings); } catch { review = undefined; }
-          updateTask(t.id, { draft, review, status: 'final_review' });
+          if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review' });
         })
         .catch(err => {
-          // 제작 실패: final_review로 안 넘김 (검수 포인트 3)
-          updateTask(t.id, { error: `제작 실패: ${err instanceof Error ? err.message : String(err)}` });
+          if (mountedRef.current) {
+            updateTask(t.id, { error: `제작 실패: ${err instanceof Error ? err.message : String(err)}` });
+          }
         })
         .finally(() => { producingRef.current.delete(t.id); });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myTasks.map(t => t.id + t.status + (t.draft ? '1' : '0')).join(','), articles, settings]);
+  }, [taskSig, articles, settings]);
 
   return null;
 }
