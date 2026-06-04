@@ -95,8 +95,9 @@ export const ALLKPOP_REVIEW_RULES: ReviewRule[] = [
 
 // allkpop 그룹 배포 맥락 프리셋
 export const ALLKPOP_GROUP_PROFILE: GroupProfile = {
-  targetType: 'media',
-  identity: 'K-pop 전문 영문 매체',
+  channelType: 'news_media',
+  formalityLevel: 'strict',
+  character: 'K-pop 전문 영문 매체',
   audience: '글로벌 K-pop 팬 (영어권)',
   toneBase: '팩트 중심, 중립적, 속보형. 에디토리얼·팬심 과잉 금지.',
 };

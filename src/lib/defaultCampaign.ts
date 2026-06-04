@@ -21,8 +21,9 @@ export const DEFAULT_SOURCE_CONFIG: SourceConfig = {
 };
 
 export const DEFAULT_GROUP_PROFILE: GroupProfile = {
-  targetType: 'media',
-  identity: '',
+  channelType: 'news_media',
+  formalityLevel: 'standard',
+  character: '',
   audience: '',
   toneBase: '',
 };
@@ -105,12 +106,26 @@ export function migrateCampaignSettings(raw: any): CampaignSettings {
   };
 }
 
-// 구버전 group(profile 없음) → profile 보강
+// 구버전 group → profile 보강/마이그레이션
+// 구 profile: {targetType, identity, audience, toneBase} → 신: {channelType, formalityLevel, character, ...}
 export function migrateGroup(raw: any): Group {
+  const p = raw.profile ?? {};
+  const TARGET_MAP: Record<string, GroupProfile['channelType']> = {
+    media: 'news_media', blog: 'creator_newsletter', medium: 'creator_newsletter', other: 'news_media',
+  };
+  const profile: GroupProfile = p.channelType
+    ? p  // 이미 신 구조
+    : {
+        channelType: TARGET_MAP[p.targetType] ?? 'news_media',
+        formalityLevel: 'standard',
+        character: p.identity ?? p.character ?? '',
+        audience: p.audience ?? '',
+        toneBase: p.toneBase ?? '',
+      };
   return {
     id: raw.id,
     name: raw.name ?? '새 그룹',
-    profile: raw.profile ?? { ...DEFAULT_GROUP_PROFILE },
+    profile,
     createdAt: raw.createdAt ?? Date.now(),
   };
 }

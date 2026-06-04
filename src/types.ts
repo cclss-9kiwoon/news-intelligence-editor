@@ -216,12 +216,16 @@ export type ArticleWindow = '1h' | '24h' | '7d' | '30d' | 'breaking';
 
 // 채널(배포 대상)은 Hydra 소관. 그룹은 "배포 맥락"(어떤 매체/플랫폼 성격인가)을
 // 정의하고 하위 캠페인에 상속. 채널(어느 SNS 계정인가)은 제외.
-export type GroupTargetType = 'media' | 'blog' | 'medium' | 'other';
+// 배포 채널 유형 (범용 분류). 도메인 특정값(K-pop 등)은 프리셋으로 분리.
+export type ChannelType = 'news_media' | 'vertical_curation' | 'brand_corporate' | 'creator_newsletter';
+// 전문성·격식 수준 → ④결과물검수 엄격도에 직접 연동.
+export type FormalityLevel = 'strict' | 'standard' | 'casual';
 
 export type GroupProfile = {
-  targetType: GroupTargetType;  // 배포 대상 유형
-  identity: string;             // 플랫폼 성격 "K-pop 전문 영문 매체"
-  audience: string;             // 타겟 독자 "글로벌 K-pop 팬"
+  channelType: ChannelType;     // 배포 채널 유형
+  formalityLevel: FormalityLevel; // 격식 수준 (검수 엄격도 연동)
+  character: string;            // 채널 성격 "이 채널이 어떤 곳인가"
+  audience: string;             // 타겟 독자
   toneBase: string;             // 전반 톤·스타일 베이스
 };
 

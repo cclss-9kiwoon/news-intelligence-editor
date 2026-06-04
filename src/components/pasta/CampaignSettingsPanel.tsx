@@ -24,8 +24,15 @@ const STEPS: { n: Step; label: string; short: string; auto: boolean; active: str
 export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign; onOpen: () => void }) {
   const { renameCampaign, updateCampaignSettings, groups } = useCampaigns();
   const [step, setStep] = useState<Step>(1);
+  const [savedSteps, setSavedSteps] = useState<Set<Step>>(new Set());
   const s = campaign.settings;
   const group = groups.find(g => g.id === campaign.groupId);
+
+  // 설정은 onChange로 이미 자동 저장됨. 이 버튼은 단계 확정 + 다음 단계 전환 + 연결선 진행.
+  const saveAndNext = (n: Step) => {
+    setSavedSteps(prev => new Set(prev).add(n));
+    if (n < 4) setStep((n + 1) as Step);
+  };
 
   const setSearching = (patch: Partial<SourceConfig>) =>
     updateCampaignSettings(campaign.id, { searching: { ...s.searching, ...patch } });
@@ -43,7 +50,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
       {/* 헤더 */}
       <div className="mb-4 flex items-start justify-between">
         <div className="flex-1">
-          <p className="text-xs text-slate-400">🏢 {group?.name ?? '—'}{group?.profile.identity ? ` · ${group.profile.identity}` : ''}</p>
+          <p className="text-xs text-slate-400">🏢 {group?.name ?? '—'}{group?.profile.character ? ` · ${group.profile.character}` : ''}</p>
           <input
             className="mt-1 w-full max-w-lg border-b border-transparent bg-transparent text-2xl font-bold text-slate-900 hover:border-slate-300 focus:border-indigo-500 focus:outline-none"
             value={campaign.name}
@@ -68,14 +75,14 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
           <div key={st.n} className="flex flex-1 items-center last:flex-none">
             <button onClick={() => setStep(st.n)} className="flex items-center gap-2.5 group">
               {/* 번호 원형 */}
-              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all ${
-                step === st.n
-                  ? `${st.active} text-white shadow-sm`
-                  : step > st.n
-                    ? `${st.dot} text-white opacity-60`
+              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all duration-300 ${
+                savedSteps.has(st.n)
+                  ? `${st.dot} text-white shadow-sm`
+                  : step === st.n
+                    ? `${st.active} text-white shadow-sm ring-4 ${st.auto ? 'ring-blue-100' : 'ring-amber-100'}`
                     : 'bg-white text-slate-400 border border-slate-200'
               }`}>
-                {step > st.n ? '✓' : st.short}
+                {savedSteps.has(st.n) ? '✓' : st.short}
               </span>
               {/* 라벨 + 자동/사람 */}
               <span className="flex flex-col items-start leading-tight">
@@ -87,9 +94,11 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                 </span>
               </span>
             </button>
-            {/* 연결선 (마지막 제외) */}
+            {/* 연결선 (마지막 제외) — 저장 시 색이 쭉 채워짐 */}
             {i < STEPS.length - 1 && (
-              <div className={`mx-3 h-0.5 flex-1 rounded-full transition-colors ${step > st.n ? st.dot : 'bg-slate-200'}`} />
+              <div className="mx-3 h-1 flex-1 overflow-hidden rounded-full bg-slate-200">
+                <div className={`h-full rounded-full transition-all duration-500 ease-out ${st.dot} ${savedSteps.has(st.n) ? 'w-full' : 'w-0'}`} />
+              </div>
             )}
           </div>
         ))}
@@ -97,7 +106,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
 
       {/* ① 서칭 */}
       {step === 1 && (
-        <Section title="📌 서칭" desc="어디서 어떤 기사를 가져올지">
+        <Section title="📌 서칭" desc="어디서 어떤 기사를 가져올지" auto onSave={() => saveAndNext(1)} saved={savedSteps.has(1)}>
           <Field label="RSS 소스">
             <div className="space-y-1">
               {s.searching.rssSources.map(src => (
@@ -144,7 +153,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
 
       {/* ② 주제 검수 */}
       {step === 2 && (
-        <Section title="📌 주제 검수" desc="어떤 주제를 고르나 + 쓸 만한 소스가 모였나">
+        <Section title="📌 주제 검수" desc="어떤 주제를 고르나 + 쓸 만한 소스가 모였나" auto onSave={() => saveAndNext(2)} saved={savedSteps.has(2)}>
           <PromptField label="주제 선정 기준" value={s.topicReview.selectionCriteria}
             onChange={v => setTopic({ selectionCriteria: v })} onReset={() => setTopic({ selectionCriteria: '' })} rows={3} />
           <PromptField label="중복·앵글 회피 규칙" value={s.topicReview.dedupeRules}
@@ -156,7 +165,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
 
       {/* ③ 생성 */}
       {step === 3 && (
-        <Section title="📌 생성" desc="어떻게 쓰나 (LLM 프롬프트 + 표기 규칙)">
+        <Section title="📌 생성" desc="어떻게 쓰나 (LLM 프롬프트 + 표기 규칙)" auto onSave={() => saveAndNext(3)} saved={savedSteps.has(3)}>
           <PromptField label="에디터 역할" value={s.generation.promptConfig.editorRole}
             onChange={v => setGenPrompt('editorRole', v)} onReset={() => setGenPrompt('editorRole', DEFAULT_PROMPT_CONFIG.editorRole)} rows={1} />
           <PromptField label="발행 가이드" value={s.generation.promptConfig.publishingGuide}
@@ -188,7 +197,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
 
       {/* ④ 결과물 검수 */}
       {step === 4 && (
-        <Section title="📌 결과물 검수" desc="무엇을 검수하나 (block=자동 차단, warn=사람 판단)">
+        <Section title="📌 결과물 검수" desc="무엇을 검수하나 (block=자동 차단, warn=사람 판단)" isLast onSave={() => saveAndNext(4)} saved={savedSteps.has(4)}>
           <Field label="금지 소스 매체 (쉼표)">
             <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="Soompi, Koreaboo"
               value={s.finalReview.bannedMedia.join(', ')}
@@ -216,12 +225,25 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
   );
 }
 
-function Section({ title, desc, children }: { title: string; desc: string; children: React.ReactNode }) {
+function Section({ title, desc, children, onSave, saved, isLast, auto }: {
+  title: string; desc: string; children: React.ReactNode;
+  onSave?: () => void; saved?: boolean; isLast?: boolean; auto?: boolean;
+}) {
+  const btnColor = auto ? 'bg-blue-500 hover:bg-blue-600' : 'bg-amber-500 hover:bg-amber-600';
   return (
     <div className="mb-5 rounded-2xl border border-white/70 bg-white/70 p-5 shadow-sm backdrop-blur-md">
       <h3 className="font-bold text-slate-800">{title}</h3>
       <p className="mb-4 text-xs text-slate-400">{desc}</p>
       <div className="space-y-4">{children}</div>
+      {onSave && (
+        <div className="mt-5 flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+          {saved && <span className="text-xs font-mono text-green-600">✓ 저장됨</span>}
+          <button
+            onClick={onSave}
+            className={`rounded-full px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors ${btnColor}`}
+          >{saved ? '저장됨 ✓' : isLast ? '저장 완료' : '저장하고 다음 →'}</button>
+        </div>
+      )}
     </div>
   );
 }

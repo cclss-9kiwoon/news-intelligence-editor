@@ -1,13 +1,27 @@
 import { useState } from 'react';
 import { useCampaigns } from '../../state/CampaignContext';
-import type { Group } from '../../types';
+import type { Group, ChannelType, FormalityLevel } from '../../types';
+
+const CHANNEL_TYPES: { value: ChannelType; label: string }[] = [
+  { value: 'news_media', label: '전문 보도 매체' },
+  { value: 'vertical_curation', label: '버티컬/큐레이션' },
+  { value: 'brand_corporate', label: '브랜드/기업' },
+  { value: 'creator_newsletter', label: '개인/뉴스레터' },
+];
+const FORMALITY: { value: FormalityLevel; label: string }[] = [
+  { value: 'strict', label: '엄격' },
+  { value: 'standard', label: '표준' },
+  { value: 'casual', label: '캐주얼' },
+];
 
 export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCampaign: (id: string) => void }) {
-  const { renameGroup, campaigns, addCampaign } = useCampaigns();
+  const { renameGroup, campaigns, addCampaign, updateGroupProfile } = useCampaigns();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
 
   const groupCampaigns = campaigns.filter(c => c.groupId === group.id);
+  const p = group.profile;
+  const inputCls = 'w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100';
 
   const createCampaign = () => {
     if (!newName.trim()) return;
@@ -41,6 +55,50 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
             className="shrink-0 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
           >✨ 새 캠페인</button>
         )}
+      </div>
+
+      {/* 배포 맥락 (profile) 편집 — 캠페인에 상속 */}
+      <div className="mb-5 rounded-2xl border border-white/70 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+        <h3 className="mb-1 font-bold text-slate-800">🎯 배포 맥락</h3>
+        <p className="mb-4 text-xs text-slate-400">채널 정체성. 하위 모든 캠페인에 상속됩니다.</p>
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-600">배포 채널 유형</label>
+            <div className="grid grid-cols-2 gap-1">
+              {CHANNEL_TYPES.map(t => (
+                <button key={t.value} onClick={() => updateGroupProfile(group.id, { channelType: t.value })}
+                  className={`rounded-lg border px-2 py-1.5 text-sm font-medium transition-colors ${p.channelType === t.value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-600">전문성·격식 수준 <span className="text-xs text-slate-400">(④검수 엄격도 연동)</span></label>
+            <div className="flex gap-1">
+              {FORMALITY.map(f => (
+                <button key={f.value} onClick={() => updateGroupProfile(group.id, { formalityLevel: f.value })}
+                  className={`flex-1 rounded-lg border px-2 py-1.5 text-sm font-medium transition-colors ${p.formalityLevel === f.value ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-600">채널 성격</label>
+            <input className={inputCls} value={p.character} placeholder="예: K-pop 전문 영문 매체" onChange={e => updateGroupProfile(group.id, { character: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">타겟 독자</label>
+              <input className={inputCls} value={p.audience} placeholder="예: 글로벌 K-pop 팬" onChange={e => updateGroupProfile(group.id, { audience: e.target.value })} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">전반 톤·스타일</label>
+              <input className={inputCls} value={p.toneBase} placeholder="예: 팩트 중심, 중립적" onChange={e => updateGroupProfile(group.id, { toneBase: e.target.value })} />
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-white/70 bg-white/70 p-5 shadow-sm backdrop-blur-md">

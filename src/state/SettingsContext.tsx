@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import type { Settings, ModelId, RssSource, ProviderId, Category, ArticleWindow, PromptConfig, ReferenceArticle, ProjectProfile, FormatRules, ReviewRule, CampaignSettings } from '../types';
+import type { Settings, ModelId, RssSource, ProviderId, Category, ArticleWindow, PromptConfig, ReferenceArticle, ProjectProfile, FormatRules, ReviewRule, CampaignSettings, GroupProfile } from '../types';
 import { PROVIDERS } from '../types';
 import { DEFAULT_SETTINGS, DEFAULT_PROMPT_CONFIG, DEFAULT_PROJECT_PROFILE } from '../lib/defaultSettings';
 import { loadJson, saveJson, STORAGE_KEYS, backupSettingsToFile, restoreSettingsFromFile } from '../lib/storage';
@@ -37,7 +37,7 @@ type Ctx = {
   updateReviewRule: (id: string, patch: Partial<ReviewRule>) => void;
   removeReviewRule: (id: string) => void;
   resetSettings: () => void;
-  applyCampaignSettings: (cs: CampaignSettings, groupProfile?: { identity: string; audience: string; toneBase: string }) => void;
+  applyCampaignSettings: (cs: CampaignSettings, groupProfile?: GroupProfile) => void;
 };
 
 const SettingsCtx = createContext<Ctx | null>(null);
@@ -160,32 +160,40 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const resetSettings = useCallback(() => setSettings(DEFAULT_SETTINGS), []);
   // Pasta: 캠페인 스코프 설정을 현재 Settings에 주입 (계정 전역 필드는 유지)
   // 4단계 CampaignSettings → 평면 Settings 브리지. 그룹 배포맥락(profile)도 주입.
-  const applyCampaignSettings = useCallback((cs: CampaignSettings, groupProfile?: { identity: string; audience: string; toneBase: string }) => setSettings(s => {
+  const applyCampaignSettings = useCallback((cs: CampaignSettings, groupProfile?: GroupProfile) => setSettings(s => {
     const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
+    // 격식 수준 → 검수 엄격도 연동: strict면 warn 규칙을 block으로 상향, casual은 완화
+    let reviewRules = clone(cs.finalReview.reviewRules);
+    if (groupProfile?.formalityLevel === 'strict') {
+      reviewRules = reviewRules.map(r => ({ ...r, severity: 'block' as const, enabled: true }));
+    } else if (groupProfile?.formalityLevel === 'casual') {
+      reviewRules = reviewRules.map(r => ({ ...r, severity: 'warn' as const }));
+    }
+    const formalityNote = groupProfile
+      ? `[격식 수준] ${groupProfile.formalityLevel === 'strict' ? '엄격 — 표기·팩트·소스 규칙 철저히 준수, 위반 시 발행 차단' : groupProfile.formalityLevel === 'casual' ? '캐주얼 — 핵심 규칙만, 톤 자유롭게' : '표준'}`
+      : '';
     return {
       ...s,
-      // ① 서칭
       rssSources: clone(cs.searching.rssSources),
       naverQueries: [...cs.searching.naverQueries],
       articleWindow: cs.searching.articleWindow,
       clusterThreshold: cs.searching.clusterThreshold,
-      // ③ 생성
       promptConfig: clone(cs.generation.promptConfig),
       referenceArticles: clone(cs.generation.referenceArticles),
       categories: clone(cs.categories),
       activeCategoryId: cs.activeCategoryId,
-      // projectProfile = ③생성 표기 + ④검수 규칙 + 그룹 배포맥락 합성
       projectProfile: {
-        publicationName: groupProfile?.identity || s.projectProfile.publicationName,
+        publicationName: groupProfile?.character || s.projectProfile.publicationName,
         outputLanguage: cs.generation.outputLanguage,
         allowedMedia: clone(cs.finalReview.allowedMedia),
         bannedMedia: clone(cs.finalReview.bannedMedia),
         formatRules: clone(cs.generation.formatRules),
         styleGuide: [
-          groupProfile ? `[배포 맥락] ${groupProfile.identity} · 타겟: ${groupProfile.audience} · 톤: ${groupProfile.toneBase}` : '',
+          groupProfile ? `[배포 맥락] ${groupProfile.character} · 타겟: ${groupProfile.audience} · 톤: ${groupProfile.toneBase}` : '',
+          formalityNote,
           cs.generation.styleGuide,
         ].filter(Boolean).join('\n'),
-        reviewRules: clone(cs.finalReview.reviewRules),
+        reviewRules,
       },
     };
   }), []);
