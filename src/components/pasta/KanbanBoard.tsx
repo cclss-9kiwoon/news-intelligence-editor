@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useTasks } from '../../state/TaskContext';
 import type { Task, TaskStatus } from '../../types';
 
@@ -9,8 +10,8 @@ const COLUMNS: { status: TaskStatus; label: string; auto: boolean }[] = [
 ];
 
 export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; onOpenTask: (taskId: string) => void }) {
-  const { tasksForCampaign, deleteTask } = useTasks();
-  const tasks = tasksForCampaign(campaignId);
+  const { tasks: allTasks, deleteTask } = useTasks();
+  const tasks = useMemo(() => allTasks.filter(t => t.campaignId === campaignId), [allTasks, campaignId]);
 
   return (
     <div className="grid h-full grid-cols-4 gap-3 overflow-hidden p-4">
