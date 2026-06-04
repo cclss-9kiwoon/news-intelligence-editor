@@ -10,6 +10,11 @@ const CHANNEL_TYPES: { value: ChannelType; label: string; icon: string }[] = [
   { value: 'creator_newsletter', label: '개인/뉴스레터', icon: '✍️' },
 ];
 // 엄격류=앰버 통일 (교차검증), 표준=인디고, 느슨=슬레이트
+// 향후 언어 추가는 이 배열에만
+const LANGUAGES: { value: string; label: string }[] = [
+  { value: 'ko', label: '한국어' },
+  { value: 'en', label: '영어' },
+];
 const SOURCE_STRICTNESS: { value: SourceStrictness; label: string; active: string; dot: string }[] = [
   { value: 'cross_verified', label: '교차검증', active: 'border-amber-400 bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
   { value: 'standard',       label: '표준',     active: 'border-indigo-500 bg-indigo-50 text-indigo-700', dot: 'bg-indigo-500' },
@@ -107,7 +112,9 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-600">언어 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">②③ 연동</span><HelpTip text="채널 언어. 주제 인지도 판단 기준 언어권과 기사 출력 언어를 결정합니다. (예: ko=한국어, en=영어)" /></label>
-              <input className={inputCls} value={p.language} placeholder="ko / en" onChange={e => updateGroupProfile(group.id, { language: e.target.value })} />
+              <select className={inputCls} value={p.language} onChange={e => updateGroupProfile(group.id, { language: e.target.value })}>
+                {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label} ({l.value})</option>)}
+              </select>
             </div>
           </div>
           <div>
