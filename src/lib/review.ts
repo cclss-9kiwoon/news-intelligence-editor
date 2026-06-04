@@ -32,7 +32,7 @@ export function runRuleChecks(draft: DraftFields, profile: ProjectProfile): Revi
   }
 
   // 아티스트 마크업: strong이면 본문 <a href> 금지
-  if (f.artistMarkup === 'strong' && /<a\s[^>]*href/i.test(body)) {
+  if (f.artistMarkup === 'strong' && /<a\s[^>]*\bhref\s*=/i.test(body)) {
     findings.push({
       ruleId: 'fmt-link-banned', label: '아티스트 마크업', severity: 'warn', source: 'rule', field: 'body',
       message: '본문에 <a href> 링크가 있습니다. 아티스트명은 <strong>으로 감싸야 합니다.',
@@ -116,16 +116,23 @@ export async function runLlmChecks(draft: DraftFields, settings: Settings): Prom
     temperature: 0.2,
   });
 
+  const ALLOWED_FIELDS: ReviewFinding['field'][] = ['headline', 'body', 'tags', 'imagePrompt'];
   const findings: ReviewFinding[] = [];
   for (const lf of out.findings || []) {
     if (lf.pass) continue;
     const rule = enabled.find(r => r.id === lf.ruleId);
+    // LLM이 활성화 안 된/존재하지 않는 ruleId를 반환하면 skip (날조 finding 방지)
+    if (!rule) continue;
+    // field 검증: 허용 목록에 없으면 'body'로 폴백
+    const field = ALLOWED_FIELDS.includes(lf.field as ReviewFinding['field'])
+      ? (lf.field as ReviewFinding['field'])
+      : 'body';
     findings.push({
       ruleId: lf.ruleId,
-      label: rule?.label || lf.ruleId,
-      severity: rule?.severity || 'warn',
+      label: rule.label,
+      severity: rule.severity,
       message: lf.message,
-      field: (lf.field as ReviewFinding['field']) || undefined,
+      field,
       source: 'llm',
     });
   }
