@@ -37,7 +37,7 @@ function AppShell() {
   };
 
   return (
-    <div className="flex h-screen flex-col" style={{ background: 'linear-gradient(135deg, #f8faff 0%, #f5f5f7 50%, #fdf6ff 100%)' }}>
+    <div className="flex h-screen flex-col bg-white">
       <Header
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHistory={() => setHistoryOpen(true)}
@@ -53,7 +53,7 @@ function AppShell() {
       )}
       <div className="grid flex-1 min-h-0 grid-cols-[340px_1fr] overflow-hidden">
         <ClusterPicker />
-        <div className="flex min-h-0 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-col overflow-hidden" style={{ background: 'radial-gradient(ellipse at top left, #D6EAF8 0%, transparent 45%), radial-gradient(ellipse at bottom center, #FDE8C0 0%, transparent 50%), radial-gradient(ellipse at right, #F5E0F8 0%, transparent 45%), #FDF6EC' }}>
           <VerticalSplitter
             storageKey="nie:workbench-split"
             defaultTopFraction={0.62}
