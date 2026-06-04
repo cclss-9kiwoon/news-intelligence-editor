@@ -2,17 +2,17 @@ import { useState } from 'react';
 import { useCampaigns } from '../../state/CampaignContext';
 import type { ChannelType, FormalityLevel } from '../../types';
 
-const CHANNEL_TYPES: { value: ChannelType; label: string }[] = [
-  { value: 'news_media', label: '전문 보도 매체' },
-  { value: 'vertical_curation', label: '버티컬/큐레이션' },
-  { value: 'brand_corporate', label: '브랜드/기업' },
-  { value: 'creator_newsletter', label: '개인/뉴스레터' },
+const CHANNEL_TYPES: { value: ChannelType; label: string; icon: string; desc: string }[] = [
+  { value: 'news_media', label: '전문 보도 매체', icon: '📰', desc: '뉴스룸 · 속보 중심' },
+  { value: 'vertical_curation', label: '버티컬/큐레이션', icon: '🎯', desc: '특정 주제 심화' },
+  { value: 'brand_corporate', label: '브랜드/기업', icon: '🏢', desc: '공식 채널 톤' },
+  { value: 'creator_newsletter', label: '개인/뉴스레터', icon: '✍️', desc: '크리에이터 보이스' },
 ];
 
-const FORMALITY: { value: FormalityLevel; label: string; desc: string }[] = [
-  { value: 'strict', label: '엄격', desc: '검수 기준 최대 — 위반 시 발행 차단' },
-  { value: 'standard', label: '표준', desc: '균형' },
-  { value: 'casual', label: '캐주얼', desc: '핵심 규칙만, 톤 자유' },
+const FORMALITY: { value: FormalityLevel; label: string; desc: string; active: string; dot: string }[] = [
+  { value: 'strict',   label: '엄격',   desc: '검수 기준 최대 — 위반 시 발행 차단', active: 'border-amber-400 bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
+  { value: 'standard', label: '표준',   desc: '균형', active: 'border-indigo-500 bg-indigo-50 text-indigo-700', dot: 'bg-indigo-500' },
+  { value: 'casual',   label: '캐주얼', desc: '핵심 규칙만, 톤 자유', active: 'border-slate-400 bg-slate-100 text-slate-700', dot: 'bg-slate-400' },
 ];
 
 const inputCls = 'w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-colors';
@@ -44,28 +44,31 @@ export function GroupSetup({ onCreated, onCancel }: { onCreated: (groupId: strin
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-600">배포 채널 유형</label>
-          <div className="grid grid-cols-2 gap-1">
+          <label className="mb-1.5 block text-sm font-medium text-slate-600">배포 채널 유형</label>
+          <div className="grid grid-cols-2 gap-2">
             {CHANNEL_TYPES.map(t => (
               <button key={t.value} onClick={() => setChannelType(t.value)}
-                className={`rounded-lg border px-2 py-1.5 text-sm font-medium transition-colors ${channelType === t.value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
-                {t.label}
+                className={`flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2.5 text-left transition-all ${channelType === t.value ? 'border-slate-900 bg-slate-900 text-white shadow-sm' : 'border-slate-200 bg-white/70 hover:border-slate-300 hover:bg-white'}`}>
+                <span className="text-base leading-none">{t.icon}</span>
+                <span className="text-sm font-semibold">{t.label}</span>
+                <span className={`text-[10px] ${channelType === t.value ? 'text-white/60' : 'text-slate-400'}`}>{t.desc}</span>
               </button>
             ))}
           </div>
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-600">전문성·격식 수준 <span className="text-xs text-slate-400">(④검수 엄격도 연동)</span></label>
-          <div className="flex gap-1">
+          <label className="mb-1.5 block text-sm font-medium text-slate-600">전문성·격식 수준 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">④검수 엄격도 연동</span></label>
+          <div className="flex gap-1.5">
             {FORMALITY.map(f => (
               <button key={f.value} onClick={() => setFormalityLevel(f.value)} title={f.desc}
-                className={`flex-1 rounded-lg border px-2 py-1.5 text-sm font-medium transition-colors ${formalityLevel === f.value ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-sm font-semibold transition-all ${formalityLevel === f.value ? f.active : 'border-slate-200 bg-white/70 text-slate-500 hover:bg-white'}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${formalityLevel === f.value ? f.dot : 'bg-slate-300'}`} />
                 {f.label}
               </button>
             ))}
           </div>
-          <p className="mt-1 text-xs text-slate-400">{FORMALITY.find(f => f.value === formalityLevel)?.desc}</p>
+          <p className="mt-1.5 text-xs text-slate-400">{FORMALITY.find(f => f.value === formalityLevel)?.desc}</p>
         </div>
 
         <div>

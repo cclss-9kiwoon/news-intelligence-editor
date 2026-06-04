@@ -2,16 +2,16 @@ import { useState } from 'react';
 import { useCampaigns } from '../../state/CampaignContext';
 import type { Group, ChannelType, FormalityLevel } from '../../types';
 
-const CHANNEL_TYPES: { value: ChannelType; label: string }[] = [
-  { value: 'news_media', label: '전문 보도 매체' },
-  { value: 'vertical_curation', label: '버티컬/큐레이션' },
-  { value: 'brand_corporate', label: '브랜드/기업' },
-  { value: 'creator_newsletter', label: '개인/뉴스레터' },
+const CHANNEL_TYPES: { value: ChannelType; label: string; icon: string }[] = [
+  { value: 'news_media', label: '전문 보도 매체', icon: '📰' },
+  { value: 'vertical_curation', label: '버티컬/큐레이션', icon: '🎯' },
+  { value: 'brand_corporate', label: '브랜드/기업', icon: '🏢' },
+  { value: 'creator_newsletter', label: '개인/뉴스레터', icon: '✍️' },
 ];
-const FORMALITY: { value: FormalityLevel; label: string }[] = [
-  { value: 'strict', label: '엄격' },
-  { value: 'standard', label: '표준' },
-  { value: 'casual', label: '캐주얼' },
+const FORMALITY: { value: FormalityLevel; label: string; active: string; dot: string }[] = [
+  { value: 'strict',   label: '엄격',   active: 'border-amber-400 bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
+  { value: 'standard', label: '표준',   active: 'border-indigo-500 bg-indigo-50 text-indigo-700', dot: 'bg-indigo-500' },
+  { value: 'casual',   label: '캐주얼', active: 'border-slate-400 bg-slate-100 text-slate-700', dot: 'bg-slate-400' },
 ];
 
 export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCampaign: (id: string) => void }) {
@@ -63,22 +63,23 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
         <p className="mb-4 text-xs text-slate-400">채널 정체성. 하위 모든 캠페인에 상속됩니다.</p>
         <div className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-600">배포 채널 유형</label>
-            <div className="grid grid-cols-2 gap-1">
+            <label className="mb-1.5 block text-sm font-medium text-slate-600">배포 채널 유형</label>
+            <div className="grid grid-cols-2 gap-2">
               {CHANNEL_TYPES.map(t => (
                 <button key={t.value} onClick={() => updateGroupProfile(group.id, { channelType: t.value })}
-                  className={`rounded-lg border px-2 py-1.5 text-sm font-medium transition-colors ${p.channelType === t.value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
-                  {t.label}
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold transition-all ${p.channelType === t.value ? 'border-slate-900 bg-slate-900 text-white shadow-sm' : 'border-slate-200 bg-white/70 text-slate-600 hover:border-slate-300 hover:bg-white'}`}>
+                  <span className="text-base leading-none">{t.icon}</span>{t.label}
                 </button>
               ))}
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-600">전문성·격식 수준 <span className="text-xs text-slate-400">(④검수 엄격도 연동)</span></label>
-            <div className="flex gap-1">
+            <label className="mb-1.5 block text-sm font-medium text-slate-600">전문성·격식 수준 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">④검수 엄격도 연동</span></label>
+            <div className="flex gap-1.5">
               {FORMALITY.map(f => (
                 <button key={f.value} onClick={() => updateGroupProfile(group.id, { formalityLevel: f.value })}
-                  className={`flex-1 rounded-lg border px-2 py-1.5 text-sm font-medium transition-colors ${p.formalityLevel === f.value ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-sm font-semibold transition-all ${p.formalityLevel === f.value ? f.active : 'border-slate-200 bg-white/70 text-slate-500 hover:bg-white'}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${p.formalityLevel === f.value ? f.dot : 'bg-slate-300'}`} />
                   {f.label}
                 </button>
               ))}
