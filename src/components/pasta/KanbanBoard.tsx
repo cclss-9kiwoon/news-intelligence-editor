@@ -114,10 +114,19 @@ function TaskCard({ task, onOpen, onDelete, onRetry }: { task: Task; onOpen: () 
         )}
         {task.status === 'final_review' && task.draft && (
           <>
-            <p className="truncate font-sans font-medium text-slate-700">{task.draft.headline}</p>
-            <p>본문 {task.draft.body.length}자 · 태그 {task.draft.tags.length} · 이미지 {task.imageCount}</p>
+            {/* #11 헤드라인 HTML 태그 strip */}
+            <p className="truncate font-sans font-medium text-slate-700">{stripHtml(task.draft.headline)}</p>
+            <p>원문: {task.sources[0]?.source ?? '—'}{mediaCount > 1 && <span className="font-semibold text-slate-700"> · 서브 {mediaCount - 1}곳</span>} · 본문 {task.draft.body.length}자</p>
+            {/* #12 차단 사유 노출 */}
             {task.review && !task.review.passed && (
-              <p className="text-red-600">검수 {task.review.findings.filter(f => f.severity === 'block').length}건 차단</p>
+              <div className="mt-0.5">
+                <p className="text-red-600">검수 {task.review.findings.filter(f => f.severity === 'block').length}건 차단</p>
+                <ul className="mt-0.5 space-y-0.5">
+                  {task.review.findings.filter(f => f.severity === 'block').slice(0, 3).map((f, i) => (
+                    <li key={i} className="truncate text-[11px] text-red-400">· {f.label}: {f.message}</li>
+                  ))}
+                </ul>
+              </div>
             )}
           </>
         )}
@@ -134,6 +143,10 @@ function TaskCard({ task, onOpen, onDelete, onRetry }: { task: Task; onOpen: () 
       </div>
     </div>
   );
+}
+
+function stripHtml(s: string): string {
+  return s.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
 }
 
 function relTime(ts: number): string {

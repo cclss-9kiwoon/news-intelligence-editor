@@ -117,6 +117,23 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
             </div>
           </div>
 
+          {/* #12 검수 결과 — 차단/경고 사유 */}
+          {task.review && task.review.findings.length > 0 && (
+            <div>
+              <h4 className="mb-1.5 text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400">
+                검수 결과 ({task.review.passed ? '통과' : `${task.review.findings.filter(f => f.severity === 'block').length}건 차단`})
+              </h4>
+              <div className="space-y-1">
+                {task.review.findings.map((f, i) => (
+                  <div key={i} className={`rounded px-2 py-1 text-xs ${f.severity === 'block' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+                    <span className="font-semibold">{f.severity === 'block' ? '🚫' : '⚠'} {f.label}</span>
+                    <p className="text-[11px] opacity-80">{f.message}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div>
             <h4 className="mb-1.5 text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400">팩트 대조 ({sourceFacts.length})</h4>
             <div className="space-y-1.5">
@@ -176,8 +193,8 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
               </div>
               <span className="ml-auto rounded-full bg-black px-2 py-0.5 text-[10px] font-mono font-bold text-white">X</span>
             </div>
-            <p className="text-sm font-semibold leading-snug text-slate-900">{headline || '헤드라인'}</p>
-            <p className="mt-1.5 text-xs leading-relaxed text-slate-600 line-clamp-6">{body.slice(0, 240) || '본문 미리보기'}</p>
+            <p className="text-sm font-semibold leading-snug text-slate-900">{stripHtml(headline) || '헤드라인'}</p>
+            <p className="mt-1.5 text-xs leading-relaxed text-slate-600 line-clamp-6">{stripHtml(body).slice(0, 240) || '본문 미리보기'}</p>
             <p className="mt-2.5 text-xs text-indigo-500">{tags.split(',').map(t => t.trim()).filter(Boolean).map(t => `#${t}`).join(' ')}</p>
             <div className="mt-3 flex items-center gap-5 border-t border-slate-100 pt-2.5 text-[11px] font-mono text-slate-400">
               <span>💬 0</span><span>🔁 0</span><span>♥ 0</span><span>📊 0</span>
@@ -203,4 +220,8 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
       </div>
     </div>
   );
+}
+
+function stripHtml(s: string): string {
+  return s.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
 }
