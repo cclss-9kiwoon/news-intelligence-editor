@@ -4,6 +4,8 @@ import { useSettings } from '../../state/SettingsContext';
 import type { Campaign, SourceConfig, TopicReviewConfig, GenerationConfig, FinalReviewConfig, ArticleWindow, SearchProviderConfig, SearchProviderId } from '../../types';
 import { DEFAULT_PROMPT_CONFIG } from '../../lib/defaultSettings';
 import { makeAllkpopCampaignSettings } from '../../lib/allkpopPreset';
+import { extractArticleText } from '../../lib/scraper';
+import type { ReferenceArticle } from '../../types';
 
 const WINDOWS: { value: ArticleWindow; label: string }[] = [
   { value: '1h', label: '1시간' },
@@ -34,8 +36,34 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
   } = useSettings();
   const [step, setStep] = useState<Step>(1);
   const [savedSteps, setSavedSteps] = useState<Set<Step>>(new Set());
+  const [refUrl, setRefUrl] = useState('');
+  const [extracting, setExtracting] = useState(false);
   const s = campaign.settings;
   const group = groups.find(g => g.id === campaign.groupId);
+
+  // #5 레퍼런스 기사: URL → 전문 추출 → 문체 참고용 저장 (최대 5개)
+  const addReference = async () => {
+    const url = refUrl.trim();
+    if (!url || s.generation.referenceArticles.length >= 5) return;
+    if (s.generation.referenceArticles.some(r => r.url === url)) { setRefUrl(''); return; }
+    setExtracting(true);
+    try {
+      const r = await extractArticleText(url);
+      if (r.ok && r.text) {
+        const ref: ReferenceArticle = { id: crypto.randomUUID(), url, title: r.title || url, body: r.text, fetchedAt: Date.now() };
+        setGen({ referenceArticles: [...s.generation.referenceArticles, ref] });
+        setRefUrl('');
+      } else {
+        alert('전문 추출 실패 — URL을 확인하세요.');
+      }
+    } catch {
+      alert('추출 중 오류가 발생했습니다.');
+    } finally {
+      setExtracting(false);
+    }
+  };
+  const removeReference = (id: string) =>
+    setGen({ referenceArticles: s.generation.referenceArticles.filter(r => r.id !== id) });
 
   // 설정은 onChange로 이미 자동 저장됨. 이 버튼은 단계 확정 + 다음 단계 전환 + 연결선 진행.
   const saveAndNext = (n: Step) => {
@@ -299,6 +327,32 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                 </select>
               </label>
             </div>
+          </Field>
+          <Field label={`레퍼런스 기사 (${s.generation.referenceArticles.length}/5)`}>
+            <p className="mb-1.5 text-xs text-slate-400">우리 매체 실제 기사 URL을 등록하면 전문을 추출해 AI가 문체·구조를 참고합니다.</p>
+            <div className="mb-2 space-y-1">
+              {s.generation.referenceArticles.map(r => (
+                <div key={r.id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-white/60 px-2 py-1.5 text-xs">
+                  <span className="truncate text-slate-700">📄 {r.title} <span className="text-slate-400">({r.body.length}자)</span></span>
+                  <button onClick={() => removeReference(r.id)} className="ml-2 shrink-0 text-slate-300 hover:text-red-500">🗑</button>
+                </div>
+              ))}
+            </div>
+            {s.generation.referenceArticles.length < 5 && (
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
+                  placeholder="기사 URL"
+                  value={refUrl}
+                  onChange={e => setRefUrl(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addReference(); }}
+                />
+                <button onClick={addReference} disabled={extracting || !refUrl.trim()}
+                  className="rounded-lg bg-slate-200 px-3 py-2 text-sm text-slate-700 hover:bg-slate-300 disabled:opacity-50">
+                  {extracting ? '추출 중...' : '+ 추가'}
+                </button>
+              </div>
+            )}
           </Field>
         </Section>
       )}
