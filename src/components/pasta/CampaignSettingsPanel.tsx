@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useCampaigns } from '../../state/CampaignContext';
 import type { Campaign, SourceConfig, TopicReviewConfig, GenerationConfig, FinalReviewConfig, ArticleWindow } from '../../types';
 import { DEFAULT_PROMPT_CONFIG } from '../../lib/defaultSettings';
+import { makeAllkpopCampaignSettings } from '../../lib/allkpopPreset';
 
 const WINDOWS: { value: ArticleWindow; label: string }[] = [
   { value: '1h', label: '1시간' },
@@ -48,10 +49,16 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
             onChange={e => renameCampaign(campaign.id, e.target.value)}
           />
         </div>
-        <button
-          onClick={onOpen}
-          className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-700 transition-colors"
-        >이 캠페인으로 작업 →</button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { if (confirm('allkpop 프리셋을 적용하시겠습니까? 현재 캠페인 설정을 덮어씁니다.')) updateCampaignSettings(campaign.id, makeAllkpopCampaignSettings()); }}
+            className="rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+          >allkpop 프리셋</button>
+          <button
+            onClick={onOpen}
+            className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-700 transition-colors"
+          >이 캠페인으로 작업 →</button>
+        </div>
       </div>
 
       {/* 4단계 스텝 탭 (칸반 단계와 1:1) */}

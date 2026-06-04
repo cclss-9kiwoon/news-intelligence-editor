@@ -4,7 +4,8 @@
  * 설정 4단계 재편 확정 후 CampaignSettings 단계별 기본값으로 매핑 예정.
  * 기존 타입(PromptConfig/FormatRules/ReviewRule) 사용 — 빌드 무영향.
  */
-import type { PromptConfig, FormatRules, ReviewRule } from '../types';
+import type { PromptConfig, FormatRules, ReviewRule, CampaignSettings, GroupProfile } from '../types';
+import { makeDefaultCampaignSettings } from './defaultCampaign';
 
 // ── ② 주제 검수 (RW 주제선정/중복/소스 규칙) ──
 export const ALLKPOP_TOPIC_RULES = {
@@ -91,3 +92,40 @@ export const ALLKPOP_REVIEW_RULES: ReviewRule[] = [
     severity: 'block', enabled: true,
   },
 ];
+
+// allkpop 그룹 배포 맥락 프리셋
+export const ALLKPOP_GROUP_PROFILE: GroupProfile = {
+  targetType: 'media',
+  identity: 'K-pop 전문 영문 매체',
+  audience: '글로벌 K-pop 팬 (영어권)',
+  toneBase: '팩트 중심, 중립적, 속보형. 에디토리얼·팬심 과잉 금지.',
+};
+
+/** allkpop 캠페인 4단계 설정 프리셋 — 기본값에 allkpop 규칙 덮어쓰기 */
+export function makeAllkpopCampaignSettings(): CampaignSettings {
+  const base = makeDefaultCampaignSettings();
+  return {
+    ...base,
+    searching: {
+      ...base.searching,
+      naverQueries: ['K-pop 아이돌', '컴백 앨범', '차트 빌보드', '콘서트 투어'],
+      minMediaCount: ALLKPOP_TOPIC_RULES.minMediaCount,
+    },
+    topicReview: {
+      selectionCriteria: ALLKPOP_TOPIC_RULES.selectionCriteria,
+      dedupeRules: ALLKPOP_TOPIC_RULES.dedupeRules,
+      priority: '속보 > 컴백/발표 > 차트/마일스톤 > 일반. BTS 편중 금지, 아티스트 다양화.',
+    },
+    generation: {
+      ...base.generation,
+      promptConfig: { ...ALLKPOP_PROMPT_CONFIG },
+      formatRules: { ...ALLKPOP_FORMAT_RULES },
+      outputLanguage: 'en',
+    },
+    finalReview: {
+      reviewRules: ALLKPOP_REVIEW_RULES.map(r => ({ ...r })),
+      allowedMedia: [...ALLKPOP_TOPIC_RULES.allowedSources],
+      bannedMedia: [...ALLKPOP_TOPIC_RULES.bannedSources],
+    },
+  };
+}
