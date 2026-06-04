@@ -95,6 +95,8 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
     ...s.searching.naverQueries.map(query => ({ provider: 'naver' as const, enabled: true, query })),
     ...((s.searching.daumQueries ?? []).map(query => ({ provider: 'daum' as const, enabled: false, query }))),
   ];
+  const apiEnabled = s.searching.apiEnabled ?? true;
+  const rssEnabled = s.searching.rssEnabled ?? true;
   const setSearchProviders = (providers: SearchProviderConfig[]) => {
     const naverQueries = providers.filter(p => p.provider === 'naver' && p.enabled).map(p => p.query).filter(Boolean);
     const daumQueries = providers.filter(p => p.provider === 'daum' && p.enabled).map(p => p.query).filter(Boolean);
@@ -186,8 +188,22 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
       {/* ① 서칭 */}
       {step === 1 && (
         <Section title="📌 서칭" desc="어디서 어떤 기사를 가져올지" auto onSave={() => saveAndNext(1)} saved={savedSteps.has(1)}>
-          <Field label="검색 API">
-            <div className="space-y-3 rounded-xl border border-slate-200 bg-white/60 p-3">
+          <div className="rounded-2xl border border-slate-200 bg-white/65 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h4 className="font-semibold text-slate-800">① API 설정</h4>
+                <p className="text-xs text-slate-400">네이버/다음 검색 API로 넓게 찾습니다.</p>
+              </div>
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={apiEnabled}
+                  onChange={e => setSearching({ apiEnabled: e.target.checked })}
+                />
+                API 수집
+              </label>
+            </div>
+            <div className={`space-y-3 rounded-xl border border-slate-200 bg-white/60 p-3 transition-opacity ${apiEnabled ? '' : 'pointer-events-none opacity-45'}`}>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-500">
@@ -204,7 +220,6 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                 <div>
                   <label className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-500">
                     <span>네이버 Client Secret</span>
-                    <a href="https://developers.naver.com/apps/#/register" target="_blank" rel="noopener" className="font-normal text-slate-400 hover:text-indigo-600">발급받기 ↗</a>
                   </label>
                   <input
                     type="password"
@@ -295,9 +310,24 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                 </div>
               </div>
             </div>
-          </Field>
-          <Field label="RSS 소스">
-            <div className="space-y-1">
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white/65 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <h4 className="font-semibold text-slate-800">② RSS 설정</h4>
+                <p className="text-xs text-slate-400">직접 고른 구독 피드에서 가져옵니다.</p>
+              </div>
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={rssEnabled}
+                  onChange={e => setSearching({ rssEnabled: e.target.checked })}
+                />
+                RSS 수집
+              </label>
+            </div>
+            <div className={`space-y-1 transition-opacity ${rssEnabled ? '' : 'pointer-events-none opacity-45'}`}>
               {s.searching.rssSources.map(src => (
                 <label key={src.id} className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={src.enabled}
@@ -306,8 +336,19 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                 </label>
               ))}
             </div>
-          </Field>
-          <div className="grid grid-cols-2 gap-4">
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white/65 p-4">
+            <div className="mb-3">
+              <h4 className="font-semibold text-slate-800">③ 공통 설정</h4>
+              <p className="text-xs text-slate-400">API/RSS 어느 방식으로 들어와도 같이 적용됩니다.</p>
+            </div>
+            {!apiEnabled && !rssEnabled && (
+              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                API 수집과 RSS 수집이 모두 꺼져 있습니다. 이 캠페인은 새 기사를 수집하지 않습니다.
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4">
             <Field label="포함 키워드 (쉼표)">
               <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="컴백, 앨범, 차트"
                 value={s.searching.topicKeywords.join(', ')}
@@ -318,8 +359,8 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                 value={s.searching.excludeKeywords.join(', ')}
                 onChange={e => setSearching({ excludeKeywords: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
             </Field>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-4">
             <Field label="시간 윈도우">
               <select className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
                 value={s.searching.articleWindow} onChange={e => setSearching({ articleWindow: e.target.value as ArticleWindow })}>
@@ -350,6 +391,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                 value={s.searching.minMediaCount}
                 onChange={e => setSearching({ minMediaCount: Math.max(1, Number(e.target.value) || 1) })} />
             </Field>
+            </div>
           </div>
         </Section>
       )}
