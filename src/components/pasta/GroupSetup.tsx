@@ -45,7 +45,7 @@ export function GroupSetup({ onCreated, onCancel }: { onCreated: (groupId: strin
           <div className="flex gap-1">
             {TARGET_TYPES.map(t => (
               <button key={t.value} onClick={() => setTargetType(t.value)}
-                className={`flex-1 rounded-lg border px-2 py-1.5 text-sm ${targetType === t.value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+                className={`flex-1 rounded-lg border px-2 py-1.5 text-sm font-medium transition-colors ${targetType === t.value ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
                 {t.label}
               </button>
             ))}
@@ -54,17 +54,17 @@ export function GroupSetup({ onCreated, onCancel }: { onCreated: (groupId: strin
 
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-600">플랫폼 성격</label>
-          <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
+          <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-colors"
             value={identity} placeholder="예: K-pop 전문 영문 매체" onChange={e => setIdentity(e.target.value)} />
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-600">타겟 독자</label>
-          <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
+          <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-colors"
             value={audience} placeholder="예: 글로벌 K-pop 팬" onChange={e => setAudience(e.target.value)} />
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-600">전반 톤·스타일</label>
-          <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
+          <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-colors"
             value={toneBase} placeholder="예: 팩트 중심, 중립적, 속보형" onChange={e => setToneBase(e.target.value)} />
         </div>
         <p className="text-xs text-slate-400">배포 맥락은 하위 모든 캠페인의 기본 컨텍스트로 상속됩니다.</p>
