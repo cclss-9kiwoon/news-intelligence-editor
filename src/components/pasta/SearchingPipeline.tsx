@@ -6,6 +6,7 @@ import { useTasks } from '../../state/TaskContext';
 import { generateStory, judgeExcludedTopic } from '../../lib/promptChain';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
+import { judgeBreaking } from '../../lib/breakingDetector';
 import { cheapStageSettings, writingStageSettings } from '../../lib/stageModel';
 import type { Campaign, Category, Task } from '../../types';
 
@@ -67,14 +68,17 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       if (!decision.ok) continue;
       const stale = erroredByCluster.get(cluster.id);
       if (stale) deleteTask(stale);
-      // 골든타임: 대표 기사 pubDate 기준 유효창(startsAt~expiresAt). 1회 확정 저장.
+      // 골든타임: 대표 기사 pubDate 기준 유효창. 속보면 짧은 창(breakingGoldenMinutes).
       const repArt = articles.find(a => a.id === decision.sources[0]?.articleId);
       const startsAt = repArt?.pubDate && !Number.isNaN(Date.parse(repArt.pubDate)) ? Date.parse(repArt.pubDate) : now;
+      const isBreaking = repArt ? judgeBreaking(repArt, searchingCfg.breakingKeywords ?? []) : false;
+      const goldenSpan = isBreaking ? (searchingCfg.breakingGoldenMinutes ?? 60) * 60_000 : windowMs;
       const created = addTask({
         campaignId: campaign.id, status: 'searching',
         title: cluster.representativeTitle, clusterId: cluster.id,
         sources: decision.sources, imageCount: decision.imageCount,
-        goldenTime: { startsAt, expiresAt: startsAt + windowMs },
+        isBreaking,
+        goldenTime: { startsAt, expiresAt: startsAt + goldenSpan },
       });
       working.push(created);
     }
@@ -91,23 +95,29 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSig, articles, windowMs]);
 
-  // ── 2. ①→② 승급: 시간당 상한 내에서 우선·최신 순. 골든타임 임박 시 자동 우선 ──
+  // ── 2. ①→② 승급: 속보는 상한 무시 즉시. 나머지는 시간당 상한 내 우선·최신 순 ──
   useEffect(() => {
     const now = Date.now();
+    const queue = myTasks.filter(t => t.status === 'searching' && !t.error && !t.paused);
+
+    // 속보 즉시 승급 (maxPerHour 무시)
+    const breaking = queue.filter(t => t.isBreaking);
+    for (const t of breaking) updateTask(t.id, { status: 'topic_review', promotedAt: now });
+
     const promotedLastHour = myTasks.filter(t => t.promotedAt && now - t.promotedAt <= HOUR_MS).length;
     let slots = maxPerHour > 0 ? maxPerHour - promotedLastHour : Infinity;
     if (slots <= 0) return;
 
-    const queue = myTasks.filter(t => t.status === 'searching' && !t.error && !t.paused);
+    const rest = queue.filter(t => !t.isBreaking);
     // 골든타임 임박(잔여 < 20%) 자동 우선 플래그
-    for (const t of queue) {
+    for (const t of rest) {
       if (!t.priority && windowMs > 0 && (expiresAtOf(t) - now) < windowMs * 0.2) {
         updateTask(t.id, { priority: true });
       }
     }
-    queue.sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || startsAtOf(b) - startsAtOf(a));
+    rest.sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || startsAtOf(b) - startsAtOf(a));
 
-    for (const t of queue) {
+    for (const t of rest) {
       if (slots <= 0) break;
       updateTask(t.id, { status: 'topic_review', promotedAt: now });
       slots--;
