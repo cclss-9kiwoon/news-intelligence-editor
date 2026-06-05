@@ -15,25 +15,26 @@ export function formatRemaining(ms: number): string {
   return '곧 만료';
 }
 
+export type GoldenTimeState = 'ok' | 'warning' | 'expired';
+
 /**
- * ① 골든타임 막대 — 남은/총 비율로 초록→앰버→빨강. 임박 시 펄스 경고.
- * remainingMs/totalMs 만 받음. 0 되면 자동 폐기(로직=Engineer)지만 표시는 '만료'.
+ * ① 골든타임 막대 — Task.goldenTime 계약에 맞춤.
+ * percent(0~100) + state('ok'|'warning'|'expired') + remainingMs(라벨용).
+ * 색: ok=초록 / warning=앰버 / expired=빨강. warning·expired는 펄스 경고.
  */
-export function GoldenTimeBar({ remainingMs, totalMs, className = '' }: {
-  remainingMs: number; totalMs: number; className?: string;
+export function GoldenTimeBar({ remainingMs, percent, state, className = '' }: {
+  remainingMs: number; percent: number; state: GoldenTimeState; className?: string;
 }) {
-  const ratio = totalMs > 0 ? Math.max(0, Math.min(1, remainingMs / totalMs)) : 0;
-  const pct = Math.round(ratio * 100);
-  const urgent = ratio <= 0.15 || remainingMs <= 0;
-  // 구간 색: 여유=초록 / 보통=앰버 / 임박=빨강
-  const fill = ratio > 0.5 ? 'bg-emerald-500' : ratio > 0.2 ? 'bg-amber-500' : 'bg-red-500';
-  const text = ratio > 0.5 ? 'text-emerald-600' : ratio > 0.2 ? 'text-amber-600' : 'text-red-600';
+  const pct = Math.max(0, Math.min(100, percent));
+  const urgent = state !== 'ok';
+  const fill = state === 'ok' ? 'bg-emerald-500' : state === 'warning' ? 'bg-amber-500' : 'bg-red-500';
+  const text = state === 'ok' ? 'text-emerald-600' : state === 'warning' ? 'text-amber-600' : 'text-red-600';
   return (
     <div className={className}>
       <div className="mb-1 flex items-center justify-between text-[10px] font-mono">
         <span className="text-slate-400">골든타임</span>
         <span className={`font-semibold ${text} ${urgent ? 'animate-pulse motion-reduce:animate-none' : ''}`}>
-          {formatRemaining(remainingMs)}
+          {state === 'expired' ? '만료' : formatRemaining(remainingMs)}
         </span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200/80">
