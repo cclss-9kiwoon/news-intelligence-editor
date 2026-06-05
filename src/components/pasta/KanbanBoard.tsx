@@ -4,7 +4,8 @@ import { useArticles } from '../../state/ArticlesContext';
 import { useClusters } from '../../state/ClustersContext';
 import { useCampaigns } from '../../state/CampaignContext';
 import { shouldClaimCluster } from '../../lib/searchFilter';
-import { IconTrash } from './icons';
+import { IconTrash, IconRefresh } from './icons';
+import { GoldenTimeBar, GaugeChip, InfoChip } from './kanbanPrimitives';
 import type { Task, TaskStatus } from '../../types';
 
 const HOUR = 3600_000;
@@ -19,14 +20,6 @@ function computeGolden(gt: Task['goldenTime'], now: number): GoldenView | null {
   const state = remainingMs <= 0 ? 'expired' : percent < 20 ? 'warning' : 'ok';
   return { remainingMs, percent, state };
 }
-function fmtDur(ms: number): string {
-  if (ms <= 0) return '만료';
-  const m = Math.floor(ms / 60000);
-  if (m < 60) return `${m}분`;
-  const h = Math.floor(m / 60);
-  return h < 24 ? `${h}시간` : `${Math.floor(h / 24)}일`;
-}
-
 type ColMeta = {
   status: TaskStatus; label: string; auto: boolean;
   bar: string;        // 상단 컬러 바
@@ -113,7 +106,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
           disabled={isRefreshing}
           className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-500 px-3 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isRefreshing ? <Spinner className="h-3 w-3 text-white" /> : '▶'} 지금 수집
+          <IconRefresh className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin motion-reduce:animate-none' : ''}`} /> 지금 수집
         </button>
 
         {noTaskHint && (
@@ -122,11 +115,13 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
           </span>
         )}
 
-        {/* 리듬바: 승급 처리량 / 대기 / 수집 (피카소 GaugeChip 자리) */}
-        <span data-rhythm className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs backdrop-blur-md ${rhythm.atCap ? 'border-amber-200/70 bg-amber-50/70 text-amber-700' : 'border-white/60 bg-white/55 text-slate-500'}`}>
-          승급 {rhythm.promotedLastHour}/{rhythm.maxPerHour === 0 ? '∞' : rhythm.maxPerHour}·시간
-          <span className="text-slate-300">|</span> ①대기 {rhythm.queueCount}
-          <span className="text-slate-300">|</span> 수집 {rhythm.collected}
+        {/* 리듬바: 승급 처리량 게이지 + 대기·수집 보조 칩 */}
+        <span data-rhythm className="inline-flex items-center gap-1.5">
+          {rhythm.maxPerHour > 0
+            ? <GaugeChip label="승급" value={rhythm.promotedLastHour} max={rhythm.maxPerHour} />
+            : <InfoChip tone={rhythm.atCap ? 'amber' : 'neutral'}>승급 {rhythm.promotedLastHour} · 무제한</InfoChip>}
+          <InfoChip tone="blue">① 대기 {rhythm.queueCount}</InfoChip>
+          <InfoChip>수집 {rhythm.collected}</InfoChip>
         </span>
       </div>
       <div className="flex min-h-0 flex-1 gap-5 overflow-x-auto px-4 pb-6 pt-3 sm:px-8">
@@ -211,37 +206,37 @@ function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, 
   return (
     <div
       onClick={onOpen}
-      className="pasta-springy cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 hover:shadow-md"
+      className={`pasta-springy group cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 hover:shadow-md ${task.paused ? 'opacity-60' : ''}`}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-semibold leading-snug text-slate-800 line-clamp-2">
           {task.priority && <span title="우선" className="text-amber-500">★ </span>}📰 {task.title}
         </p>
         <span className="flex shrink-0 items-center gap-1.5">
-          <button onClick={stop(onTogglePriority)} aria-label="우선 처리 토글"
-            className={`transition-colors ${task.priority ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400'}`}>★</button>
+          {/* [우선] 손잡이 — 활성 시 상시, 아니면 hover 노출(절제) */}
+          <button onClick={stop(onTogglePriority)} aria-label="우선 처리 토글" title="우선"
+            className={`transition ${task.priority ? 'text-amber-500' : 'text-slate-300 opacity-0 hover:text-amber-400 focus:opacity-100 group-hover:opacity-100'}`}>★</button>
           <button onClick={e => { e.stopPropagation(); if (confirm('이 기사 건을 삭제할까요?')) onDelete(); }}
             aria-label="기사 건 삭제" className="text-slate-300 hover:text-red-500 transition-colors"><IconTrash className="h-4 w-4" /></button>
         </span>
       </div>
 
-      {/* 골든타임 바 (① 대기) — 피카소 GoldenTimeBar 자리. data-* 로 값 노출 */}
+      {/* 골든타임 바 (① 대기) — GoldenTimeBar 적용. data-* 값 노출 유지 */}
       {golden && (
         <div data-golden-state={golden.state} data-golden-percent={golden.percent} className="mt-2">
-          <div className="h-1 w-full overflow-hidden rounded-full bg-slate-100">
-            <div className={`h-full rounded-full ${golden.state === 'expired' ? 'bg-red-400' : golden.state === 'warning' ? 'bg-amber-400' : 'bg-blue-400'}`} style={{ width: `${golden.percent}%` }} />
-          </div>
-          <p className={`mt-0.5 text-[10px] font-mono ${golden.state === 'warning' ? 'text-amber-600' : 'text-slate-400'}`}>골든타임 {fmtDur(golden.remainingMs)} 남음</p>
+          <GoldenTimeBar remainingMs={golden.remainingMs} percent={golden.percent} state={golden.state} />
         </div>
       )}
 
-      {/* 보류 상태 — [재개]/[폐기] */}
+      {/* 보류 상태 — 슬레이트 배지 + [재개(블루)]/[폐기(레드)] */}
       {task.paused && (
-        <div className="mt-2 flex items-center justify-between rounded-lg bg-slate-100 px-2 py-1 text-[11px]">
-          <span className="font-semibold text-slate-500">⏸ 보류 중</span>
-          <span className="flex gap-2">
-            <button onClick={stop(onResume)} className="text-indigo-500 hover:underline">재개</button>
-            <button onClick={stop(onDiscard)} className="text-red-400 hover:text-red-600">폐기</button>
+        <div className="mt-2 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-[11px]">
+          <span className="inline-flex items-center gap-1 font-semibold text-slate-500">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" /> 보류 중
+          </span>
+          <span className="flex gap-2.5">
+            <button onClick={stop(onResume)} className="font-semibold text-blue-600 hover:text-blue-700">재개</button>
+            <button onClick={stop(onDiscard)} className="font-semibold text-red-500 hover:text-red-600">폐기</button>
           </span>
         </div>
       )}
@@ -316,17 +311,22 @@ function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, 
         )}
       </div>
 
-      {/* 액션 푸터 — 자동 단계: 보류 / ④ Verified: 빠른발행 */}
+      {/* 액션 푸터 — ④ Verified: 발행/편집/폐기 / 차단: 검토 / 자동: 보류(hover 절제) */}
       {!task.paused && !task.error && (
         <div className="mt-2 flex items-center gap-2 border-t border-slate-100 pt-2 text-[11px]">
           {task.status === 'final_review' && verified && !task.published && (
-            <button onClick={stop(onPublish)} className="rounded-md bg-green-600 px-2 py-0.5 font-semibold text-white hover:bg-green-700">⚡ 빠른 발행</button>
+            <>
+              <button onClick={stop(onPublish)} className="rounded-md bg-slate-900 px-2.5 py-0.5 font-semibold text-white shadow-sm hover:bg-slate-700">발행</button>
+              <button onClick={stop(onOpen)} className="rounded-md border border-indigo-300 px-2.5 py-0.5 font-semibold text-indigo-600 hover:bg-indigo-50">편집</button>
+              <button onClick={stop(onDiscard)} className="ml-auto font-semibold text-red-500 hover:text-red-600">폐기</button>
+            </>
           )}
           {task.status === 'final_review' && task.review && !task.review.passed && (
-            <button onClick={stop(onOpen)} className="rounded-md border border-amber-300 px-2 py-0.5 font-semibold text-amber-700 hover:bg-amber-50">검토</button>
+            <button onClick={stop(onOpen)} className="rounded-md border border-amber-300 px-2.5 py-0.5 font-semibold text-amber-700 hover:bg-amber-50">검토</button>
           )}
           {task.status !== 'final_review' && (
-            <button onClick={stop(onPause)} className="text-slate-400 hover:text-slate-600">⏸ 보류</button>
+            <button onClick={stop(onPause)} title="보류(멈춤)"
+              className="font-semibold text-slate-400 opacity-0 transition hover:text-slate-600 focus:opacity-100 group-hover:opacity-100">⏸ 보류</button>
           )}
         </div>
       )}
