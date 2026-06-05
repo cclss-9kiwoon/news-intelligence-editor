@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 import { useTasks } from '../../state/TaskContext';
 import { useArticles } from '../../state/ArticlesContext';
+import { useClusters } from '../../state/ClustersContext';
+import { useCampaigns } from '../../state/CampaignContext';
+import { shouldClaimCluster } from '../../lib/searchFilter';
 import type { Task, TaskStatus } from '../../types';
 
 type ColMeta = {
@@ -20,14 +23,33 @@ const COLUMNS: ColMeta[] = [
 
 export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; onOpenTask: (taskId: string) => void }) {
   const { tasks: allTasks, deleteTask, updateTask } = useTasks();
-  const { isRefreshing, loadingStatus, lastRefreshedAt, articles } = useArticles();
+  const { isRefreshing, loadingStatus, lastRefreshedAt, articles, refreshNow } = useArticles();
+  const { clusters } = useClusters();
+  const { campaigns } = useCampaigns();
   const tasks = useMemo(() => allTasks.filter(t => t.campaignId === campaignId), [allTasks, campaignId]);
   const retryTask = (id: string) => updateTask(id, { error: undefined, produceAttempts: 0, status: 'producing' });
 
+  // 0건 진단: 수집은 됐는데 태스크가 안 생기는 이유를 클러스터 거부 사유로 집계
+  const searching = campaigns.find(c => c.id === campaignId)?.settings.searching;
+  const noTaskHint = useMemo(() => {
+    if (isRefreshing || tasks.length > 0 || articles.length === 0 || !searching) return null;
+    const now = Date.now();
+    const reasons: Record<string, number> = {};
+    let claimable = 0;
+    for (const c of clusters) {
+      const d = shouldClaimCluster(c, articles, searching, tasks, now);
+      if (d.ok) claimable++;
+      else reasons[d.reason] = (reasons[d.reason] ?? 0) + 1;
+    }
+    if (claimable > 0) return null; // 곧 생성됨 — 힌트 불필요
+    const top = Object.entries(reasons).sort((a, b) => b[1] - a[1])[0]?.[0];
+    return { clusterCount: clusters.length, text: reasonHint(top, searching) };
+  }, [isRefreshing, tasks, articles, clusters, searching]);
+
   return (
     <div className="flex h-full flex-col overflow-hidden" style={{ background: 'radial-gradient(ellipse 80% 80% at top left, #C5E3F6 0%, transparent 55%), radial-gradient(ellipse at bottom center, #FBE2BC 0%, transparent 55%), radial-gradient(ellipse at right, #F0D5F7 0%, transparent 55%), #FCF4E8' }}>
-      {/* #3 단계 가시성: 자동 수집 상태 바 */}
-      <div className="px-8 pt-4">
+      {/* #3 단계 가시성: 수집 상태 바 + 수동 트리거 + 0건 진단 */}
+      <div className="flex flex-wrap items-center gap-2 px-8 pt-4">
         <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs backdrop-blur-md transition-colors ${
           isRefreshing
             ? 'border-blue-200/70 bg-blue-50/70 text-blue-700'
@@ -35,9 +57,23 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
         }`}>
           <span className={`inline-flex h-2 w-2 rounded-full ${isRefreshing ? 'animate-pulse bg-blue-500' : 'bg-slate-300'}`} />
           {isRefreshing
-            ? <span className="font-semibold">{loadingStatus || '자동 수집 중...'}</span>
+            ? <span className="font-semibold">{loadingStatus || '수집 중...'}</span>
             : <span>자동 진행 대기 · 수집 {articles.length}건{lastRefreshedAt ? ` · 마지막 ${relTime(lastRefreshedAt)}` : ''}</span>}
         </span>
+
+        <button
+          onClick={() => { if (!isRefreshing) refreshNow(); }}
+          disabled={isRefreshing}
+          className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-500 px-3 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isRefreshing ? <Spinner className="h-3 w-3 text-white" /> : '▶'} 지금 수집
+        </button>
+
+        {noTaskHint && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/80 bg-amber-50/80 px-3 py-1 text-xs text-amber-700 backdrop-blur-md">
+            ⚠ 묶음 {noTaskHint.clusterCount}개 · 생성 0 — {noTaskHint.text}
+          </span>
+        )}
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 px-4 pb-6 pt-3 sm:grid-cols-2 sm:px-8 xl:grid-cols-4">
         {COLUMNS.map(col => {
@@ -177,6 +213,26 @@ function TaskCard({ task, onOpen, onDelete, onRetry }: { task: Task; onOpen: () 
       </div>
     </div>
   );
+}
+
+// 클러스터 거부 사유 → 사람이 읽을 원인 + 해결 힌트
+function reasonHint(reason: string | undefined, searching: { minMediaCount: number }): string {
+  switch (reason) {
+    case 'below_min_media':
+      return `최소 매체 수(${searching.minMediaCount}) 미달. 같은 이슈를 여러 매체가 다뤄야 생성됩니다 — 설정에서 낮춰보세요.`;
+    case 'no_topic_keyword':
+      return '포함 키워드와 일치하는 기사가 없습니다 — 키워드를 넓혀보세요.';
+    case 'excluded_keyword':
+      return '대부분 제외 키워드에 걸렸습니다.';
+    case 'no_allowed_entity':
+      return '허용 인물·브랜드가 없는 기사뿐입니다 — 목록을 비우거나 넓혀보세요.';
+    case 'no_articles':
+      return '허용/차단 매체 필터로 전부 제외됐습니다 — 소스 필터를 확인하세요.';
+    case 'already_claimed':
+      return '이미 모두 기사 건으로 생성됐습니다.';
+    default:
+      return '조건에 맞는 묶음이 없습니다 — 서칭 설정을 조정하세요.';
+  }
 }
 
 // 자동 단계에서 실제로 작업이 돌아가는 중인지 (에러·완료 제외)
