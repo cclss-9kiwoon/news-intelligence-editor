@@ -8,6 +8,7 @@ import { extractArticleText } from '../../lib/scraper';
 import { testNaverConnection } from '../../lib/naver';
 import { testDaumConnection } from '../../lib/daum';
 import { HelpTip } from './HelpTip';
+import { TagInput } from './TagInput';
 import type { ReferenceArticle } from '../../types';
 
 const WINDOWS: { value: ArticleWindow; label: string }[] = [
@@ -349,15 +350,18 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
               </div>
             )}
             <div className="grid grid-cols-2 gap-4">
-            <Field label={<span>포함 키워드 (쉼표) <HelpTip text="이 단어가 들어간 기사만 우선 검토합니다. 캠페인 주제와 직접 관련된 단어를 넣습니다." /></span>}>
-              <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="컴백, 앨범, 차트"
-                value={s.searching.topicKeywords.join(', ')}
-                onChange={e => setSearching({ topicKeywords: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
+            <Field label={<span>포함 키워드 <HelpTip text="이 단어가 들어간 기사만 우선 검토합니다. 단어 입력 후 Enter로 등록합니다." /></span>}>
+              <TagInput
+                values={s.searching.topicKeywords}
+                onChange={topicKeywords => setSearching({ topicKeywords })}
+                placeholder="컴백 입력 후 Enter" />
             </Field>
-            <Field label={<span>제외 키워드 (쉼표) <HelpTip text="이 단어가 들어간 기사는 제외합니다. 캠페인과 상관없는 분야나 금지 주제를 넣습니다." /></span>}>
-              <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="정치, 경제"
-                value={s.searching.excludeKeywords.join(', ')}
-                onChange={e => setSearching({ excludeKeywords: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
+            <Field label={<span>제외 키워드 <HelpTip text="이 단어가 들어간 기사는 제외합니다. 단어 입력 후 Enter로 등록합니다." /></span>}>
+              <TagInput
+                values={s.searching.excludeKeywords}
+                onChange={excludeKeywords => setSearching({ excludeKeywords })}
+                placeholder="정치 입력 후 Enter"
+                tone="rose" />
             </Field>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-4">
