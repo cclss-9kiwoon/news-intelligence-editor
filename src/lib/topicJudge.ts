@@ -23,14 +23,17 @@ export async function judgeTopicAdequacy(
   if (!settings.apiKey) return { adequate: true };
 
   const system = [
-    '당신은 매체 편집국의 주제 선별 데스크입니다.',
-    '아래 [주제 정의]에 비춰, 주어진 기사 소재가 이 매체에서 다룰 만한지 판정하세요.',
+    '당신은 매체 편집국의 주제 선별 데스크입니다. 캠페인당 "완전 부합 소수정예"만 통과시킵니다.',
+    '아래 [주제 정의]에 비춰, 주어진 기사 소재가 이 캠페인의 핵심 주제에 정확히 부합하는지 판정하세요.',
     '',
     '[주제 정의]',
     intent.trim(),
     '',
-    '판정 기준: 주제 정의의 범위·대상·성격에 부합하면 adequate=true. 벗어나면 false + reason(한 줄, 왜 부적합한지).',
-    '경계가 모호하면 포용적으로 adequate=true(놓치는 것보다 사람이 거르는 게 낫다).',
+    '판정 기준 (보수적 — 빡세게):',
+    '- 주제 정의의 대상·범위·성격에 명확히 부합할 때만 adequate=true.',
+    '- "관련 있어 보임"·주변부·간접 언급·애매하면 adequate=false(컷). 확신 없으면 false.',
+    '- 잘못 통과시키는 것이 놓치는 것보다 나쁨(소수정예 원칙). 의심되면 떨어뜨린다.',
+    '- false면 reason 한 줄(왜 핵심 주제와 어긋나는지).',
     '',
     '오직 valid JSON: { "adequate": boolean, "reason"?: string }',
   ].join('\n');
