@@ -56,6 +56,41 @@ describe('runRuleChecks', () => {
     const out = runRuleChecks(baseDraft, DEFAULT_PROJECT_PROFILE);
     expect(out).toHaveLength(0);
   });
+
+  it('클로징 첨언(질문 종료) warn (noEditorialClosing)', () => {
+    const out = runRuleChecks({ ...baseDraft, body: '컴백을 발표했다. 과연 1위를 차지할 수 있을까?' }, DEFAULT_PROJECT_PROFILE);
+    expect(out.find(x => x.ruleId === 'fmt-editorial-closing')?.severity).toBe('warn');
+  });
+
+  it('클로징 첨언(응원/기대 종료) warn', () => {
+    const out = runRuleChecks({ ...baseDraft, body: '신곡을 공개했다. 앞으로의 행보가 기대된다.' }, DEFAULT_PROJECT_PROFILE);
+    expect(out.find(x => x.ruleId === 'fmt-editorial-closing')).toBeDefined();
+  });
+
+  it('팩트로 끝나면 클로징 통과', () => {
+    const out = runRuleChecks({ ...baseDraft, body: '소속사는 6월 1일 발매라고 밝혔다.' }, DEFAULT_PROJECT_PROFILE);
+    expect(out.find(x => x.ruleId === 'fmt-editorial-closing')).toBeUndefined();
+  });
+
+  it('헤드라인 케이싱 lower-minor — 전치사 대문자 warn', () => {
+    const profile: ProjectProfile = {
+      ...DEFAULT_PROJECT_PROFILE,
+      formatRules: { ...DEFAULT_PROJECT_PROFILE.formatRules, headlineCasing: 'lower-minor' },
+    };
+    const out = runRuleChecks({ ...baseDraft, headline: 'aespa Returns To The Stage' }, profile);
+    const f = out.find(x => x.ruleId === 'fmt-headline-casing');
+    expect(f).toBeDefined();
+    expect(f?.message).toContain('To');
+  });
+
+  it('헤드라인 케이싱 — 올바르면 통과', () => {
+    const profile: ProjectProfile = {
+      ...DEFAULT_PROJECT_PROFILE,
+      formatRules: { ...DEFAULT_PROJECT_PROFILE.formatRules, headlineCasing: 'lower-minor' },
+    };
+    const out = runRuleChecks({ ...baseDraft, headline: 'aespa Returns to the Stage' }, profile);
+    expect(out.find(x => x.ruleId === 'fmt-headline-casing')).toBeUndefined();
+  });
 });
 
 describe('reviewDraft needsHuman (자율발행 안전장치)', () => {

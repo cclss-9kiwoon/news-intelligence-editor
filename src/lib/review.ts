@@ -65,6 +65,39 @@ export function runRuleChecks(draft: DraftFields, profile: ProjectProfile): Revi
     }
   }
 
+  // 클로징 에디토리얼 첨언 금지 — 본문 마지막 문장이 질문/응원/기대로 끝나면 위반
+  if (f.noEditorialClosing) {
+    const plain = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    // 마지막 문장(., !, ?, 다., 까? 등 기준) 추출
+    const lastSentence = plain.split(/(?<=[.!?。])\s+/).filter(Boolean).pop() || plain;
+    const editorialClose =
+      /[?？]\s*$/.test(lastSentence) ||  // 질문으로 종료
+      /(응원|기대|축하|바란다|바랍니다|기원|주목된다|귀추가 주목|관심이 모[아이]|화이팅|파이팅|행보가 기대)/.test(lastSentence);
+    if (editorialClose) {
+      findings.push({
+        ruleId: 'fmt-editorial-closing', label: '클로징 첨언', severity: 'warn', source: 'rule', field: 'body',
+        message: `마지막 문장이 에디토리얼 첨언(질문/응원/기대)으로 끝남: "${lastSentence.slice(-40)}". 팩트로 종료해야 합니다.`,
+      });
+    }
+  }
+
+  // 헤드라인 케이싱(영문) — lower-minor: 전치사·접속사·관사는 소문자
+  if (f.headlineCasing === 'lower-minor' && /[A-Za-z]/.test(draft.headline)) {
+    const MINOR = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'of', 'to', 'in', 'on', 'at', 'by', 'with', 'as', 'from', 'into', 'over', 'per', 'vs']);
+    const words = draft.headline.split(/\s+/);
+    const offenders = words.filter((w, i) => {
+      if (i === 0) return false; // 첫 단어는 대문자 허용
+      const bare = w.replace(/[^A-Za-z]/g, '');
+      return bare && MINOR.has(bare.toLowerCase()) && /^[A-Z]/.test(bare);
+    });
+    if (offenders.length > 0) {
+      findings.push({
+        ruleId: 'fmt-headline-casing', label: '헤드라인 케이싱', severity: 'warn', source: 'rule', field: 'headline',
+        message: `전치사·접속사는 소문자여야 함: ${offenders.join(', ')}`,
+      });
+    }
+  }
+
   return findings;
 }
 
