@@ -156,6 +156,8 @@ export type ReviewResult = {
   passed: boolean;              // block 0건이면 true
   findings: ReviewFinding[];
   checkedAt: number;
+  needsHuman?: boolean;         // 자율발행 차단 — 사람 확인 필요(불확실/민감). 값은 검수 로직(NIE)이 채움
+  needsHumanReasons?: string[]; // 사람 필요 사유 (표시용)
 };
 
 export type ReferenceArticle = {
@@ -369,6 +371,7 @@ export type Task = {
   pauseReason?: string;      // 보류 사유 (표시용)
   promotedAt?: number;       // ①→② 승급 시각 (시간당 승급 상한 카운트용)
   goldenTime?: { startsAt: number; expiresAt: number };  // 후보 유효창(입력값만 저장, 잔여/비율은 렌더 시 계산)
+  isBreaking?: boolean;      // 속보 — 최상단 정렬·자동발행 차단·알림. 판정은 검수 로직(NIE)이 채움
   createdAt: number;
   updatedAt: number;
 };
