@@ -84,7 +84,7 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
     <div className="flex h-full flex-col" style={{ background: 'radial-gradient(ellipse 80% 80% at top left, #C5E3F6 0%, transparent 55%), radial-gradient(ellipse at bottom center, #FBE2BC 0%, transparent 55%), radial-gradient(ellipse at right, #F0D5F7 0%, transparent 55%), #FCF4E8' }}>
       {/* 헤더 */}
       <div className="flex items-center gap-2 border-b border-slate-200/60 bg-white/70 backdrop-blur-md px-5 py-2.5 text-sm">
-        <button onClick={onBack} className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">← 칸반</button>
+        <button onClick={onBack} aria-label="칸반 보드로 돌아가기" className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">← 칸반</button>
         <span className="font-bold text-slate-800 truncate">📰 {task.title}</span>
         {task.review && (
           <span className={`ml-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-mono font-semibold ${task.review.passed ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
@@ -93,8 +93,8 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
         )}
       </div>
 
-      {/* 3분할 */}
-      <div className="grid min-h-0 flex-1 grid-cols-[300px_1fr_340px] overflow-hidden">
+      {/* 3분할 — 좁은 화면은 세로 스택, lg↑ 3분할 고정폭 */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[280px_1fr_320px] lg:overflow-hidden xl:grid-cols-[300px_1fr_340px]">
         {/* 좌: AI Assistant */}
         <div className="flex min-h-0 flex-col gap-4 overflow-y-auto border-r border-white/60 bg-white/45 backdrop-blur-md p-4">
           <div>

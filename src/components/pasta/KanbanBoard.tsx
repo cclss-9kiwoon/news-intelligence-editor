@@ -39,7 +39,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
             : <span>자동 진행 대기 · 수집 {articles.length}건{lastRefreshedAt ? ` · 마지막 ${relTime(lastRefreshedAt)}` : ''}</span>}
         </span>
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-4 gap-5 px-8 pb-6 pt-3">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 px-4 pb-6 pt-3 sm:grid-cols-2 sm:px-8 xl:grid-cols-4">
         {COLUMNS.map(col => {
           const colTasks = tasks.filter(t => t.status === col.status);
           return (
@@ -92,6 +92,7 @@ function TaskCard({ task, onOpen, onDelete, onRetry }: { task: Task; onOpen: () 
         <p className="text-sm font-semibold leading-snug text-slate-800 line-clamp-2">📰 {task.title}</p>
         <button
           onClick={e => { e.stopPropagation(); if (confirm('이 기사 건을 삭제할까요?')) onDelete(); }}
+          aria-label="기사 건 삭제"
           className="shrink-0 text-slate-300 hover:text-red-500 transition-colors"
         >🗑</button>
       </div>
