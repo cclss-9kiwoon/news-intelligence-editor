@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { judgeTopicAdequacy } from './topicJudge';
+import { resetLlmCircuit } from './openai';
 import { DEFAULT_SETTINGS } from './defaultSettings';
 import type { Settings } from '../types';
 
@@ -13,47 +14,57 @@ function stubLlm(resp: unknown) {
   } as unknown as Response)));
 }
 
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => { vi.unstubAllGlobals(); resetLlmCircuit(); });
 
-describe('judgeTopicAdequacy', () => {
-  it('빈 intent면 LLM 호출 없이 adequate=true (게이트 비활성)', async () => {
+describe('judgeTopicAdequacy (fail-closed)', () => {
+  it('빈 intent면 게이트 비활성 → adequate=true, decided=true', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const r = await judgeTopicAdequacy(subject, '   ', SETTINGS);
-    expect(r.adequate).toBe(true);
+    expect(r).toMatchObject({ adequate: true, decided: true });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('apiKey 없으면 fail-open (호출 없이 true)', async () => {
+  it('apiKey 없으면 보류 (decided=false, fail-closed)', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const r = await judgeTopicAdequacy(subject, 'K-pop 컴백', { ...SETTINGS, apiKey: '' });
-    expect(r.adequate).toBe(true);
+    expect(r).toMatchObject({ adequate: false, decided: false });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('LLM adequate=false면 부적합 + reason', async () => {
-    stubLlm({ adequate: false, reason: '주제 범위 밖' });
-    const r = await judgeTopicAdequacy(subject, 'K-pop 컴백', SETTINGS);
-    expect(r.adequate).toBe(false);
-    expect(r.reason).toBe('주제 범위 밖');
-  });
-
-  it('LLM adequate=true면 통과', async () => {
+  it('LLM 명확 부합 → adequate=true, decided=true', async () => {
     stubLlm({ adequate: true });
     const r = await judgeTopicAdequacy(subject, 'K-pop 컴백', SETTINGS);
-    expect(r.adequate).toBe(true);
+    expect(r).toMatchObject({ adequate: true, decided: true });
   });
 
-  it('응답 누락/파싱불가는 fail-open (true)', async () => {
+  it('LLM 명확 부적합 → adequate=false, decided=true + reason', async () => {
+    stubLlm({ adequate: false, reason: '금융 기사' });
+    const r = await judgeTopicAdequacy(subject, 'K-pop 컴백', SETTINGS);
+    expect(r).toMatchObject({ adequate: false, decided: true, reason: '금융 기사' });
+  });
+
+  it('응답에 adequate 불리언 없으면 보류 (decided=false)', async () => {
     stubLlm({ foo: 'bar' });
     const r = await judgeTopicAdequacy(subject, 'K-pop 컴백', SETTINGS);
-    expect(r.adequate).toBe(true);
+    expect(r).toMatchObject({ adequate: false, decided: false });
   });
 
-  it('호출 실패(throw)면 fail-open (true)', async () => {
+  it('호출 실패(throw)면 보류 (decided=false, 통과 금지)', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) } as unknown as Response)));
     const r = await judgeTopicAdequacy(subject, 'K-pop 컴백', SETTINGS);
-    expect(r.adequate).toBe(true);
+    expect(r).toMatchObject({ adequate: false, decided: false });
+  });
+
+  it('429로 서킷 open이면 호출 안 하고 즉시 보류', async () => {
+    // 먼저 429로 서킷 트립
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 429, json: async () => ({}) } as unknown as Response)));
+    await judgeTopicAdequacy(subject, 'K-pop 컴백', SETTINGS); // 트립
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const r = await judgeTopicAdequacy(subject, 'K-pop 컴백', SETTINGS);
+    expect(r.decided).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled(); // 서킷 open → 호출 스킵
   });
 });

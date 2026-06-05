@@ -1,15 +1,22 @@
 import type { Settings } from '../types';
-import { chatJson } from './openai';
+import { chatJson, getLlmCircuitState } from './openai';
 
 /**
  * ② 주제 적합성 판정 (LLM judge).
  * 캠페인 주제정의(intent, 자연어)에 비춰 이 소재가 적합한지 판단.
  * topic_review 단계에서 부적합 클러스터/기사를 탈락시키는 게이트.
  *
- * fail-open: intent 비었거나 키 없거나 호출 실패 시 adequate=true(막지 않음).
- * chatJson 통과 → 글로벌 동시성 상한 적용.
+ * fail-CLOSED (PM): LLM이 판단 못 하면 통과 금지 = 보류(decided:false).
+ * 적합성은 "명확 부합만 통과"라 판단 불가 시 흘려보내면 필터가 무력화됨.
+ * → intent 있는데 판단 불가(429/서킷/오류/파싱실패)면 decided:false로 ②에 잡아둠.
+ *   키 꽂혀 서킷 풀리면 다음 사이클 재판단.
+ * intent 비었으면 게이트 비활성 → {adequate:true, decided:true}.
  */
-export type TopicAdequacy = { adequate: boolean; reason?: string };
+export type TopicAdequacy = {
+  adequate: boolean;   // 주제 부합 여부 (decided일 때만 의미)
+  decided: boolean;    // 판단 완료 여부. false=판단 불가(보류)
+  reason?: string;
+};
 
 type AdequacyResponse = { adequate?: boolean; reason?: string };
 
@@ -18,9 +25,11 @@ export async function judgeTopicAdequacy(
   intent: string,
   settings: Settings,
 ): Promise<TopicAdequacy> {
-  // 게이트 비활성 / 키 없음 → 통과 (fail-open)
-  if (!intent.trim()) return { adequate: true };
-  if (!settings.apiKey) return { adequate: true };
+  // 게이트 비활성(주제정의 없음) → 통과. 게이트 자체가 꺼진 거라 decided.
+  if (!intent.trim()) return { adequate: true, decided: true };
+  // 키 없음 / 서킷 open(429 소진) → 판단 불가 = 보류 (fail-closed)
+  if (!settings.apiKey) return { adequate: false, decided: false, reason: 'API 키 없음 — AI 판단 대기' };
+  if (getLlmCircuitState().open) return { adequate: false, decided: false, reason: 'LLM 한도 소진 — AI 판단 대기(키 확인)' };
 
   const system = [
     '당신은 매체 편집국의 주제 선별 데스크입니다. 캠페인당 "완전 부합 소수정예"만 통과시킵니다.',
@@ -54,9 +63,13 @@ export async function judgeTopicAdequacy(
       user,
       temperature: 0.1,
     });
-    // 명시적 false만 부적합 — 누락/파싱불가는 통과(fail-open)
-    return { adequate: out.adequate !== false, reason: out.adequate === false ? out.reason : undefined };
+    // 응답에 adequate 불리언이 없으면(파싱 모호) 판단 불가 = 보류 (fail-closed)
+    if (typeof out.adequate !== 'boolean') {
+      return { adequate: false, decided: false, reason: 'AI 응답 불명확 — 보류' };
+    }
+    return { adequate: out.adequate, decided: true, reason: out.adequate ? undefined : out.reason };
   } catch {
-    return { adequate: true };
+    // 호출 실패(429 등) → 보류 (통과 금지)
+    return { adequate: false, decided: false, reason: 'AI 판단 실패 — 보류(키·한도 확인)' };
   }
 }
