@@ -365,6 +365,7 @@ export type Task = {
   error?: string;
   produceAttempts?: number;  // 제작 시도 횟수 (자동 재시도용)
   topicChecked?: boolean;    // 제외 주제 AI 판단 통과 (주제 검수 단계)
+  intentChecked?: boolean;   // 주제 정의(intent) 적합성 AI 판단 통과
   published?: boolean;       // 발행 완료 (Hydra 배포 훅)
   publishedAt?: number;      // 발행 시각 (발행함 뷰 정렬/표시)
   discardReason?: DiscardReason;  // 폐기 사유

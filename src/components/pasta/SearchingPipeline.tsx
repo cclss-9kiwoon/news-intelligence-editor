@@ -4,6 +4,7 @@ import { useArticles } from '../../state/ArticlesContext';
 import { useSettings } from '../../state/SettingsContext';
 import { useTasks } from '../../state/TaskContext';
 import { generateStory, judgeExcludedTopic } from '../../lib/promptChain';
+import { judgeTopicAdequacy } from '../../lib/topicJudge';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
 import { promotionBudget } from '../../lib/promotion';
@@ -29,6 +30,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   const { tasks, addTasks, updateTask, deleteTask } = useTasks();
   const producingRef = useRef<Set<string>>(new Set());
   const topicJudgeRef = useRef<Set<string>>(new Set()); // 제외 주제 AI 판단 진행 중 가드
+  const intentJudgeRef = useRef<Set<string>>(new Set()); // 주제 적합성 AI 판단 진행 중 가드
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -43,7 +45,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
   const myTasks = tasks.filter(t => t.campaignId === campaign.id);
   // deps용 시그니처 (상태/플래그 변화 반영 — paused/priority 포함해 보드 조작 즉시 반영)
-  const taskSig = myTasks.map(t => `${t.id}:${t.status}:${t.draft ? 1 : 0}:${t.error ? 1 : 0}:${t.produceAttempts ?? 0}:${t.topicChecked ? 1 : 0}:${t.paused ? 1 : 0}:${t.priority ? 1 : 0}:${t.published ? 1 : 0}`).join(',');
+  const taskSig = myTasks.map(t => `${t.id}:${t.status}:${t.draft ? 1 : 0}:${t.error ? 1 : 0}:${t.produceAttempts ?? 0}:${t.topicChecked ? 1 : 0}:${t.intentChecked ? 1 : 0}:${t.paused ? 1 : 0}:${t.priority ? 1 : 0}:${t.published ? 1 : 0}`).join(',');
 
   // 기준기사 시각 (만료·골든타임·승급정렬용) — 대표 기사 pubDate, 없으면 생성시각
   const refTime = (t: Task): number => {
@@ -160,6 +162,26 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         continue;
       }
 
+      // 주제 정의(intent) 적합성 게이트 — 캠페인 주제정의에 맞는 기사만 통과.
+      const intent = (campaign.settings.topicReview.intent ?? '').trim();
+      if (intent && !t.intentChecked) {
+        if (!intentJudgeRef.current.has(t.id)) {
+          intentJudgeRef.current.add(t.id);
+          const snippets = articles
+            .filter(a => t.sources.some(s => s.articleId === a.id))
+            .map(a => a.description || a.fullText?.slice(0, 300) || '');
+          judgeTopicAdequacy({ title: t.title, snippets }, intent, cheapStageSettings(settings))
+            .then(r => {
+              if (!mountedRef.current) return;
+              if (!r.adequate) updateTask(t.id, { error: `주제 부적합: ${r.reason || '캠페인 주제와 불일치'}` });
+              else updateTask(t.id, { intentChecked: true });
+            })
+            .catch(() => { if (mountedRef.current) updateTask(t.id, { intentChecked: true }); }) // fail-open
+            .finally(() => { intentJudgeRef.current.delete(t.id); });
+        }
+        continue; // 판단 결과 대기
+      }
+
       // 제외 주제 AI 판단 게이트 — 통과(topicChecked) 전엔 제작으로 안 넘김.
       if (excludeTopics.length > 0 && !t.topicChecked) {
         if (!topicJudgeRef.current.has(t.id)) {
@@ -182,7 +204,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSig, articles, settings, searchingCfg.excludeTopics]);
+  }, [taskSig, articles, settings, searchingCfg.excludeTopics, campaign.settings.topicReview.intent]);
 
   // ── 4. ③ 제작: LLM 생성 → 결과물 검수 전환 ──
   useEffect(() => {
