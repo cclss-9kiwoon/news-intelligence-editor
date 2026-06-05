@@ -19,7 +19,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   const { clusters } = useClusters();
   const { articles } = useArticles();
   const { settings } = useSettings();
-  const { tasks, addTask, updateTask, moveTask } = useTasks();
+  const { tasks, addTask, updateTask } = useTasks();
   const producingRef = useRef<Set<string>>(new Set());
   const topicJudgeRef = useRef<Set<string>>(new Set()); // 제외 주제 AI 판단 진행 중 가드
   const mountedRef = useRef(true);
@@ -76,15 +76,33 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusters, articles, taskSig, campaign.id, campaign.autoCollect?.enabled]);
 
-  // ── 2. 서칭 → 주제 검수 (즉시 전환) ──
+  // ── 2. 기사 찾기: 전문 수집 대기 → 모이면 주제 검수로 (없으면 이 단계에 머묾) ──
   useEffect(() => {
     for (const t of myTasks) {
-      if (t.status === 'searching') moveTask(t.id, 'topic_review');
+      if (t.status !== 'searching' || t.error) continue;
+
+      const refreshed = t.sources.map(s => {
+        const a = articles.find(x => x.id === s.articleId);
+        return a ? { ...s, hasFullText: !!a.fullText } : s;
+      });
+      const fullTextCount = refreshed.filter(s => s.hasFullText).length;
+      const changed = refreshed.some((s, i) => s.hasFullText !== t.sources[i].hasFullText);
+      const imageCount = articles
+        .filter(a => t.sources.some(s => s.articleId === a.id))
+        .reduce((n, a) => n + (a.images?.length ?? 0), 0);
+
+      if (fullTextCount > 0) {
+        updateTask(t.id, { sources: refreshed, imageCount, status: 'topic_review' });
+      } else if (Date.now() - t.createdAt > SOURCE_REVIEW_TIMEOUT_MS) {
+        updateTask(t.id, { sources: refreshed, error: '전문 수집 실패 (출처 0건)' });
+      } else if (changed) {
+        updateTask(t.id, { sources: refreshed, imageCount });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSig]);
+  }, [taskSig, articles]);
 
-  // ── 3. 주제 검수: 주제 선정 판단(topicReview) + 전문 수집 확인 → 제작 전환 / 탈락 ──
+  // ── 3. 주제 검수: 제외 주제 AI 판단 게이트 → 제작 전환 / 탈락 ──
   useEffect(() => {
     const excludeTopics = (campaign.settings.searching.excludeTopics ?? []).filter(x => x.trim());
 
@@ -105,29 +123,13 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
               if (r.excluded) updateTask(t.id, { error: `제외 주제 해당: ${r.matched || '동일 주제'}` });
               else updateTask(t.id, { topicChecked: true });
             })
-            .catch(() => { if (mountedRef.current) updateTask(t.id, { topicChecked: true }); }) // 판단 실패 → 통과(fail-open)
+            .catch(() => { if (mountedRef.current) updateTask(t.id, { topicChecked: true }); }) // 판단 실패 → 통과(fail-open). PM ② 견고화에서 보류로 교체 예정
             .finally(() => { topicJudgeRef.current.delete(t.id); });
         }
         continue; // 판단 결과 대기
       }
 
-      const refreshed = t.sources.map(s => {
-        const a = articles.find(x => x.id === s.articleId);
-        return a ? { ...s, hasFullText: !!a.fullText } : s;
-      });
-      const fullTextCount = refreshed.filter(s => s.hasFullText).length;
-      const changed = refreshed.some((s, i) => s.hasFullText !== t.sources[i].hasFullText);
-      const imageCount = articles
-        .filter(a => t.sources.some(s => s.articleId === a.id))
-        .reduce((n, a) => n + (a.images?.length ?? 0), 0);
-
-      if (fullTextCount > 0) {
-        updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
-      } else if (Date.now() - t.createdAt > SOURCE_REVIEW_TIMEOUT_MS) {
-        updateTask(t.id, { sources: refreshed, error: '전문 수집 실패 (출처 0건)' });
-      } else if (changed) {
-        updateTask(t.id, { sources: refreshed, imageCount });
-      }
+      updateTask(t.id, { status: 'producing' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSig, articles, settings, campaign.settings.searching.excludeTopics]);
