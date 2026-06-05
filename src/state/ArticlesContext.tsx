@@ -30,6 +30,7 @@ type Ctx = {
   lastRefreshedAt: number | null;
   enrichStats: EnrichStats | null;
   enrichMethod: 'naver' | 'jina' | 'none';
+  collectError: string | null;   // 소스별 수집 실패 안내 (네이버 401 등)
 };
 
 const ArticlesCtx = createContext<Ctx | null>(null);
@@ -44,6 +45,7 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
   const [enrichStats, setEnrichStats] = useState<EnrichStats | null>(null);
   const [enrichMethod, setEnrichMethod] = useState<'naver' | 'jina' | 'none'>('none');
+  const [collectError, setCollectError] = useState<string | null>(null);
   const inFlightRef = useRef(false);
 
   const sourcesRef = useRef(settings.rssSources);
@@ -91,38 +93,44 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
     let incoming: Article[] = [];
     let initialEnriched = 0;
 
-    if (hasNaver || hasDaum) {
-      setLoadingStatus('검색 API + RSS 수집 중...');
-      const enabled = sourcesRef.current.filter(s => s.enabled);
-      const [naverArticles, daumArticles, rssResults] = await Promise.all([
-        hasNaver
-          ? fetchNaverArticles(naverQueriesRef.current, naverIdRef.current, naverSecretRef.current)
-          : Promise.resolve([]),
-        hasDaum
-          ? fetchDaumArticles(daumQueriesRef.current, daumKeyRef.current)
-          : Promise.resolve([]),
-        Promise.all(enabled.map(s => fetchRss(s, rss2jsonKeyRef.current))),
-      ]);
-      incoming.push(...naverArticles, ...daumArticles, ...rssResults.flat());
+    // 견고성: 모든 소스를 Promise.allSettled로 — 한 소스 실패(naver 401 등)가
+    // 전체 수집을 멈추지 않게. 소스별 실패는 수집해서 사용자에 노출.
+    setLoadingStatus(hasNaver || hasDaum ? '검색 API + RSS 수집 중...' : 'RSS 수집 중...');
+    const enabled = sourcesRef.current.filter(s => s.enabled);
 
-      const searchArticles = [...naverArticles, ...daumArticles];
-      initialEnriched = searchArticles.filter(a => a.fullText).length;
-      if (initialEnriched > 0) {
-        setEnrichStats({
-          enriched: initialEnriched,
-          failed: searchArticles.length - initialEnriched,
-          skipped: 0,
-          total: searchArticles.length,
-        });
-        setEnrichMethod(hasNaver ? 'naver' : 'jina');
+    type Job = { label: string; kind: 'search' | 'rss'; run: () => Promise<Article[]> };
+    const jobs: Job[] = [];
+    if (hasNaver) jobs.push({ label: '네이버 검색', kind: 'search', run: () => fetchNaverArticles(naverQueriesRef.current, naverIdRef.current, naverSecretRef.current) });
+    if (hasDaum) jobs.push({ label: '다음 검색', kind: 'search', run: () => fetchDaumArticles(daumQueriesRef.current, daumKeyRef.current) });
+    for (const s of enabled) jobs.push({ label: s.name, kind: 'rss', run: () => fetchRss(s, rss2jsonKeyRef.current) });
+
+    const settled = await Promise.allSettled(jobs.map(j => j.run()));
+    const failures: string[] = [];
+    let searchArticleCount = 0;
+    let searchEnrichedCount = 0;
+    settled.forEach((res, i) => {
+      const job = jobs[i];
+      if (res.status === 'fulfilled') {
+        incoming.push(...res.value);
+        if (job.kind === 'search') {
+          searchArticleCount += res.value.length;
+          searchEnrichedCount += res.value.filter(a => a.fullText).length;
+        }
+        // 키 있는 검색 소스가 0건이면 인증/응답 실패 가능성 — 알림
+        if (job.kind === 'search' && res.value.length === 0) failures.push(`${job.label}: 결과 0 (키·인증 확인)`);
+      } else {
+        failures.push(`${job.label}: 실패`);
+        console.warn(`[articles] source failed: ${job.label}`, res.reason);
       }
-    } else {
-      // ── RSS only ──
-      setLoadingStatus('RSS 수집 중...');
-      const enabled = sourcesRef.current.filter(s => s.enabled);
-      const results = await Promise.all(enabled.map(s => fetchRss(s, rss2jsonKeyRef.current)));
-      incoming = results.flat();
+    });
+
+    initialEnriched = searchEnrichedCount;
+    if (searchEnrichedCount > 0) {
+      setEnrichStats({ enriched: searchEnrichedCount, failed: searchArticleCount - searchEnrichedCount, skipped: 0, total: searchArticleCount });
+      setEnrichMethod(hasNaver ? 'naver' : 'jina');
     }
+    // 소스 실패 노출 (전체 침묵 금지)
+    setCollectError(failures.length > 0 ? failures.join(' · ') : null);
 
     setLoadingStatus('카테고리 분류 중...');
     // Classify categories
@@ -178,8 +186,12 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
     inFlightRef.current = true;
     try {
       await fetchClassifyAndEnrich();
-      setIsInitialLoading(false);
+    } catch (err) {
+      console.warn('[articles] poll failed', err);
+      setCollectError('수집 중 오류 발생');
     } finally {
+      setIsInitialLoading(false);
+      setLoadingStatus('');
       inFlightRef.current = false;
     }
   }, [fetchClassifyAndEnrich]);
@@ -230,14 +242,18 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
       clearAllRssCache();
       await fetchClassifyAndEnrich();
       setLastRefreshedAt(Date.now());
+    } catch (err) {
+      console.warn('[articles] refresh failed', err);
+      setCollectError('수집 중 오류 발생');
     } finally {
       inFlightRef.current = false;
-      setIsRefreshing(false);
+      setIsRefreshing(false);   // 어떤 실패든 스피너 해제 (영구 로딩 금지)
+      setLoadingStatus('');
     }
   }, [fetchClassifyAndEnrich]);
 
   return (
-    <ArticlesCtx.Provider value={{ articles, selectedArticle, selectArticle, addManualArticle, refreshNow: forceRefresh, isRefreshing, isInitialLoading, loadingStatus, lastRefreshedAt, enrichStats, enrichMethod }}>
+    <ArticlesCtx.Provider value={{ articles, selectedArticle, selectArticle, addManualArticle, refreshNow: forceRefresh, isRefreshing, isInitialLoading, loadingStatus, lastRefreshedAt, enrichStats, enrichMethod, collectError }}>
       {children}
     </ArticlesCtx.Provider>
   );
