@@ -214,7 +214,7 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
             <select className={inputCls} value={p.llm?.provider ?? ''}
               onChange={e => updateGroupProfile(group.id, { llm: { ...p.llm, provider: (e.target.value || undefined) as ProviderId | undefined, baseUrl: e.target.value ? PROVIDERS[e.target.value as ProviderId]?.baseUrl : p.llm?.baseUrl } })}>
               <option value="">(글로벌 기본 사용)</option>
-              {Object.values(PROVIDERS).map(pr => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
+              {Object.values(PROVIDERS).filter(pr => pr.id === 'openai' || pr.id === 'gemini').map(pr => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
             </select>
           </div>
           <div>
