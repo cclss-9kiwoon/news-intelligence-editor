@@ -34,6 +34,8 @@ export const DEFAULT_SOURCE_CONFIG: SourceConfig = {
   excludeTopics: [],
   maxPerEntityPerDay: 0,
   maxPerHour: 3,
+  breakingKeywords: [],
+  breakingGoldenMinutes: 60,
   ownSiteDedupe: false,
   imageSourcePolicy: '',
 };

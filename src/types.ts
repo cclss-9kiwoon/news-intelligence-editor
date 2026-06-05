@@ -277,6 +277,8 @@ export type SourceConfig = {
   excludeTopics: string[];     // 제외 주제(구문 단위, 대소문자 무시)
   maxPerEntityPerDay: number;  // 엔티티당 하루 최대 기사 건수 (0=무제한)
   maxPerHour?: number;         // 시간당 신규 태스크 생성 상한 (기본 3, 0=무제한). 초과분은 버림
+  breakingKeywords?: string[]; // 속보 판정 키워드 (제목/본문 포함 시 isBreaking). 판정은 NIE 로직
+  breakingGoldenMinutes?: number; // 속보 골든타임(분) — 일반보다 짧은 유효창
   ownSiteDedupe: boolean;      // 자체 기보도 제목과 중복되면 스킵
   imageSourcePolicy: string;   // 이미지 출처 정책 (검수 프롬프트에 주입)
 };

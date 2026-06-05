@@ -509,6 +509,20 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                 </label>
               </Field>
             </div>
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <Field label={<span>속보 키워드 <HelpTip text="이 단어가 든 기사는 속보로 분류돼 항상 최상단 정렬·즉시 알림·자동발행 차단(사람 확인)됩니다. 비우면 속보 판정 안 함." /></span>}>
+                <TagInput
+                  values={s.searching.breakingKeywords ?? []}
+                  onChange={breakingKeywords => setSearching({ breakingKeywords })}
+                  placeholder="긴급 입력 후 Enter"
+                  tone="rose" />
+              </Field>
+              <Field label={<span>속보 골든타임(분) <HelpTip text="속보 후보가 검수로 승급되기까지 유효한 시간(분). 일반보다 짧게 잡아 빠르게 처리합니다." /></span>}>
+                <input type="number" min={1} max={1440} className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
+                  value={s.searching.breakingGoldenMinutes ?? 60}
+                  onChange={e => setSearching({ breakingGoldenMinutes: Math.max(1, Number(e.target.value) || 60) })} />
+              </Field>
+            </div>
             <div className="mt-4">
               <Field label={<span>이미지 출처 정책 <HelpTip text="허용/금지 이미지 출처를 적습니다. 기사 생성 가이드에 그대로 주입됩니다." /></span>}>
                 <textarea className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" rows={2}
