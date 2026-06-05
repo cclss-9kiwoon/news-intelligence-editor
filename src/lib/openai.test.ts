@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { chatJson } from './openai';
+import { chatJson, getLlmConcurrency, MAX_CONCURRENT_LLM } from './openai';
 
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -60,5 +60,40 @@ describe('openai.chatJson', () => {
     }));
     await expect(chatJson({ apiKey: 'x', model: 'gpt-4o-mini', system: 's', user: 'u' }))
       .rejects.toThrow(/JSON/);
+  });
+});
+
+describe('chatJson 글로벌 동시성 상한', () => {
+  it(`동시 실행이 MAX_CONCURRENT_LLM(${MAX_CONCURRENT_LLM})을 넘지 않는다`, async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const fetchMock = vi.fn(async () => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise(r => setTimeout(r, 10));
+      inFlight--;
+      return { ok: true, json: async () => ({ choices: [{ message: { content: '{"ok":true}' } }] }) } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const N = MAX_CONCURRENT_LLM * 3;
+    const calls = Array.from({ length: N }, () =>
+      chatJson({ apiKey: 'k', model: 'm', system: 's', user: 'u' }));
+
+    expect(getLlmConcurrency().active).toBeLessThanOrEqual(MAX_CONCURRENT_LLM);
+
+    await Promise.all(calls);
+
+    expect(fetchMock).toHaveBeenCalledTimes(N);
+    expect(peak).toBeLessThanOrEqual(MAX_CONCURRENT_LLM);
+    expect(getLlmConcurrency()).toEqual({ active: 0, queued: 0 });
+  });
+
+  it('호출이 실패해도 슬롯을 반납한다 (누수 없음)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) } as unknown as Response)));
+    await Promise.allSettled(
+      Array.from({ length: MAX_CONCURRENT_LLM + 2 }, () =>
+        chatJson({ apiKey: 'k', model: 'm', system: 's', user: 'u' })));
+    expect(getLlmConcurrency()).toEqual({ active: 0, queued: 0 });
   });
 });

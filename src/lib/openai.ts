@@ -25,39 +25,71 @@ export type ChatJsonArgs = {
   baseUrl?: string;
 };
 
+// ─── 글로벌 LLM 동시 호출 상한 (429 완화) ───────────────────────────
+// 모든 LLM 호출(generateStory/reviewDraft/translate/judge…)이 chatJson을
+// 통과하므로, 여기 세마포어 하나로 전 파이프라인 동시성을 제한한다.
+// 동시 MAX_CONCURRENT_LLM개만 실행, 초과분은 FIFO 큐로 대기.
+export const MAX_CONCURRENT_LLM = 3;
+let activeLlm = 0;
+const llmQueue: Array<() => void> = [];
+
+function acquireLlmSlot(): Promise<void> {
+  if (activeLlm < MAX_CONCURRENT_LLM) {
+    activeLlm++;
+    return Promise.resolve();
+  }
+  return new Promise<void>(resolve => llmQueue.push(resolve));
+}
+
+function releaseLlmSlot(): void {
+  const next = llmQueue.shift();
+  if (next) next();      // 대기자에게 슬롯 양도 (activeLlm 유지)
+  else activeLlm--;      // 대기자 없으면 슬롯 반납
+}
+
+/** 테스트/관측용 — 현재 실행 중 + 대기 중 카운트 */
+export function getLlmConcurrency(): { active: number; queued: number } {
+  return { active: activeLlm, queued: llmQueue.length };
+}
+
 export async function chatJson<T = unknown>(args: ChatJsonArgs): Promise<T> {
   if (!args.apiKey) throw new OpenAIError('API key is empty', 0);
 
-  const res = await fetch(buildEndpoint(args.baseUrl || DEFAULT_BASE_URL), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${args.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: args.model,
-      temperature: args.temperature ?? 0.5,
-      response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: args.system },
-        { role: 'user', content: args.user },
-      ],
-    }),
-  });
+  await acquireLlmSlot();
+  try {
+    const res = await fetch(buildEndpoint(args.baseUrl || DEFAULT_BASE_URL), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${args.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: args.model,
+        temperature: args.temperature ?? 0.5,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: args.system },
+          { role: 'user', content: args.user },
+        ],
+      }),
+    });
 
-  if (!res.ok) {
-    let body: { error?: { message?: string } } = {};
-    try { body = await res.json(); } catch { /* ignore */ }
-    throw new OpenAIError(body.error?.message || `HTTP ${res.status}`, res.status);
-  }
+    if (!res.ok) {
+      let body: { error?: { message?: string } } = {};
+      try { body = await res.json(); } catch { /* ignore */ }
+      throw new OpenAIError(body.error?.message || `HTTP ${res.status}`, res.status);
+    }
 
-  const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
-  const content = data.choices?.[0]?.message?.content ?? '';
-  const parsed = parseJsonLoose<T>(content);
-  if (parsed === undefined) {
-    throw new OpenAIError('Response was not valid JSON: ' + content.slice(0, 200), 0);
+    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const content = data.choices?.[0]?.message?.content ?? '';
+    const parsed = parseJsonLoose<T>(content);
+    if (parsed === undefined) {
+      throw new OpenAIError('Response was not valid JSON: ' + content.slice(0, 200), 0);
+    }
+    return parsed;
+  } finally {
+    releaseLlmSlot();
   }
-  return parsed;
 }
 
 /**
