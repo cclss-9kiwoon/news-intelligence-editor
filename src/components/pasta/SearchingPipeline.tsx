@@ -206,13 +206,15 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSig, articles, settings]);
 
-  // ── 5. ④ 자동 발행: autoPublish on + Verified(검수 통과)면 자동 발행. 미통과는 사람 대기 ──
+  // ── 5. ④ 자동 발행: autoPublish on + 통과 + 안전(사람 불요·비속보)일 때만 자동.
+  //        미통과·needsHuman(불확실/민감)·속보는 사람 큐(④ 잔류). ──
   useEffect(() => {
     if (!autoPublish) return;
     const now = Date.now();
     for (const t of myTasks) {
       if (t.status !== 'final_review' || t.published || t.error || t.paused) continue;
-      if (t.review?.passed) updateTask(t.id, { published: true, publishedAt: now });
+      const safe = t.review?.passed && !t.review.needsHuman && !t.isBreaking;
+      if (safe) updateTask(t.id, { published: true, publishedAt: now });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSig, autoPublish]);
