@@ -54,20 +54,17 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   const expiresAtOf = (t: Task): number => t.goldenTime?.expiresAt ?? refTime(t) + windowMs;
   const startsAtOf = (t: Task): number => t.goldenTime?.startsAt ?? refTime(t);
 
-  // ── 1. ① 대기큐 채우기: 자격 클러스터 전부 생성(LLM 비용 없음, 상한 없음). 실패 클러스터 자가치유 ──
+  // ── 1. ① 대기큐 채우기: 자격 클러스터 전부 생성(LLM 비용 없음, 상한 없음).
+  //   실패(error) 태스크도 클러스터 점유 유지 → 재생성 안 함(무한 재생성 루프 방지).
+  //   실패 건은 사람이 카드에서 [다시 시도]로 복구. ──
   useEffect(() => {
     if (campaign.autoCollect && campaign.autoCollect.enabled === false) return;
     const now = Date.now();
-    const campaignTasks = tasks.filter(t => t.campaignId === campaign.id);
-    const working: Task[] = campaignTasks.filter(t => !t.error);
-    const erroredByCluster = new Map<string, string>();
-    campaignTasks.filter(t => t.error).forEach(t => erroredByCluster.set(t.clusterId, t.id));
+    const working: Task[] = tasks.filter(t => t.campaignId === campaign.id);
 
     for (const cluster of clusters) {
       const decision = shouldClaimCluster(cluster, articles, searchingCfg, working, now);
       if (!decision.ok) continue;
-      const stale = erroredByCluster.get(cluster.id);
-      if (stale) deleteTask(stale);
       // 골든타임: 대표 기사 pubDate 기준 유효창. 속보면 짧은 창(breakingGoldenMinutes).
       const repArt = articles.find(a => a.id === decision.sources[0]?.articleId);
       const startsAt = repArt?.pubDate && !Number.isNaN(Date.parse(repArt.pubDate)) ? Date.parse(repArt.pubDate) : now;
@@ -90,7 +87,8 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     const now = Date.now();
     for (const t of myTasks) {
       if (t.status !== 'searching' || t.error || t.paused) continue;
-      if (now > expiresAtOf(t)) deleteTask(t.id);
+      // 생성 직후 즉시폐기(만료↔재생성 루프) 방지: 최소 30초 grace 후에만 만료
+      if (now > expiresAtOf(t) && now - t.createdAt > 30_000) deleteTask(t.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSig, articles, windowMs]);
