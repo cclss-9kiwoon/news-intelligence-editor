@@ -225,6 +225,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         styleGuide: [
           groupProfile ? `[배포 맥락] ${groupProfile.character} · 타겟: ${groupProfile.audience} · 톤: ${groupProfile.toneBase}` : '',
           ...matrix,
+          cs.searching.imageSourcePolicy ? `[이미지 출처] ${cs.searching.imageSourcePolicy}` : '',
           cs.generation.styleGuide,
         ].filter(Boolean).join('\n'),
         reviewRules,

@@ -124,6 +124,11 @@ export function makeAllkpopCampaignSettings(): CampaignSettings {
       allowedSources: [...ALLKPOP_TOPIC_RULES.allowedSources],
       bannedSources: [...ALLKPOP_TOPIC_RULES.bannedSources],
       minMediaCount: ALLKPOP_TOPIC_RULES.minMediaCount,
+      entityAllowlist: ['BTS', 'BLACKPINK', 'TWICE', 'SEVENTEEN', 'Stray Kids', 'ENHYPEN', 'aespa', 'IVE', 'LE SSERAFIM', 'KATSEYE', 'NewJeans', 'NCT', 'TXT', 'ITZY', 'Red Velvet'],
+      excludeTopics: [],
+      maxPerEntityPerDay: 2, // RW dedupeRules: 같은 아티스트 하루 최대 2건
+      ownSiteDedupe: true,   // allkpop 기보도 재탕 금지
+      imageSourcePolicy: '타 매체 워터마크/로고(STARNEWS·디스패치·MBC·SBS) 금지. 공식 프로모·OST 커버아트·allkpop 자체호스팅·소속사 제공분만 허용.',
     },
     topicReview: {
       selectionCriteria: ALLKPOP_TOPIC_RULES.selectionCriteria,

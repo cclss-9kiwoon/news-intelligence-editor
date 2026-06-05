@@ -30,6 +30,11 @@ export const DEFAULT_SOURCE_CONFIG: SourceConfig = {
   topicKeywords: [],
   excludeKeywords: [],
   minMediaCount: 2,
+  entityAllowlist: [],
+  excludeTopics: [],
+  maxPerEntityPerDay: 0,
+  ownSiteDedupe: false,
+  imageSourcePolicy: '',
 };
 
 export const DEFAULT_GROUP_PROFILE: GroupProfile = {

@@ -393,6 +393,45 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
             </Field>
             </div>
           </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white/65 p-4">
+            <div className="mb-3">
+              <h4 className="font-semibold text-slate-800">④ 중복·범위 보강</h4>
+              <p className="text-xs text-slate-400">엔티티(인물/브랜드) 단위로 범위와 중복을 다듬습니다. 비우면 적용 안 함.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label={<span>허용 엔티티 (쉼표) <HelpTip text="이 인물/브랜드가 언급된 기사만 후보로 만듭니다. 비우면 모든 엔티티를 허용합니다." /></span>}>
+                <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="BTS, BLACKPINK, aespa"
+                  value={(s.searching.entityAllowlist ?? []).join(', ')}
+                  onChange={e => setSearching({ entityAllowlist: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
+              </Field>
+              <Field label={<span>제외 주제 (쉼표) <HelpTip text="이 구문이 들어간 기사는 후보에서 뺍니다. 제외 키워드보다 주제·구문 단위로 넓게 거릅니다." /></span>}>
+                <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="열애설, 논란"
+                  value={(s.searching.excludeTopics ?? []).join(', ')}
+                  onChange={e => setSearching({ excludeTopics: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
+              </Field>
+              <Field label={<span>엔티티당 하루 최대 건수 <HelpTip text="같은 인물/브랜드 기사를 하루에 몇 건까지 만들지 제한합니다. 0이면 무제한. 허용 엔티티 목록이 있어야 동작합니다." /></span>}>
+                <input type="number" min={0} max={20} className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
+                  value={s.searching.maxPerEntityPerDay ?? 0}
+                  onChange={e => setSearching({ maxPerEntityPerDay: Math.max(0, Number(e.target.value) || 0) })} />
+              </Field>
+              <Field label={<span>자체 기보도 중복 회피 <HelpTip text="이미 제작·발행한 기사 제목과 겹치는 주제는 새로 만들지 않습니다." /></span>}>
+                <label className="flex h-[42px] items-center gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 text-sm text-slate-700">
+                  <input type="checkbox" checked={s.searching.ownSiteDedupe ?? false}
+                    onChange={e => setSearching({ ownSiteDedupe: e.target.checked })} />
+                  기보도 제목과 중복 시 스킵
+                </label>
+              </Field>
+            </div>
+            <div className="mt-4">
+              <Field label={<span>이미지 출처 정책 <HelpTip text="허용/금지 이미지 출처를 적습니다. 기사 생성 가이드에 그대로 주입됩니다." /></span>}>
+                <textarea className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" rows={2}
+                  placeholder="타 매체 워터마크 금지. 공식 프로모·소속사 제공분만 허용."
+                  value={s.searching.imageSourcePolicy ?? ''}
+                  onChange={e => setSearching({ imageSourcePolicy: e.target.value })} />
+              </Field>
+            </div>
+          </div>
         </Section>
       )}
 

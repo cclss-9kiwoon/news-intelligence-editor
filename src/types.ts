@@ -262,6 +262,12 @@ export type SourceConfig = {
   topicKeywords: string[];   // 포함 키워드 (비면 전체)
   excludeKeywords: string[]; // 제외 키워드
   minMediaCount: number;     // 태스크 생성 최소 매체 수
+  // ── 중복·범위 보강 (범용 스키마) ──
+  entityAllowlist: string[];   // 허용 엔티티(인물/브랜드). 비면 전체 허용
+  excludeTopics: string[];     // 제외 주제(구문 단위, 대소문자 무시)
+  maxPerEntityPerDay: number;  // 엔티티당 하루 최대 기사 건수 (0=무제한)
+  ownSiteDedupe: boolean;      // 자체 기보도 제목과 중복되면 스킵
+  imageSourcePolicy: string;   // 이미지 출처 정책 (검수 프롬프트에 주입)
 };
 
 /** ② 주제 검수 설정 — 어떤 주제를 고르나 */
