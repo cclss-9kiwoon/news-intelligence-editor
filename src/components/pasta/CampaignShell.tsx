@@ -2,8 +2,10 @@ import { useState } from 'react';
 import type { Campaign } from '../../types';
 import { useCampaigns } from '../../state/CampaignContext';
 import { useArticles } from '../../state/ArticlesContext';
-import { useTasks } from '../../state/TaskContext';
 import { KanbanBoard } from './KanbanBoard';
+import { StatusView } from './views/StatusView';
+import { PublishedView } from './views/PublishedView';
+import { DiscardedView } from './views/DiscardedView';
 import { IconBoard, IconChart, IconSend, IconTrash, IconRefresh, IconBolt, IconSettings, IconWrench, IconArrowLeft } from './icons';
 import type { ReactElement } from 'react';
 
@@ -31,7 +33,7 @@ export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTa
 }) {
   const [view, setView] = useState<ShellView>('board');
   const { setCampaignAutoCollect } = useCampaigns();
-  const { isRefreshing, refreshNow, lastRefreshedAt, articles } = useArticles();
+  const { isRefreshing, refreshNow } = useArticles();
   const auto = campaign.autoCollect ?? { enabled: true, intervalMin: 30 as const };
 
   return (
@@ -102,99 +104,10 @@ export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTa
       {/* 본문 */}
       <main className="min-w-0 flex-1">
         {view === 'board' && <KanbanBoard campaignId={campaign.id} onOpenTask={onOpenTask} />}
-        {view === 'status' && <StatusPlaceholder campaignId={campaign.id} lastRefreshedAt={lastRefreshedAt} articleCount={articles.length} />}
-        {view === 'published' && <PublishedPlaceholder campaignId={campaign.id} onOpenTask={onOpenTask} />}
-        {view === 'discarded' && <DiscardedPlaceholder campaignId={campaign.id} />}
+        {view === 'status' && <StatusView campaignId={campaign.id} onOpenTask={onOpenTask} />}
+        {view === 'published' && <PublishedView campaignId={campaign.id} onOpenTask={onOpenTask} />}
+        {view === 'discarded' && <DiscardedView campaignId={campaign.id} />}
       </main>
     </div>
-  );
-}
-
-// ── 임시 인라인 뷰 (NIE_개발 views/ 컴포넌트 랜딩 시 교체) ──
-
-function ViewFrame({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="h-full overflow-y-auto p-6">
-      <h2 className="mb-4 text-lg font-bold text-slate-800">{title}</h2>
-      {children}
-    </div>
-  );
-}
-
-function StatusPlaceholder({ campaignId, lastRefreshedAt, articleCount }: { campaignId: string; lastRefreshedAt: number | null; articleCount: number }) {
-  const { tasks } = useTasks();
-  const mine = tasks.filter(t => t.campaignId === campaignId);
-  const active = mine.filter(t => !t.published && !t.discardReason);
-  const count = (s: string) => active.filter(t => t.status === s).length;
-  const since = (() => {
-    const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime();
-  })();
-  const todayMade = mine.filter(t => t.createdAt >= since).length;
-  const todayPub = mine.filter(t => t.publishedAt && t.publishedAt >= since).length;
-  const todayDisc = mine.filter(t => t.discardReason && t.updatedAt >= since).length;
-  const reached = mine.filter(t => t.status === 'final_review' || t.published).length;
-  const passed = mine.filter(t => t.review?.passed).length;
-  const rate = reached > 0 ? Math.round((passed / reached) * 100) : 0;
-  const cell = 'rounded-xl border border-slate-200 bg-white/70 p-4';
-  return (
-    <ViewFrame title="📊 현황">
-      <div className="grid grid-cols-4 gap-3">
-        {(['searching', 'topic_review', 'producing', 'final_review'] as const).map(s => (
-          <div key={s} className={cell}><p className="text-xs text-slate-400">{({ searching: '기사 찾기', topic_review: '주제 검수', producing: '기사 작성', final_review: '최종 검수' } as Record<string, string>)[s]}</p><p className="mt-1 text-2xl font-bold text-slate-800">{count(s)}</p></div>
-        ))}
-      </div>
-      <div className="mt-3 grid grid-cols-3 gap-3">
-        <div className={cell}><p className="text-xs text-slate-400">오늘 생성</p><p className="mt-1 text-2xl font-bold text-slate-800">{todayMade}</p></div>
-        <div className={cell}><p className="text-xs text-slate-400">오늘 발행</p><p className="mt-1 text-2xl font-bold text-green-600">{todayPub}</p></div>
-        <div className={cell}><p className="text-xs text-slate-400">오늘 폐기</p><p className="mt-1 text-2xl font-bold text-slate-500">{todayDisc}</p></div>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <div className={cell}><p className="text-xs text-slate-400">검수 통과율</p><p className="mt-1 text-2xl font-bold text-slate-800">{rate}%</p><p className="text-[11px] text-slate-400">{passed}/{reached} 통과</p></div>
-        <div className={cell}><p className="text-xs text-slate-400">마지막 수집</p><p className="mt-1 text-sm font-semibold text-slate-700">{lastRefreshedAt ? new Date(lastRefreshedAt).toLocaleTimeString('ko-KR') : '—'}</p><p className="text-[11px] text-slate-400">수집 기사 {articleCount}건</p></div>
-      </div>
-    </ViewFrame>
-  );
-}
-
-function PublishedPlaceholder({ campaignId, onOpenTask }: { campaignId: string; onOpenTask: (taskId: string) => void }) {
-  const { tasks } = useTasks();
-  const pub = tasks.filter(t => t.campaignId === campaignId && t.published)
-    .sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0));
-  return (
-    <ViewFrame title={`📤 발행함 (${pub.length})`}>
-      {pub.length === 0 ? <p className="text-sm text-slate-400">🍃 발행된 기사가 없습니다.</p> : (
-        <div className="space-y-1">
-          {pub.map(t => (
-            <button key={t.id} onClick={() => onOpenTask(t.id)} className="flex w-full items-center justify-between rounded-lg border border-slate-100 bg-white/60 px-3 py-2 text-left text-sm hover:bg-white">
-              <span className="truncate text-slate-700">📄 {t.title}</span>
-              <span className="ml-2 shrink-0 text-xs text-slate-400">{t.publishedAt ? new Date(t.publishedAt).toLocaleString('ko-KR') : ''} · <span className="text-slate-300">Hydra 미연결</span></span>
-            </button>
-          ))}
-        </div>
-      )}
-    </ViewFrame>
-  );
-}
-
-function DiscardedPlaceholder({ campaignId }: { campaignId: string }) {
-  const { tasks, updateTask, deleteTask } = useTasks();
-  const disc = tasks.filter(t => t.campaignId === campaignId && t.discardReason);
-  const LABEL: Record<string, string> = { low_quality: '품질 부족', off_topic: '주제 부적합', duplicate: '중복', other: '기타' };
-  return (
-    <ViewFrame title={`🗑 폐기함 (${disc.length})`}>
-      {disc.length === 0 ? <p className="text-sm text-slate-400">🍃 폐기된 기사가 없습니다.</p> : (
-        <div className="space-y-1">
-          {disc.map(t => (
-            <div key={t.id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-white/60 px-3 py-2 text-sm">
-              <span className="min-w-0 truncate text-slate-600">📄 {t.title} <span className="ml-1 rounded-full bg-slate-100 px-1.5 text-[11px] text-slate-500">{LABEL[t.discardReason!] ?? t.discardReason}</span></span>
-              <span className="ml-2 flex shrink-0 items-center gap-2">
-                <button onClick={() => updateTask(t.id, { discardReason: undefined })} className="text-xs text-indigo-500 hover:underline">복원</button>
-                <button onClick={() => { if (confirm('영구 삭제하시겠습니까? 되돌릴 수 없습니다.')) deleteTask(t.id); }} className="text-xs text-red-400 hover:text-red-600">영구삭제</button>
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-    </ViewFrame>
   );
 }
