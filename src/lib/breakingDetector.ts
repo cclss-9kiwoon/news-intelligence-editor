@@ -25,6 +25,16 @@ export function detect(article: Article): BreakingAlert | null {
   };
 }
 
+/**
+ * 속보 판정 — 파이프라인이 Task.isBreaking 전파에 사용.
+ * 기본 BREAKING_KEYWORDS/제목 critical 매칭(detect) OR 캠페인 breakingKeywords 매칭.
+ */
+export function judgeBreaking(article: Article, breakingKeywords: string[] = []): boolean {
+  if (detect(article)) return true;
+  const text = `${article.title} ${article.description}`;
+  return breakingKeywords.some(k => k.trim() && text.includes(k.trim()));
+}
+
 const MOCK_HEADLINES = [
   '[속보] 유명 K-pop 그룹 멤버 ○○ 군 입대 발표',
   '[단독] △△ 엔터테인먼트, 새 보이그룹 데뷔 일정 공개',

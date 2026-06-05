@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detect, BREAKING_KEYWORDS, generateMockBreaking } from './breakingDetector';
+import { detect, judgeBreaking, BREAKING_KEYWORDS, generateMockBreaking } from './breakingDetector';
 import type { Article } from '../types';
 
 function art(over: Partial<Article>): Article {
@@ -33,6 +33,22 @@ describe('breakingDetector.detect', () => {
   it('marks 1 keyword match as medium', () => {
     const r = detect(art({ title: '결혼 발표' }));
     expect(r?.severity).toBe('medium');
+  });
+});
+
+describe('breakingDetector.judgeBreaking', () => {
+  it('true when default detector matches', () => {
+    expect(judgeBreaking(art({ title: '[속보] 발생' }))).toBe(true);
+    expect(judgeBreaking(art({ title: '결혼 발표' }))).toBe(true);
+  });
+  it('false for plain article with no keywords', () => {
+    expect(judgeBreaking(art({ title: '신곡 소개', description: '평범한 기사' }))).toBe(false);
+  });
+  it('true when campaign breakingKeywords match (detector miss)', () => {
+    expect(judgeBreaking(art({ title: '○○ 월드투어 추가 공연', description: '' }), ['월드투어'])).toBe(true);
+  });
+  it('campaign keywords are trimmed + empty ignored', () => {
+    expect(judgeBreaking(art({ title: '평범' }), ['', '  '])).toBe(false);
   });
 });
 

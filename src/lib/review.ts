@@ -71,7 +71,8 @@ export function runRuleChecks(draft: DraftFields, profile: ProjectProfile): Revi
 // ─── 2. LLM 검수 ────────────────────────────────────────────────────
 
 type LlmFinding = { ruleId: string; pass: boolean; message: string; field?: string };
-type LlmResponse = { findings: LlmFinding[] };
+type SensitiveJudgment = { flag: boolean; reason?: string };
+type LlmResponse = { findings: LlmFinding[]; sensitive?: SensitiveJudgment };
 
 function buildReviewSystem(profile: ProjectProfile): string {
   const enabled = profile.reviewRules.filter(r => r.enabled);
@@ -90,7 +91,11 @@ function buildReviewSystem(profile: ProjectProfile): string {
   lines.push('문제 없으면 pass=true.');
   lines.push('field는 headline/body/tags 중 해당되는 곳(없으면 생략).');
   lines.push('');
-  lines.push('오직 valid JSON: { "findings": [ { "ruleId": string, "pass": boolean, "message": string, "field"?: string } ] }');
+  lines.push('[민감주제 분류 — 자율발행 안전장치]');
+  lines.push('이 기사가 민감 주제(논란·사건사고·법적분쟁·사망/건강·정치)에 해당하면 sensitive.flag=true + reason(한 줄).');
+  lines.push('단순 컴백·발매·시상·일상은 민감 아님(flag=false). 민감이면 자동발행을 막고 사람이 확인한다.');
+  lines.push('');
+  lines.push('오직 valid JSON: { "findings": [ { "ruleId": string, "pass": boolean, "message": string, "field"?: string } ], "sensitive": { "flag": boolean, "reason"?: string } }');
   return lines.join('\n');
 }
 
@@ -103,9 +108,11 @@ function buildReviewUser(draft: DraftFields): string {
   ].join('\n\n');
 }
 
-export async function runLlmChecks(draft: DraftFields, settings: Settings): Promise<ReviewFinding[]> {
+export type LlmCheckResult = { findings: ReviewFinding[]; sensitive: SensitiveJudgment };
+
+export async function runLlmChecks(draft: DraftFields, settings: Settings): Promise<LlmCheckResult> {
   const enabled = settings.projectProfile.reviewRules.filter(r => r.enabled);
-  if (enabled.length === 0) return [];
+  if (enabled.length === 0) return { findings: [], sensitive: { flag: false } };
 
   const out = await chatJson<LlmResponse>({
     apiKey: settings.apiKey,
@@ -136,7 +143,7 @@ export async function runLlmChecks(draft: DraftFields, settings: Settings): Prom
       source: 'llm',
     });
   }
-  return findings;
+  return { findings, sensitive: out.sensitive ?? { flag: false } };
 }
 
 // ─── 통합 검수 ──────────────────────────────────────────────────────
@@ -145,10 +152,15 @@ export async function reviewDraft(draft: DraftFields, settings: Settings): Promi
   const ruleFindings = runRuleChecks(draft, settings.projectProfile);
 
   let llmFindings: ReviewFinding[] = [];
+  let sensitive: SensitiveJudgment = { flag: false };
+  let llmFailed = false;
   try {
-    llmFindings = await runLlmChecks(draft, settings);
+    const r = await runLlmChecks(draft, settings);
+    llmFindings = r.findings;
+    sensitive = r.sensitive;
   } catch (err) {
-    // LLM 검수 실패해도 규칙기반 결과는 반환
+    // LLM 검수 실패해도 규칙기반 결과는 반환. 단 LLM 판정 불가 = 불확실 → 사람 확인.
+    llmFailed = true;
     llmFindings = [{
       ruleId: 'llm-error', label: 'LLM 검수 오류', severity: 'warn', source: 'llm',
       message: err instanceof Error ? err.message : 'LLM 검수 호출 실패',
@@ -157,5 +169,15 @@ export async function reviewDraft(draft: DraftFields, settings: Settings): Promi
 
   const findings = [...ruleFindings, ...llmFindings];
   const passed = !findings.some(f => f.severity === 'block');
-  return { passed, findings, checkedAt: Date.now() };
+
+  // 자율발행 안전장치 — needsHuman: block 존재 OR 민감주제 OR LLM 검수 불확실(실패)
+  const reasons: string[] = [];
+  for (const f of findings) {
+    if (f.severity === 'block') reasons.push(`차단: ${f.label}`);
+  }
+  if (sensitive.flag) reasons.push(`민감 주제${sensitive.reason ? ` — ${sensitive.reason}` : ''}`);
+  if (llmFailed) reasons.push('LLM 검수 불가(불확실) — 사람 확인 필요');
+  const needsHuman = reasons.length > 0;
+
+  return { passed, findings, checkedAt: Date.now(), needsHuman, needsHumanReasons: reasons };
 }
