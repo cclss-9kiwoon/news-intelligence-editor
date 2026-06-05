@@ -4,6 +4,7 @@ import { useArticles } from '../../state/ArticlesContext';
 import { useClusters } from '../../state/ClustersContext';
 import { useCampaigns } from '../../state/CampaignContext';
 import { shouldClaimCluster } from '../../lib/searchFilter';
+import { IconTrash } from './icons';
 import type { Task, TaskStatus } from '../../types';
 
 type ColMeta = {
@@ -143,7 +144,7 @@ function TaskCard({ task, onOpen, onDelete, onRetry }: { task: Task; onOpen: () 
           onClick={e => { e.stopPropagation(); if (confirm('이 기사 건을 삭제할까요?')) onDelete(); }}
           aria-label="기사 건 삭제"
           className="shrink-0 text-slate-300 hover:text-red-500 transition-colors"
-        >🗑</button>
+        ><IconTrash className="h-4 w-4" /></button>
       </div>
 
       {/* 진행 중 표시 — 자동 단계에서 작업이 돌아가는 중 (스피너 + 라벨) */}
