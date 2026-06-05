@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useCampaigns } from '../../state/CampaignContext';
 import { useTasks } from '../../state/TaskContext';
 import { HelpTip } from './HelpTip';
+import { IconCopy } from './icons';
 import type { Group, ChannelType, FormalityLevel, SourceStrictness, ArticleWindow, Campaign, Task } from '../../types';
 
 const WINDOW_LABEL: Record<ArticleWindow, string> = {
@@ -258,7 +259,7 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
                         aria-label={`캠페인 복제: ${c.name}`}
                         onClick={e => { e.stopPropagation(); const copy = duplicateCampaign(c.id); if (copy) onOpenCampaign(copy.id); }}
                         className="text-slate-300 hover:text-indigo-500"
-                      >📑</button>
+                      ><IconCopy className="h-3.5 w-3.5" /></button>
                       <span className="text-xs font-semibold text-slate-400 group-hover:text-slate-700">설정 →</span>
                     </span>
                   </div>

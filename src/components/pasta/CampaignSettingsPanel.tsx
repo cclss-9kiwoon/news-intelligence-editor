@@ -10,6 +10,7 @@ import { testNaverConnection } from '../../lib/naver';
 import { testDaumConnection } from '../../lib/daum';
 import { HelpTip } from './HelpTip';
 import { TagInput } from './TagInput';
+import { IconTrash } from './icons';
 import type { ReferenceArticle } from '../../types';
 
 const WINDOWS: { value: ArticleWindow; label: string }[] = [
@@ -559,7 +560,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
               {s.generation.referenceArticles.map(r => (
                 <div key={r.id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-white/60 px-2 py-1.5 text-xs">
                   <span className="truncate text-slate-700">📄 {r.title} <span className="text-slate-400">({r.body.length}자)</span></span>
-                  <button onClick={() => removeReference(r.id)} aria-label={`참고 기사 삭제: ${r.title}`} className="ml-2 shrink-0 text-slate-300 hover:text-red-500">🗑</button>
+                  <button onClick={() => removeReference(r.id)} aria-label={`참고 기사 삭제: ${r.title}`} className="ml-2 shrink-0 text-slate-300 hover:text-red-500"><IconTrash className="h-3.5 w-3.5" /></button>
                 </div>
               ))}
             </div>
