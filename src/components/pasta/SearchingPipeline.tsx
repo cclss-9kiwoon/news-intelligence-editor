@@ -26,7 +26,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   const { clusters } = useClusters();
   const { articles } = useArticles();
   const { settings } = useSettings();
-  const { tasks, addTask, updateTask, deleteTask } = useTasks();
+  const { tasks, addTasks, updateTask, deleteTask } = useTasks();
   const producingRef = useRef<Set<string>>(new Set());
   const topicJudgeRef = useRef<Set<string>>(new Set()); // 제외 주제 AI 판단 진행 중 가드
   const mountedRef = useRef(true);
@@ -63,7 +63,11 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     const now = Date.now();
     const working: Task[] = tasks.filter(t => t.campaignId === campaign.id);
 
+    // 점진화: 한 사이클에 클러스터 전부 생성 금지(흰화면/프리즈 방지). 상한만큼 모아 1회 벌크 setState.
+    const MAX_NEW_PER_CYCLE = 24;
+    const batch: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>[] = [];
     for (const cluster of clusters) {
+      if (batch.length >= MAX_NEW_PER_CYCLE) break;
       const decision = shouldClaimCluster(cluster, articles, searchingCfg, working, now);
       if (!decision.ok) continue;
       // 골든타임: 대표 기사 pubDate 기준 유효창. 속보면 짧은 창(breakingGoldenMinutes).
@@ -71,15 +75,18 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       const startsAt = repArt?.pubDate && !Number.isNaN(Date.parse(repArt.pubDate)) ? Date.parse(repArt.pubDate) : now;
       const isBreaking = repArt ? judgeBreaking(repArt, searchingCfg.breakingKeywords ?? []) : false;
       const goldenSpan = isBreaking ? (searchingCfg.breakingGoldenMinutes ?? 60) * 60_000 : windowMs;
-      const created = addTask({
-        campaignId: campaign.id, status: 'searching',
+      const spec = {
+        campaignId: campaign.id, status: 'searching' as const,
         title: cluster.representativeTitle, clusterId: cluster.id,
         sources: decision.sources, imageCount: decision.imageCount,
         isBreaking,
         goldenTime: { startsAt, expiresAt: startsAt + goldenSpan },
-      });
-      working.push(created);
+      };
+      batch.push(spec);
+      // 동일 사이클 중복 점유 방지용 합성 태스크
+      working.push({ ...spec, id: `__pending_${cluster.id}`, createdAt: now, updatedAt: now });
     }
+    if (batch.length > 0) addTasks(batch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusters, articles, taskSig, campaign.id, campaign.autoCollect?.enabled]);
 

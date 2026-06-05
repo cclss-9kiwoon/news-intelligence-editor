@@ -8,6 +8,7 @@ type Ctx = {
   tasks: Task[];
   tasksForCampaign: (campaignId: string) => Task[];
   addTask: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => Task;
+  addTasks: (tasks: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>[]) => Task[];
   updateTask: (id: string, patch: Partial<Task>) => void;
   moveTask: (id: string, status: TaskStatus) => void;
   deleteTask: (id: string) => void;
@@ -34,6 +35,15 @@ export function TaskProvider({ children }: { children: ReactNode }) {
     const now = Date.now();
     const full: Task = { ...task, id: `task_${crypto.randomUUID()}`, createdAt: now, updatedAt: now };
     setTasks(prev => [...prev, full]);
+    return full;
+  }, []);
+
+  // 벌크 생성 — 한 번의 setState로 다건 추가(대량 생성 시 재렌더 폭발 방지). 생성된 Task[] 반환.
+  const addTasks = useCallback((items: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>[]) => {
+    if (items.length === 0) return [];
+    const now = Date.now();
+    const full: Task[] = items.map(t => ({ ...t, id: `task_${crypto.randomUUID()}`, createdAt: now, updatedAt: now }));
+    setTasks(prev => [...prev, ...full]);
     return full;
   }, []);
 
@@ -66,7 +76,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <TaskCtx.Provider value={{ tasks, tasksForCampaign, addTask, updateTask, moveTask, deleteTask, togglePriority, pauseTask, resumeTask, discardTask }}>
+    <TaskCtx.Provider value={{ tasks, tasksForCampaign, addTask, addTasks, updateTask, moveTask, deleteTask, togglePriority, pauseTask, resumeTask, discardTask }}>
       {children}
     </TaskCtx.Provider>
   );

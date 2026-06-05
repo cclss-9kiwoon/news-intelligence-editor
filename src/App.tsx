@@ -22,6 +22,7 @@ import { CampaignShell } from './components/pasta/CampaignShell';
 import { SearchingPipeline } from './components/pasta/SearchingPipeline';
 import { CampaignWorkspace } from './components/pasta/CampaignWorkspace';
 import { loadJson, saveJson } from './lib/storage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const COLLAPSE_KEY = 'nie:workbench-collapsed';
 
@@ -183,7 +184,9 @@ export default function App() {
     <SettingsProvider>
       <CampaignProvider>
         <TaskProvider>
-          <PastaRouter />
+          <ErrorBoundary label="pasta-root">
+            <PastaRouter />
+          </ErrorBoundary>
         </TaskProvider>
       </CampaignProvider>
     </SettingsProvider>
