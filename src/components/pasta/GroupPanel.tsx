@@ -3,7 +3,8 @@ import { useCampaigns } from '../../state/CampaignContext';
 import { useTasks } from '../../state/TaskContext';
 import { HelpTip } from './HelpTip';
 import { IconCopy } from './icons';
-import type { Group, ChannelType, FormalityLevel, SourceStrictness, ArticleWindow, Campaign, Task } from '../../types';
+import type { Group, ChannelType, FormalityLevel, SourceStrictness, ArticleWindow, Campaign, Task, ProviderId } from '../../types';
+import { PROVIDERS } from '../../types';
 
 const WINDOW_LABEL: Record<ArticleWindow, string> = {
   '1h': '1시간', '24h': '24시간', '7d': '7일', '30d': '30일', breaking: '속보',
@@ -201,6 +202,43 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
           </div>
         </div>
         )}
+      </div>
+
+      {/* 그룹 AI(LLM) 설정 — 이 그룹 캠페인의 기본 AI. 캠페인 단계가 오버라이드. */}
+      <div className="mb-5 rounded-2xl border border-white/70 bg-white/70 p-5 shadow-sm backdrop-blur-md">
+        <h3 className="mb-1 font-bold text-slate-800">🤖 AI(LLM) 설정 <HelpTip text="이 그룹 캠페인이 기본으로 쓰는 AI입니다. 키를 여기서 등록하면 기사 작성·검수에 사용됩니다. 캠페인 단계별로 다른 모델/키를 쓰려면 캠페인 설정에서 오버라이드합니다." /></h3>
+        <p className="mb-4 text-xs text-slate-400">기사 생성에 쓰는 AI. 키 미등록 시 ③ 생성이 안 됩니다.</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-600">제공자</label>
+            <select className={inputCls} value={p.llm?.provider ?? ''}
+              onChange={e => updateGroupProfile(group.id, { llm: { ...p.llm, provider: (e.target.value || undefined) as ProviderId | undefined, baseUrl: e.target.value ? PROVIDERS[e.target.value as ProviderId]?.baseUrl : p.llm?.baseUrl } })}>
+              <option value="">(글로벌 기본 사용)</option>
+              {Object.values(PROVIDERS).map(pr => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-600">모델</label>
+            <select className={inputCls} value={p.llm?.model ?? ''} disabled={!p.llm?.provider}
+              onChange={e => updateGroupProfile(group.id, { llm: { ...p.llm, model: e.target.value || undefined } })}>
+              <option value="">{p.llm?.provider ? '(제공자 기본)' : '제공자 먼저 선택'}</option>
+              {(p.llm?.provider ? PROVIDERS[p.llm.provider]?.models ?? [] : []).map(m => <option key={m.id} value={m.id}>{m.label}{m.note ? ` · ${m.note}` : ''}</option>)}
+            </select>
+          </div>
+          <div className="col-span-2">
+            <label className="mb-1 block text-sm font-medium text-slate-600">API 키 <span className="text-[11px] text-slate-400">(브라우저에만 저장)</span></label>
+            <input type="password" className={inputCls} value={p.llm?.apiKey ?? ''} placeholder={p.llm?.provider ? `${PROVIDERS[p.llm.provider]?.name} API 키 입력` : '제공자 먼저 선택'}
+              onChange={e => updateGroupProfile(group.id, { llm: { ...p.llm, apiKey: e.target.value || undefined } })} />
+            {p.llm?.provider && <p className="mt-1 text-[11px] text-slate-400">{PROVIDERS[p.llm.provider]?.keyHelp}</p>}
+          </div>
+          {p.llm?.provider === 'custom' && (
+            <div className="col-span-2">
+              <label className="mb-1 block text-sm font-medium text-slate-600">Base URL</label>
+              <input className={inputCls} value={p.llm?.baseUrl ?? ''} placeholder="https://... (OpenAI 호환 endpoint)"
+                onChange={e => updateGroupProfile(group.id, { llm: { ...p.llm, baseUrl: e.target.value || undefined } })} />
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-white/70 bg-white/70 p-5 shadow-sm backdrop-blur-md">

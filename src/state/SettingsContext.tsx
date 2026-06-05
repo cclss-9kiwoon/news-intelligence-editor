@@ -220,8 +220,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       : [...(cs.searching.daumQueries ?? [])];
     const apiEnabled = cs.searching.apiEnabled ?? true;
     const rssEnabled = cs.searching.rssEnabled ?? true;
+    // 그룹 LLM → 글로벌 Settings 오버라이드(키 진입점). 단계별 오버라이드는 resolveStageLLM(추후)에서.
+    const gl = groupProfile?.llm;
+    const llmOverride = gl && gl.enabled !== false ? {
+      ...(gl.provider ? { provider: gl.provider } : {}),
+      ...(gl.apiKey ? { apiKey: gl.apiKey } : {}),
+      ...(gl.model ? { model: gl.model } : {}),
+      ...(gl.baseUrl ? { apiBaseUrl: gl.baseUrl } : {}),
+    } : {};
     return {
       ...s,
+      ...llmOverride,
       rssSources: rssEnabled ? clone(cs.searching.rssSources) : clone(cs.searching.rssSources).map(r => ({ ...r, enabled: false })),
       naverQueries: apiEnabled ? (naverQueries.length ? naverQueries : [...cs.searching.naverQueries]) : [],
       daumQueries: apiEnabled ? (daumQueries.length ? daumQueries : [...(cs.searching.daumQueries ?? [])]) : [],
