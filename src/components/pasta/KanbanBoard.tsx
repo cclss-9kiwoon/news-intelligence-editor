@@ -7,6 +7,26 @@ import { shouldClaimCluster } from '../../lib/searchFilter';
 import { IconTrash } from './icons';
 import type { Task, TaskStatus } from '../../types';
 
+const HOUR = 3600_000;
+
+// 골든타임 파생값 (저장 안 함, 렌더 계산). gt 없으면 null.
+export type GoldenView = { remainingMs: number; percent: number; state: 'ok' | 'warning' | 'expired' };
+function computeGolden(gt: Task['goldenTime'], now: number): GoldenView | null {
+  if (!gt) return null;
+  const total = Math.max(1, gt.expiresAt - gt.startsAt);
+  const remainingMs = gt.expiresAt - now;
+  const percent = Math.max(0, Math.min(100, Math.round((remainingMs / total) * 100)));
+  const state = remainingMs <= 0 ? 'expired' : percent < 20 ? 'warning' : 'ok';
+  return { remainingMs, percent, state };
+}
+function fmtDur(ms: number): string {
+  if (ms <= 0) return '만료';
+  const m = Math.floor(ms / 60000);
+  if (m < 60) return `${m}분`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}시간` : `${Math.floor(h / 24)}일`;
+}
+
 type ColMeta = {
   status: TaskStatus; label: string; auto: boolean;
   bar: string;        // 상단 컬러 바
@@ -23,7 +43,7 @@ const COLUMNS: ColMeta[] = [
 ];
 
 export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; onOpenTask: (taskId: string) => void }) {
-  const { tasks: allTasks, deleteTask, updateTask } = useTasks();
+  const { tasks: allTasks, deleteTask, updateTask, togglePriority, pauseTask, resumeTask, discardTask } = useTasks();
   const { isRefreshing, loadingStatus, lastRefreshedAt, articles, refreshNow } = useArticles();
   const { clusters } = useClusters();
   const { campaigns } = useCampaigns();
@@ -33,6 +53,16 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
     [allTasks, campaignId],
   );
   const retryTask = (id: string) => updateTask(id, { error: undefined, produceAttempts: 0, status: 'producing' });
+  const publishTask = (id: string) => updateTask(id, { published: true, publishedAt: Date.now() });
+
+  // 리듬바 수치 (피카소 GaugeChip/InfoChip용)
+  const maxPerHour = campaigns.find(c => c.id === campaignId)?.settings.searching.maxPerHour ?? 3;
+  const rhythm = useMemo(() => {
+    const now = Date.now();
+    const promotedLastHour = tasks.filter(t => t.promotedAt && now - t.promotedAt <= HOUR).length;
+    const queueCount = tasks.filter(t => t.status === 'searching' && !t.error && !t.paused).length;
+    return { promotedLastHour, maxPerHour, queueCount, collected: articles.length, atCap: maxPerHour > 0 && promotedLastHour >= maxPerHour };
+  }, [tasks, maxPerHour, articles.length]);
 
   // 0건 진단: 수집은 됐는데 태스크가 안 생기는 이유를 클러스터 거부 사유로 집계
   const searching = campaigns.find(c => c.id === campaignId)?.settings.searching;
@@ -79,6 +109,13 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
             ⚠ 묶음 {noTaskHint.clusterCount}개 · 생성 0 — {noTaskHint.text}
           </span>
         )}
+
+        {/* 리듬바: 승급 처리량 / 대기 / 수집 (피카소 GaugeChip 자리) */}
+        <span data-rhythm className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs backdrop-blur-md ${rhythm.atCap ? 'border-amber-200/70 bg-amber-50/70 text-amber-700' : 'border-white/60 bg-white/55 text-slate-500'}`}>
+          승급 {rhythm.promotedLastHour}/{rhythm.maxPerHour === 0 ? '∞' : rhythm.maxPerHour}·시간
+          <span className="text-slate-300">|</span> ①대기 {rhythm.queueCount}
+          <span className="text-slate-300">|</span> 수집 {rhythm.collected}
+        </span>
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 px-4 pb-6 pt-3 sm:grid-cols-2 sm:px-8 xl:grid-cols-4">
         {COLUMNS.map(col => {
@@ -103,7 +140,16 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
               </div>
               <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-4">
                 {colTasks.map(t => (
-                  <TaskCard key={t.id} task={t} onOpen={() => onOpenTask(t.id)} onDelete={() => deleteTask(t.id)} onRetry={() => retryTask(t.id)} />
+                  <TaskCard key={t.id} task={t}
+                    onOpen={() => onOpenTask(t.id)}
+                    onDelete={() => deleteTask(t.id)}
+                    onRetry={() => retryTask(t.id)}
+                    onTogglePriority={() => togglePriority(t.id)}
+                    onPause={() => pauseTask(t.id)}
+                    onResume={() => resumeTask(t.id)}
+                    onDiscard={() => discardTask(t.id, 'other')}
+                    onPublish={() => publishTask(t.id)}
+                  />
                 ))}
                 {colTasks.length === 0 && (
                   <div className="mt-1 flex flex-col items-center gap-1.5 rounded-2xl border-2 border-dashed border-slate-200/70 py-10 text-center">
@@ -120,10 +166,15 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   );
 }
 
-function TaskCard({ task, onOpen, onDelete, onRetry }: { task: Task; onOpen: () => void; onDelete: () => void; onRetry: () => void }) {
+function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, onResume, onDiscard, onPublish }: {
+  task: Task; onOpen: () => void; onDelete: () => void; onRetry: () => void;
+  onTogglePriority: () => void; onPause: () => void; onResume: () => void; onDiscard: () => void; onPublish: () => void;
+}) {
   const fullTextCount = task.sources.filter(s => s.hasFullText).length;
   const mediaCount = new Set(task.sources.map(s => s.source)).size;
   const verified = task.status === 'final_review' && task.review?.passed;
+  const golden = task.status === 'searching' && !task.error ? computeGolden(task.goldenTime, Date.now()) : null;
+  const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
   const attempts = task.produceAttempts ?? 0;
   const retrying = task.status === 'producing' && !task.draft && !task.error && attempts >= 1;
   const inProgress = taskActive(task);
@@ -139,13 +190,37 @@ function TaskCard({ task, onOpen, onDelete, onRetry }: { task: Task; onOpen: () 
       className="pasta-springy cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold leading-snug text-slate-800 line-clamp-2">📰 {task.title}</p>
-        <button
-          onClick={e => { e.stopPropagation(); if (confirm('이 기사 건을 삭제할까요?')) onDelete(); }}
-          aria-label="기사 건 삭제"
-          className="shrink-0 text-slate-300 hover:text-red-500 transition-colors"
-        ><IconTrash className="h-4 w-4" /></button>
+        <p className="text-sm font-semibold leading-snug text-slate-800 line-clamp-2">
+          {task.priority && <span title="우선" className="text-amber-500">★ </span>}📰 {task.title}
+        </p>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <button onClick={stop(onTogglePriority)} aria-label="우선 처리 토글"
+            className={`transition-colors ${task.priority ? 'text-amber-500' : 'text-slate-300 hover:text-amber-400'}`}>★</button>
+          <button onClick={e => { e.stopPropagation(); if (confirm('이 기사 건을 삭제할까요?')) onDelete(); }}
+            aria-label="기사 건 삭제" className="text-slate-300 hover:text-red-500 transition-colors"><IconTrash className="h-4 w-4" /></button>
+        </span>
       </div>
+
+      {/* 골든타임 바 (① 대기) — 피카소 GoldenTimeBar 자리. data-* 로 값 노출 */}
+      {golden && (
+        <div data-golden-state={golden.state} data-golden-percent={golden.percent} className="mt-2">
+          <div className="h-1 w-full overflow-hidden rounded-full bg-slate-100">
+            <div className={`h-full rounded-full ${golden.state === 'expired' ? 'bg-red-400' : golden.state === 'warning' ? 'bg-amber-400' : 'bg-blue-400'}`} style={{ width: `${golden.percent}%` }} />
+          </div>
+          <p className={`mt-0.5 text-[10px] font-mono ${golden.state === 'warning' ? 'text-amber-600' : 'text-slate-400'}`}>골든타임 {fmtDur(golden.remainingMs)} 남음</p>
+        </div>
+      )}
+
+      {/* 보류 상태 — [재개]/[폐기] */}
+      {task.paused && (
+        <div className="mt-2 flex items-center justify-between rounded-lg bg-slate-100 px-2 py-1 text-[11px]">
+          <span className="font-semibold text-slate-500">⏸ 보류 중</span>
+          <span className="flex gap-2">
+            <button onClick={stop(onResume)} className="text-indigo-500 hover:underline">재개</button>
+            <button onClick={stop(onDiscard)} className="text-red-400 hover:text-red-600">폐기</button>
+          </span>
+        </div>
+      )}
 
       {/* 진행 중 표시 — 자동 단계에서 작업이 돌아가는 중 (스피너 + 라벨) */}
       {inProgress && (
@@ -216,6 +291,21 @@ function TaskCard({ task, onOpen, onDelete, onRetry }: { task: Task; onOpen: () 
           </div>
         )}
       </div>
+
+      {/* 액션 푸터 — 자동 단계: 보류 / ④ Verified: 빠른발행 */}
+      {!task.paused && !task.error && (
+        <div className="mt-2 flex items-center gap-2 border-t border-slate-100 pt-2 text-[11px]">
+          {task.status === 'final_review' && verified && !task.published && (
+            <button onClick={stop(onPublish)} className="rounded-md bg-green-600 px-2 py-0.5 font-semibold text-white hover:bg-green-700">⚡ 빠른 발행</button>
+          )}
+          {task.status === 'final_review' && task.review && !task.review.passed && (
+            <button onClick={stop(onOpen)} className="rounded-md border border-amber-300 px-2 py-0.5 font-semibold text-amber-700 hover:bg-amber-50">검토</button>
+          )}
+          {task.status !== 'final_review' && (
+            <button onClick={stop(onPause)} className="text-slate-400 hover:text-slate-600">⏸ 보류</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
