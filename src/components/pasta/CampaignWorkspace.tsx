@@ -107,7 +107,7 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
           </div>
 
           <div>
-            <h4 className="mb-1.5 text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400">원문 소스 ({srcArticles.length})</h4>
+            <h4 className="mb-1.5 text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400">원문 출처 ({srcArticles.length})</h4>
             <div className="space-y-1.5">
               {task.sources.map(s => (
                 <div key={s.articleId} className="rounded-lg border border-slate-100 bg-white/70 px-2.5 py-1.5 text-xs text-slate-600">

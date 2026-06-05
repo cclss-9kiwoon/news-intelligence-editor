@@ -86,9 +86,9 @@ export function ProjectProfileTab() {
           </div>
         </section>
 
-        {/* 소스 매체 정책 */}
+        {/* 출처 매체 정책 */}
         <section>
-          <h3 className="mb-2 font-semibold text-sm">소스 매체 정책</h3>
+          <h3 className="mb-2 font-semibold text-sm">출처 매체 정책</h3>
           <div className="space-y-2">
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-500">허용 매체 (쉼표 구분, 비우면 전체 허용)</label>
@@ -186,7 +186,7 @@ export function ProjectProfileTab() {
             value={p.styleGuide}
             onChange={e => setProfile({ styleGuide: e.target.value })}
             rows={5}
-            placeholder="예: News Article URL 필드는 비운다. 단일 소스 링크를 본문에 넣지 않는다."
+            placeholder="예: News Article URL 필드는 비운다. 단일 출처 링크를 본문에 넣지 않는다."
             className="w-full rounded border border-slate-300 px-3 py-2 text-sm leading-relaxed"
           />
         </section>
@@ -199,7 +199,7 @@ export function ProjectProfileTab() {
               <Plus size={12} /> 항목 추가
             </button>
           </div>
-          <p className="mb-2 text-xs text-slate-500">기본 검수(팩트 정합·엔티티)에 더해, 이 매체만의 검수 기준을 추가합니다. <b>block</b>=발행 차단, <b>warn</b>=경고만.</p>
+          <p className="mb-2 text-xs text-slate-500">기본 검수(사실 일치·핵심 이름)에 더해, 이 매체만의 검수 기준을 추가합니다. <b>block</b>=발행 차단, <b>warn</b>=경고만.</p>
           <div className="space-y-2">
             {p.reviewRules.map(r => (
               <div key={r.id} className="rounded border border-slate-200 p-2">

@@ -109,7 +109,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       if (fullTextCount > 0) {
         updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
       } else if (Date.now() - t.createdAt > SOURCE_REVIEW_TIMEOUT_MS) {
-        updateTask(t.id, { sources: refreshed, error: '전문 수집 실패 (소스 0건)' });
+        updateTask(t.id, { sources: refreshed, error: '전문 수집 실패 (출처 0건)' });
       } else if (changed) {
         updateTask(t.id, { sources: refreshed, imageCount });
       }

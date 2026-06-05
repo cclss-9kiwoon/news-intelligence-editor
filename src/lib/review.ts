@@ -60,7 +60,7 @@ export function runRuleChecks(draft: DraftFields, profile: ProjectProfile): Revi
     if (body.includes(media) || (draft.sourceFacts || []).some(s => s.includes(media))) {
       findings.push({
         ruleId: `fmt-banned-media-${media}`, label: '금지 매체', severity: 'block', source: 'rule', field: 'body',
-        message: `금지 매체 "${media}" 가 본문/소스에 인용됨.`,
+        message: `금지 매체 "${media}" 가 본문/출처에 인용됨.`,
       });
     }
   }

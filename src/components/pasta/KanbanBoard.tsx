@@ -12,10 +12,10 @@ type ColMeta = {
 
 // 단계별 컬러코딩: 자동 단계=블루, 검수=앰버, 결과=그린
 const COLUMNS: ColMeta[] = [
-  { status: 'searching',    label: '서칭',        auto: true,  bar: 'bg-blue-400',  badge: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500' },
+  { status: 'searching',    label: '기사 찾기',    auto: true,  bar: 'bg-blue-400',  badge: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500' },
   { status: 'topic_review', label: '주제 검수',    auto: true,  bar: 'bg-blue-400',  badge: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500' },
-  { status: 'producing',    label: '아티클 제작',  auto: true,  bar: 'bg-blue-400',  badge: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500' },
-  { status: 'final_review', label: '결과물 검수',  auto: false, bar: 'bg-amber-400', badge: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500' },
+  { status: 'producing',    label: '기사 작성',    auto: true,  bar: 'bg-blue-400',  badge: 'bg-blue-100 text-blue-700',   dot: 'bg-blue-500' },
+  { status: 'final_review', label: '최종 검수',    auto: false, bar: 'bg-amber-400', badge: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500' },
 ];
 
 export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; onOpenTask: (taskId: string) => void }) {

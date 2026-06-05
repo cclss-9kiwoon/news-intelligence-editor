@@ -13,8 +13,8 @@ export const ALLKPOP_TOPIC_RULES = {
 2. 영어권 인지도 높은 아티스트 우선 (BTS·BLACKPINK·TWICE·SEVENTEEN·Stray Kids·ENHYPEN·aespa·IVE·LE SSERAFIM·KATSEYE 등).
 3. BTS 편중 금지 — 아티스트 다양화.`,
   dedupeRules: `중복 = 아티스트가 아니라 스토리/내용 기준.
-- 같은 아티스트 하루 최대 2건, 단 앵글(내용)은 절대 중복 금지.
-- allkpop 기보도 스토리 재탕 금지. 다른 앵글(차트결과/마일스톤)이면 별건 OK.
+- 같은 아티스트 하루 최대 2건, 단 내용은 절대 중복 금지.
+- allkpop 기보도 스토리 재탕 금지. 다른 관점(차트결과/마일스톤)이면 별건 OK.
 - 컴백 발표류는 allkpop이 빠르게 커버 → 차트결과/마일스톤형이 중복 회피에 유리.`,
   allowedSources: ['디스패치', '네이버', '다음', '스타뉴스', 'OSEN', '스포츠경향', 'Newsen', '한터뉴스'],
   bannedSources: ['Soompi', 'Korea Herald', 'Koreaboo'],
@@ -29,8 +29,8 @@ export const ALLKPOP_PROMPT_CONFIG: PromptConfig = {
 - 인용: 소개 먼저, 인용문 뒤 "A rep said, ..." 패턴.
 - 미확인 사실은 "reportedly", "according to reports"로 표기.`,
   taskInstructions: `1. 한국 매체 2곳+ 교차검증된 팩트만 사용.
-2. allkpop 기존 기사와 앵글 중복 확인 (같은 아티스트라도 내용 다르면 OK).
-3. 수치(차트/판매량/날짜) 정확성 확인, 헤드라인↔본문 정합성 유지.`,
+2. allkpop 기존 기사와 내용 중복 확인 (같은 아티스트라도 내용 다르면 OK).
+3. 수치(차트/판매량/날짜) 정확성 확인, 헤드라인↔본문 내용 일치 유지.`,
   bannedExpressions: 'Congratulations, Let us know your thoughts in the comments below, What do you think, exciting, heartwarming, captivating, we are absolutely here for it, delve, furthermore',
 };
 
@@ -75,8 +75,8 @@ export const ALLKPOP_REVIEW_RULES: ReviewRule[] = [
   },
   {
     id: 'akp-source',
-    label: '소스 규칙',
-    instruction: '허용: 디스패치/네이버/다음/스타뉴스/스포츠경향/한터뉴스. 금지: Soompi/Korea Herald/Koreaboo(2차 소스).',
+    label: '출처 규칙',
+    instruction: '허용: 디스패치/네이버/다음/스타뉴스/스포츠경향/한터뉴스. 금지: Soompi/Korea Herald/Koreaboo(2차 출처).',
     severity: 'block', enabled: true,
   },
   {
@@ -88,7 +88,7 @@ export const ALLKPOP_REVIEW_RULES: ReviewRule[] = [
   {
     id: 'akp-fact',
     label: '팩트 검수',
-    instruction: '수치(차트순위/판매량/날짜) 정확성, 헤드라인↔본문 정합성, 미확인 사실 확정 서술 금지(reportedly 사용).',
+    instruction: '수치(차트순위/판매량/날짜) 정확성, 헤드라인↔본문 내용 일치, 미확인 사실 확정 서술 금지(reportedly 사용).',
     severity: 'block', enabled: true,
   },
 ];

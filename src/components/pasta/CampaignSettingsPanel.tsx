@@ -22,10 +22,10 @@ type Step = 1 | 2 | 3 | 4;
 type ApiStatus = { state: 'idle' | 'testing' | 'ok' | 'error'; message: string };
 // 칸반 단계 컬러 체계와 1:1 — 자동(서칭/주제검수/생성)=블루, 결과물검수=앰버
 const STEPS: { n: Step; label: string; short: string; auto: boolean; active: string; dot: string }[] = [
-  { n: 1, label: '서칭',        short: '①', auto: true,  active: 'bg-blue-500',  dot: 'bg-blue-500' },
+  { n: 1, label: '기사 찾기',    short: '①', auto: true,  active: 'bg-blue-500',  dot: 'bg-blue-500' },
   { n: 2, label: '주제 검수',    short: '②', auto: true,  active: 'bg-blue-500',  dot: 'bg-blue-500' },
-  { n: 3, label: '생성',        short: '③', auto: true,  active: 'bg-blue-500',  dot: 'bg-blue-500' },
-  { n: 4, label: '결과물 검수',  short: '④', auto: false, active: 'bg-amber-500', dot: 'bg-amber-500' },
+  { n: 3, label: '기사 작성',    short: '③', auto: true,  active: 'bg-blue-500',  dot: 'bg-blue-500' },
+  { n: 4, label: '최종 검수',    short: '④', auto: false, active: 'bg-amber-500', dot: 'bg-amber-500' },
 ];
 
 export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign; onOpen: () => void }) {
@@ -185,13 +185,13 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
         ))}
       </div>
 
-      {/* ① 서칭 */}
+      {/* ① 기사 찾기 */}
       {step === 1 && (
-        <Section title="📌 서칭" desc="어디서 어떤 기사를 가져올지" auto onSave={() => saveAndNext(1)} saved={savedSteps.has(1)}>
+        <Section title="📌 기사 찾기" desc="어디서 어떤 기사를 가져올지" auto onSave={() => saveAndNext(1)} saved={savedSteps.has(1)}>
           <div className="rounded-2xl border border-slate-200 bg-white/65 p-4">
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <h4 className="font-semibold text-slate-800">① API 설정</h4>
+                <h4 className="font-semibold text-slate-800">① 검색 API 설정</h4>
                 <p className="text-xs text-slate-400">네이버/다음 검색 API로 넓게 찾습니다.</p>
               </div>
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
@@ -200,7 +200,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                   checked={apiEnabled}
                   onChange={e => setSearching({ apiEnabled: e.target.checked })}
                 />
-                API 수집
+                검색 API 사용
               </label>
             </div>
             <div className={`space-y-3 rounded-xl border border-slate-200 bg-white/60 p-3 transition-opacity ${apiEnabled ? '' : 'pointer-events-none opacity-45'}`}>
@@ -297,12 +297,12 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                   검색 API(네이버/다음)로 들어온 기사의 원문 매체를 거릅니다. 허용 목록이 있으면 그 매체만, 차단 목록은 항상 제외. RSS는 직접 선택한 피드라 대부분 통과됩니다.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="허용 소스 매체 (쉼표)">
+                  <Field label={<span>허용 매체 (쉼표) <HelpTip text="검색 API로 찾은 기사 중 이 매체 기사만 통과시킵니다. 비우면 모든 매체를 허용합니다." /></span>}>
                     <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="디스패치, 스타뉴스"
                       value={(s.searching.allowedSources ?? []).join(', ')}
                       onChange={e => setSearching({ allowedSources: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
                   </Field>
-                  <Field label="차단 소스 매체 (쉼표)">
+                  <Field label={<span>차단 매체 (쉼표) <HelpTip text="검색 API로 찾은 기사 중 제외할 매체입니다. 허용 목록보다 우선 적용됩니다." /></span>}>
                     <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="Soompi, Koreaboo"
                       value={(s.searching.bannedSources ?? []).join(', ')}
                       onChange={e => setSearching({ bannedSources: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
@@ -324,7 +324,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                   checked={rssEnabled}
                   onChange={e => setSearching({ rssEnabled: e.target.checked })}
                 />
-                RSS 수집
+                RSS 사용
               </label>
             </div>
             <div className={`space-y-1 transition-opacity ${rssEnabled ? '' : 'pointer-events-none opacity-45'}`}>
@@ -349,19 +349,19 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
               </div>
             )}
             <div className="grid grid-cols-2 gap-4">
-            <Field label="포함 키워드 (쉼표)">
+            <Field label={<span>포함 키워드 (쉼표) <HelpTip text="이 단어가 들어간 기사만 우선 검토합니다. 캠페인 주제와 직접 관련된 단어를 넣습니다." /></span>}>
               <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="컴백, 앨범, 차트"
                 value={s.searching.topicKeywords.join(', ')}
                 onChange={e => setSearching({ topicKeywords: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
             </Field>
-            <Field label="제외 키워드 (쉼표)">
+            <Field label={<span>제외 키워드 (쉼표) <HelpTip text="이 단어가 들어간 기사는 제외합니다. 캠페인과 상관없는 분야나 금지 주제를 넣습니다." /></span>}>
               <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="정치, 경제"
                 value={s.searching.excludeKeywords.join(', ')}
                 onChange={e => setSearching({ excludeKeywords: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
             </Field>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-4">
-            <Field label="시간 윈도우">
+            <Field label={<span>기사 시간 범위 <HelpTip text="최근 몇 시간 또는 며칠 기사까지 볼지 정합니다. 좁을수록 최신 이슈 중심입니다." /></span>}>
               <select className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
                 value={s.searching.articleWindow} onChange={e => setSearching({ articleWindow: e.target.value as ArticleWindow })}>
                 {WINDOWS.map(w => <option key={w.value} value={w.value}>{w.label}</option>)}
@@ -386,7 +386,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                 ))}
               </div>
             </Field>
-            <Field label="기사 건 생성 최소 매체 수">
+            <Field label={<span>기사로 만들 최소 매체 수 <HelpTip text="같은 주제를 다룬 매체가 이 수 이상 모이면 기사 후보로 만듭니다. 높을수록 검증은 강해지고 후보는 줄어듭니다." /></span>}>
               <input type="number" min={1} max={10} className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
                 value={s.searching.minMediaCount}
                 onChange={e => setSearching({ minMediaCount: Math.max(1, Number(e.target.value) || 1) })} />
@@ -398,7 +398,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
 
       {/* ② 주제 검수 */}
       {step === 2 && (
-        <Section title="📌 주제 검수" desc="어떤 주제를 고르나 + 쓸 만한 소스가 모였나" auto onSave={() => saveAndNext(2)} saved={savedSteps.has(2)}>
+        <Section title="📌 주제 검수" desc="어떤 주제를 고르나 + 쓸 만한 출처가 모였나" auto onSave={() => saveAndNext(2)} saved={savedSteps.has(2)}>
           <PromptField label="주제 선정 기준" value={s.topicReview.selectionCriteria}
             onChange={v => setTopic({ selectionCriteria: v })} onReset={() => setTopic({ selectionCriteria: '' })} rows={3} />
           <PromptField label="같은 내용 중복 피하기" value={s.topicReview.dedupeRules}
@@ -410,7 +410,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
 
       {/* ③ 생성 */}
       {step === 3 && (
-        <Section title="📌 생성" desc="어떻게 쓰나 (LLM 프롬프트 + 표기 규칙)" auto onSave={() => saveAndNext(3)} saved={savedSteps.has(3)}>
+        <Section title="📌 기사 작성" desc="어떻게 쓸지 정합니다 (AI 지시문 + 표기 규칙)" auto onSave={() => saveAndNext(3)} saved={savedSteps.has(3)}>
           <PromptField label="에디터 역할" value={s.generation.promptConfig.editorRole}
             onChange={v => setGenPrompt('editorRole', v)} onReset={() => setGenPrompt('editorRole', DEFAULT_PROMPT_CONFIG.editorRole)} rows={1} />
           <PromptField label="발행 가이드" value={s.generation.promptConfig.publishingGuide}
@@ -419,7 +419,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
             onChange={v => setGenPrompt('taskInstructions', v)} onReset={() => setGenPrompt('taskInstructions', DEFAULT_PROMPT_CONFIG.taskInstructions)} rows={6} />
           <PromptField label="금지 표현 (쉼표)" value={s.generation.promptConfig.bannedExpressions}
             onChange={v => setGenPrompt('bannedExpressions', v)} onReset={() => setGenPrompt('bannedExpressions', DEFAULT_PROMPT_CONFIG.bannedExpressions)} rows={2} />
-          <Field label="표기 규칙">
+          <Field label={<span>표기 규칙 <HelpTip text="곡명, 앨범명, 아티스트명, 이미지 HTML 같은 반복 표기 방식을 정합니다. 작성과 최종 검수에 같이 반영됩니다." /></span>}>
             <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
               <label className="flex items-center justify-between rounded border border-slate-200 bg-white/60 px-2 py-1">
                 곡명 인용
@@ -437,7 +437,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
               </label>
             </div>
           </Field>
-          <Field label={`레퍼런스 기사 (${s.generation.referenceArticles.length}/5)`}>
+          <Field label={<span>참고 기사 ({s.generation.referenceArticles.length}/5) <HelpTip text="우리 매체의 실제 기사 URL을 넣으면 AI가 문체와 구조를 참고합니다. 사실 근거로 쓰는 용도는 아닙니다." /></span>}>
             <p className="mb-1.5 text-xs text-slate-400">우리 매체 실제 기사 URL을 등록하면 전문을 추출해 AI가 문체·구조를 참고합니다.</p>
             <div className="mb-2 space-y-1">
               {s.generation.referenceArticles.map(r => (
@@ -466,15 +466,15 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
         </Section>
       )}
 
-      {/* ④ 결과물 검수 */}
+      {/* ④ 최종 검수 */}
       {step === 4 && (
-        <Section title="📌 결과물 검수" desc="무엇을 검수하나 (block=자동 차단, warn=사람 판단)" isLast onSave={() => saveAndNext(4)} saved={savedSteps.has(4)}>
-          <Field label="금지 소스 매체 (쉼표)">
+        <Section title="📌 최종 검수" desc="발행 전 무엇을 확인할지 정합니다 (block=자동 차단, warn=사람 판단)" isLast onSave={() => saveAndNext(4)} saved={savedSteps.has(4)}>
+          <Field label={<span>금지 매체 (쉼표) <HelpTip text="최종 검수에서 출처로 쓰면 안 되는 매체입니다. 발견되면 발행 전 차단됩니다." /></span>}>
             <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="Soompi, Koreaboo"
               value={s.finalReview.bannedMedia.join(', ')}
               onChange={e => setReview({ bannedMedia: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
           </Field>
-          <Field label={`검수 규칙 (${s.finalReview.reviewRules.length})`}>
+          <Field label={<span>검수 규칙 ({s.finalReview.reviewRules.length}) <HelpTip text="켜진 항목만 검사합니다. 자동 차단은 발행 전 막고, 사람 판단은 경고만 표시합니다." /></span>}>
             <div className="space-y-1">
               {s.finalReview.reviewRules.map(r => (
                 <div key={r.id} className="flex items-center justify-between rounded border border-slate-200 bg-white/60 px-2 py-1.5 text-sm">

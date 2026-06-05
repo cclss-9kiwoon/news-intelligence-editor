@@ -53,14 +53,14 @@ export const DEFAULT_PROJECT_PROFILE: ProjectProfile = {
   reviewRules: [
     {
       id: 'fact-consistency',
-      label: '팩트 정합성',
+      label: '사실 일치',
       instruction: '본문의 모든 사실(인물·날짜·수치·소속사)이 원문 sourceFacts와 일치하는지 확인. 원문에 없는 추측·창작이 있으면 지적.',
       severity: 'block',
       enabled: true,
     },
     {
       id: 'entity-complete',
-      label: '핵심 엔티티 누락',
+      label: '핵심 이름 누락',
       instruction: '핵심 인물/그룹/작품명이 본문에 빠짐없이 포함됐는지 확인.',
       severity: 'warn',
       enabled: true,

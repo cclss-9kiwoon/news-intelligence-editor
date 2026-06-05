@@ -178,7 +178,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     if (groupProfile) {
       // formalityLevel → ④검수 + ③에디토리얼 + ②우선
       if (groupProfile.formalityLevel === 'strict') {
-        matrix.push('[격식: 엄격] ③에디토리얼·1인칭·주관 금지. ②고인지도·팩트 우선. ④표기·팩트·소스 규칙 위반 시 발행 차단.');
+        matrix.push('[격식: 엄격] ③에디토리얼·1인칭·주관 금지. ②고인지도·팩트 우선. ④표기·팩트·출처 규칙 위반 시 발행 차단.');
       } else if (groupProfile.formalityLevel === 'casual') {
         matrix.push('[격식: 캐주얼] ③주관·1인칭·취향 표현 허용, 롱폼 OK. ④핵심 규칙만 검수.');
       } else {
@@ -186,9 +186,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       }
       // sourceStrictness → ①서칭 소스 교차검증 강도
       if (groupProfile.sourceStrictness === 'cross_verified') {
-        matrix.push('[소스: 교차검증] 서로 다른 원문 2곳+ 교차검증된 팩트만 사용. 2차매체·SNS 인용 불가.');
+        matrix.push('[출처: 교차검증] 서로 다른 원문 2곳+ 교차검증된 팩트만 사용. 2차매체·SNS 인용 불가.');
       } else if (groupProfile.sourceStrictness === 'loose') {
-        matrix.push('[소스: 느슨] 2차매체·SNS 인용 허용. 단일 소스 가능.');
+        matrix.push('[출처: 느슨] 2차매체·SNS 인용 허용. 단일 출처 가능.');
       }
       // language → ②인지도 기준 언어권 + ③출력
       matrix.push(`[언어: ${groupProfile.language}] 주제 인지도는 ${groupProfile.language} 언어권 기준. 출력 언어 ${groupProfile.language}.`);

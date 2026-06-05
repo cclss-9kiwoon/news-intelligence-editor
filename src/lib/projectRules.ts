@@ -73,10 +73,10 @@ export function buildProjectRulesText(profile: ProjectProfile): string {
 
   // 매체 정책
   if (profile.allowedMedia.length > 0) {
-    lines.push(`허용 소스 매체: ${profile.allowedMedia.join(', ')}만 사용한다.`);
+    lines.push(`허용 출처 매체: ${profile.allowedMedia.join(', ')}만 사용한다.`);
   }
   if (profile.bannedMedia.length > 0) {
-    lines.push(`금지 소스 매체: ${profile.bannedMedia.join(', ')}는 인용·참조하지 않는다.`);
+    lines.push(`금지 출처 매체: ${profile.bannedMedia.join(', ')}는 인용·참조하지 않는다.`);
   }
 
   // 자유 가이드라인

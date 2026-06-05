@@ -389,7 +389,7 @@ export function SettingsModal({ open, onClose }: Props) {
             </p>
             {settings.naverClientId && settings.naverClientSecret && (
               <>
-                <p className="mt-1 text-xs text-green-600">✓ 네이버 전문 수집 활성 (메인 소스)</p>
+                <p className="mt-1 text-xs text-green-600">✓ 네이버 전문 수집 활성 (주 출처)</p>
                 <div className="mt-3">
                   <label className="mb-1 block text-xs font-semibold text-slate-500">검색어 (쉼표로 구분)</label>
                   <input
@@ -406,7 +406,7 @@ export function SettingsModal({ open, onClose }: Props) {
           </section>
 
           <section>
-            <h3 className="mb-2 font-semibold">다음/Kakao 검색 API (보조 소스)</h3>
+            <h3 className="mb-2 font-semibold">다음/Kakao 검색 API (보조 출처)</h3>
             <div>
               <label className="mb-1 block text-xs font-semibold text-slate-500">REST API Key</label>
               <div className="flex gap-2">
@@ -508,7 +508,7 @@ export function SettingsModal({ open, onClose }: Props) {
           ))}
 
           <section>
-            <h3 className="mb-2 font-semibold text-sm">레퍼런스 기사 (최대 5개)</h3>
+            <h3 className="mb-2 font-semibold text-sm">참고 기사 (최대 5개)</h3>
             <p className="mb-2 text-xs text-slate-500">
               우리 매체가 실제로 발행한 기사 URL을 등록하면 LLM이 문체·구조를 참고합니다.
             </p>

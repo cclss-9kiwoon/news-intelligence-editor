@@ -23,7 +23,7 @@ describe('buildProjectRulesText', () => {
       styleGuide: 'News Article URL 필드는 비운다.',
     };
     const txt = buildProjectRulesText(profile);
-    expect(txt).toContain('금지 소스 매체: Soompi, Koreaboo');
+    expect(txt).toContain('금지 출처 매체: Soompi, Koreaboo');
     expect(txt).toContain('News Article URL 필드는 비운다.');
   });
 

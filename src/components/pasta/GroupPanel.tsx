@@ -99,7 +99,7 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-600">소스 검증 강도 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">①서칭 연동</span><HelpTip text="기사 출처를 얼마나 깐깐하게 보는지. 교차검증 = 서로 다른 원문 2곳 이상 확인된 사실만 / 표준 = 균형 / 느슨 = 2차 매체·SNS 인용도 허용." /></label>
+              <label className="mb-1 block text-sm font-medium text-slate-600">출처 확인 강도 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">①기사 찾기 연동</span><HelpTip text="기사 출처를 얼마나 깐깐하게 보는지. 교차검증 = 서로 다른 원문 2곳 이상 확인된 사실만 / 표준 = 균형 / 느슨 = 2차 매체·SNS 인용도 허용." /></label>
               <div className="flex gap-1.5">
                 {SOURCE_STRICTNESS.map(ss => (
                   <button key={ss.value} onClick={() => updateGroupProfile(group.id, { sourceStrictness: ss.value })}
@@ -163,4 +163,3 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
     </div>
   );
 }
-
