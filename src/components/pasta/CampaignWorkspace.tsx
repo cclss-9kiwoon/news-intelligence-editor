@@ -4,6 +4,7 @@ import { useArticles } from '../../state/ArticlesContext';
 import { useSettings } from '../../state/SettingsContext';
 import { generateStory } from '../../lib/promptChain';
 import { TagInput } from './TagInput';
+import { TaskSourcePanel } from './TaskSourcePanel';
 import type { DiscardReason, Category, StoryOutput } from '../../types';
 
 const DISCARD_REASONS: { value: DiscardReason; label: string }[] = [
@@ -107,16 +108,7 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
             >{regenerating ? '재생성 중...' : '✨ 초안 재생성'}</button>
           </div>
 
-          <div>
-            <h4 className="mb-1.5 text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400">원문 출처 ({srcArticles.length})</h4>
-            <div className="space-y-1.5">
-              {task.sources.map(s => (
-                <div key={s.articleId} className="rounded-lg border border-slate-100 bg-white/70 px-2.5 py-1.5 text-xs text-slate-600">
-                  <span className={s.hasFullText ? 'text-green-500' : 'text-slate-300'}>●</span> {s.source} · {s.title.slice(0, 30)}
-                </div>
-              ))}
-            </div>
-          </div>
+          <TaskSourcePanel task={task} />
 
           {/* #12 검수 결과 — 차단/경고 사유 */}
           {task.review && task.review.findings.length > 0 && (
