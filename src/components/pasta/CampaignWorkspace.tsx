@@ -200,7 +200,7 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
               <span>💬 0</span><span>🔁 0</span><span>♥ 0</span><span>📊 0</span>
             </div>
           </div>
-          <p className="text-xs text-slate-400">발행 시 Hydra 배포 파이프라인으로 연결됩니다.</p>
+          <p className="text-xs text-slate-400">발행하면 연결된 배포 채널로 전송됩니다.</p>
         </div>
       </div>
 

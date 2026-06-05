@@ -397,10 +397,10 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
           <div className="rounded-2xl border border-slate-200 bg-white/65 p-4">
             <div className="mb-3">
               <h4 className="font-semibold text-slate-800">④ 중복·범위 보강</h4>
-              <p className="text-xs text-slate-400">엔티티(인물/브랜드) 단위로 범위와 중복을 다듬습니다. 비우면 적용 안 함.</p>
+              <p className="text-xs text-slate-400">인물·브랜드 단위로 범위와 중복을 다듬습니다. 비우면 적용 안 함.</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Field label={<span>허용 엔티티 (쉼표) <HelpTip text="이 인물/브랜드가 언급된 기사만 후보로 만듭니다. 비우면 모든 엔티티를 허용합니다." /></span>}>
+              <Field label={<span>허용 인물·브랜드 (쉼표) <HelpTip text="이 인물·브랜드가 언급된 기사만 후보로 만듭니다. 비우면 모두 허용합니다." /></span>}>
                 <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="BTS, BLACKPINK, aespa"
                   value={(s.searching.entityAllowlist ?? []).join(', ')}
                   onChange={e => setSearching({ entityAllowlist: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
@@ -410,7 +410,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                   value={(s.searching.excludeTopics ?? []).join(', ')}
                   onChange={e => setSearching({ excludeTopics: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
               </Field>
-              <Field label={<span>엔티티당 하루 최대 건수 <HelpTip text="같은 인물/브랜드 기사를 하루에 몇 건까지 만들지 제한합니다. 0이면 무제한. 허용 엔티티 목록이 있어야 동작합니다." /></span>}>
+              <Field label={<span>인물·브랜드당 하루 최대 건수 <HelpTip text="같은 인물·브랜드 기사를 하루에 몇 건까지 만들지 제한합니다. 0이면 무제한. 허용 인물·브랜드 목록이 있어야 동작합니다." /></span>}>
                 <input type="number" min={0} max={20} className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
                   value={s.searching.maxPerEntityPerDay ?? 0}
                   onChange={e => setSearching({ maxPerEntityPerDay: Math.max(0, Number(e.target.value) || 0) })} />
