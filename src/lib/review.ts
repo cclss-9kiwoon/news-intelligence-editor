@@ -18,7 +18,16 @@ type DraftFields = Pick<StoryOutput, 'summary' | 'headline' | 'body' | 'tags'> &
 
 // ─── 1. 규칙기반 검사 ────────────────────────────────────────────────
 
-export function runRuleChecks(draft: DraftFields, profile: ProjectProfile): ReviewFinding[] {
+/** 검수 부가 컨텍스트 — 소스 매체/이미지(태스크 단계에서 주입). 없으면 draft-level만. */
+export type ReviewContext = {
+  sources?: { source: string }[];
+  images?: { url: string }[];
+};
+
+// 이미지 워터마크 의심 URL 휴리스틱 — 매칭 시 '사람 확인'(불확실). 비전 판별 한계라 확정 아님.
+const WATERMARK_URL_HINTS = ['watermark', 'dispatch', 'starnews', 'mnet', 'logo', 'preview', 'sample', '_wm', 'thumb'];
+
+export function runRuleChecks(draft: DraftFields, profile: ProjectProfile, ctx?: ReviewContext): ReviewFinding[] {
   const findings: ReviewFinding[] = [];
   const f = profile.formatRules;
   const body = draft.body || '';
@@ -77,6 +86,40 @@ export function runRuleChecks(draft: DraftFields, profile: ProjectProfile): Revi
       findings.push({
         ruleId: 'fmt-editorial-closing', label: '클로징 첨언', severity: 'warn', source: 'rule', field: 'body',
         message: `마지막 문장이 에디토리얼 첨언(질문/응원/기대)으로 끝남: "${lastSentence.slice(-40)}". 팩트로 종료해야 합니다.`,
+      });
+    }
+  }
+
+  // 소스 교차검증 — N≥2 + 금지(2차 영문) 매체 차단 (ctx.sources 있을 때만)
+  if (ctx?.sources) {
+    const distinct = new Set(ctx.sources.map(s => s.source));
+    if (distinct.size < 2) {
+      findings.push({
+        ruleId: 'gate-cross-verify', label: '교차검증', severity: 'block', source: 'rule', field: 'body',
+        message: `소스 매체 ${distinct.size}곳 — 교차검증 최소 2곳 미달.`,
+      });
+    }
+    for (const media of profile.bannedMedia) {
+      if (!media.trim()) continue;
+      if ([...distinct].some(s => s.toLowerCase().includes(media.toLowerCase()))) {
+        findings.push({
+          ruleId: `gate-banned-source-${media}`, label: '금지 소스', severity: 'block', source: 'rule', field: 'body',
+          message: `금지(2차) 매체 "${media}"가 소스에 포함됨 — 1차 매체만 사용.`,
+        });
+      }
+    }
+  }
+
+  // 워터마크 의심 이미지 — URL 휴리스틱. 불확실이라 warn(사람 확인). (ctx.images 있을 때만)
+  if (ctx?.images) {
+    const suspect = ctx.images.filter(im => {
+      const u = im.url.toLowerCase();
+      return WATERMARK_URL_HINTS.some(h => u.includes(h));
+    });
+    if (suspect.length > 0) {
+      findings.push({
+        ruleId: 'gate-watermark', label: '워터마크 의심', severity: 'warn', source: 'rule', field: 'imagePrompt',
+        message: `워터마크/로고 의심 이미지 ${suspect.length}건(URL 휴리스틱) — 사람 확인 필요.`,
       });
     }
   }
@@ -181,8 +224,8 @@ export async function runLlmChecks(draft: DraftFields, settings: Settings): Prom
 
 // ─── 통합 검수 ──────────────────────────────────────────────────────
 
-export async function reviewDraft(draft: DraftFields, settings: Settings): Promise<ReviewResult> {
-  const ruleFindings = runRuleChecks(draft, settings.projectProfile);
+export async function reviewDraft(draft: DraftFields, settings: Settings, ctx?: ReviewContext): Promise<ReviewResult> {
+  const ruleFindings = runRuleChecks(draft, settings.projectProfile, ctx);
 
   let llmFindings: ReviewFinding[] = [];
   let sensitive: SensitiveJudgment = { flag: false };
@@ -210,6 +253,8 @@ export async function reviewDraft(draft: DraftFields, settings: Settings): Promi
   }
   if (sensitive.flag) reasons.push(`민감 주제${sensitive.reason ? ` — ${sensitive.reason}` : ''}`);
   if (llmFailed) reasons.push('LLM 검수 불가(불확실) — 사람 확인 필요');
+  // 워터마크 의심(불확실) → 사람 확인 (자동발행 차단)
+  if (findings.some(f => f.ruleId === 'gate-watermark')) reasons.push('워터마크 의심 이미지 — 사람 확인 필요');
   const needsHuman = reasons.length > 0;
 
   return { passed, findings, checkedAt: Date.now(), needsHuman, needsHumanReasons: reasons };

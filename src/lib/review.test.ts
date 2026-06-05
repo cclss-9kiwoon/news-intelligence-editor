@@ -91,6 +91,37 @@ describe('runRuleChecks', () => {
     const out = runRuleChecks({ ...baseDraft, headline: 'aespa Returns to the Stage' }, profile);
     expect(out.find(x => x.ruleId === 'fmt-headline-casing')).toBeUndefined();
   });
+
+  it('ctx 소스 N<2면 교차검증 block', () => {
+    const out = runRuleChecks(baseDraft, DEFAULT_PROJECT_PROFILE, { sources: [{ source: 'OSEN' }] });
+    expect(out.find(x => x.ruleId === 'gate-cross-verify')?.severity).toBe('block');
+  });
+
+  it('ctx 소스 2곳+면 교차검증 통과', () => {
+    const out = runRuleChecks(baseDraft, DEFAULT_PROJECT_PROFILE, { sources: [{ source: 'OSEN' }, { source: '스타뉴스' }] });
+    expect(out.find(x => x.ruleId === 'gate-cross-verify')).toBeUndefined();
+  });
+
+  it('ctx 금지 소스 매체면 block', () => {
+    const profile: ProjectProfile = { ...DEFAULT_PROJECT_PROFILE, bannedMedia: ['Soompi'] };
+    const out = runRuleChecks(baseDraft, profile, { sources: [{ source: 'Soompi' }, { source: 'OSEN' }] });
+    expect(out.find(x => x.ruleId.startsWith('gate-banned-source'))?.severity).toBe('block');
+  });
+
+  it('ctx 워터마크 의심 URL이면 warn', () => {
+    const out = runRuleChecks(baseDraft, DEFAULT_PROJECT_PROFILE, { images: [{ url: 'https://x.com/photo_wm_sample.jpg' }] });
+    expect(out.find(x => x.ruleId === 'gate-watermark')?.severity).toBe('warn');
+  });
+});
+
+describe('reviewDraft ctx → needsHuman', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+  it('워터마크 의심이면 needsHuman(사람 확인)', async () => {
+    stubReviewLlm({ sensitive: { flag: false } });
+    const r = await reviewDraft(baseDraft, SETTINGS, { sources: [{ source: 'A' }, { source: 'B' }], images: [{ url: 'http://x/logo.png' }] });
+    expect(r.needsHuman).toBe(true);
+    expect(r.needsHumanReasons?.some(x => x.includes('워터마크'))).toBe(true);
+  });
 });
 
 describe('reviewDraft needsHuman (자율발행 안전장치)', () => {
