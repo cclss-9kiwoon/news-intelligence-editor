@@ -3,6 +3,7 @@ import { useTasks } from '../../state/TaskContext';
 import { useArticles } from '../../state/ArticlesContext';
 import { useClusters } from '../../state/ClustersContext';
 import { useCampaigns } from '../../state/CampaignContext';
+import { useSettings } from '../../state/SettingsContext';
 import { shouldClaimCluster } from '../../lib/searchFilter';
 import { IconTrash, IconRefresh } from './icons';
 import { GoldenTimeBar, GaugeChip, InfoChip, formatRemaining } from './kanbanPrimitives';
@@ -41,6 +42,8 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   const { isRefreshing, loadingStatus, lastRefreshedAt, articles, refreshNow } = useArticles();
   const { clusters } = useClusters();
   const { campaigns } = useCampaigns();
+  const { settings } = useSettings();
+  const noLlmKey = !settings.apiKey;  // 그룹 LLM 키는 브리지로 settings.apiKey에 주입됨 → 비면 미설정
   // 보드는 진행중 태스크만 — 발행됨(→발행함)·폐기됨(→폐기함)은 제외
   const tasks = useMemo(
     () => allTasks.filter(t => t.campaignId === campaignId && !t.published && !t.discardReason),
@@ -117,6 +120,12 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
         >
           <IconRefresh className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin motion-reduce:animate-none' : ''}`} /> 지금 수집
         </button>
+
+        {noLlmKey && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-600">
+            🔑 AI 키 미설정 — 그룹 설정(🤖 AI)에서 등록해야 기사가 작성됩니다
+          </span>
+        )}
 
         {noTaskHint && (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/80 bg-amber-50/80 px-3 py-1 text-xs text-amber-700 backdrop-blur-md">
