@@ -438,11 +438,11 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
       {/* ② 주제 검수 */}
       {step === 2 && (
         <Section title="📌 주제 검수" desc="어떤 주제를 고르나 + 쓸 만한 출처가 모였나" auto onSave={() => saveAndNext(2)} saved={savedSteps.has(2)}>
-          <PromptField label="주제 선정 기준" value={s.topicReview.selectionCriteria}
+          <PromptField label="주제 선정 기준" help="AI가 어떤 주제를 기사로 고를지 판단하는 기준입니다. 최신성·인지도·다양성 같은 우선 가치를 적습니다." value={s.topicReview.selectionCriteria}
             onChange={v => setTopic({ selectionCriteria: v })} onReset={() => setTopic({ selectionCriteria: '' })} rows={3} />
-          <PromptField label="같은 내용 중복 피하기" value={s.topicReview.dedupeRules}
+          <PromptField label="같은 내용 중복 피하기" help="이미 다룬 주제를 또 쓰지 않도록 하는 규칙. 같은 소재라도 다른 관점이면 허용할지 등을 적습니다." value={s.topicReview.dedupeRules}
             onChange={v => setTopic({ dedupeRules: v })} onReset={() => setTopic({ dedupeRules: '' })} rows={3} />
-          <PromptField label="우선순위" value={s.topicReview.priority}
+          <PromptField label="우선순위" help="후보가 많을 때 무엇을 먼저 쓸지 순서를 정합니다. 예: 속보 > 발표 > 차트 > 일반." value={s.topicReview.priority}
             onChange={v => setTopic({ priority: v })} onReset={() => setTopic({ priority: '' })} rows={2} />
         </Section>
       )}
@@ -450,13 +450,13 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
       {/* ③ 생성 */}
       {step === 3 && (
         <Section title="📌 기사 작성" desc="어떻게 쓸지 정합니다 (AI 지시문 + 표기 규칙)" auto onSave={() => saveAndNext(3)} saved={savedSteps.has(3)}>
-          <PromptField label="에디터 역할" value={s.generation.promptConfig.editorRole}
+          <PromptField label="에디터 역할" help="AI가 어떤 매체의 어떤 에디터로서 글을 쓸지 정합니다. 매체 성격과 전문 분야를 적습니다." value={s.generation.promptConfig.editorRole}
             onChange={v => setGenPrompt('editorRole', v)} onReset={() => setGenPrompt('editorRole', DEFAULT_PROMPT_CONFIG.editorRole)} rows={1} />
-          <PromptField label="발행 가이드" value={s.generation.promptConfig.publishingGuide}
+          <PromptField label="발행 가이드" help="분량·구조·인용 방식 등 기사 작성의 큰 원칙입니다. 리드문 구성, 단어 수, 인용 패턴 등을 적습니다." value={s.generation.promptConfig.publishingGuide}
             onChange={v => setGenPrompt('publishingGuide', v)} onReset={() => setGenPrompt('publishingGuide', DEFAULT_PROMPT_CONFIG.publishingGuide)} rows={6} />
-          <PromptField label="작업 지침" value={s.generation.promptConfig.taskInstructions}
+          <PromptField label="작업 지침" help="기사마다 반드시 지킬 세부 규칙입니다. 교차검증, 중복 확인, 수치 정확성 같은 체크 항목을 적습니다." value={s.generation.promptConfig.taskInstructions}
             onChange={v => setGenPrompt('taskInstructions', v)} onReset={() => setGenPrompt('taskInstructions', DEFAULT_PROMPT_CONFIG.taskInstructions)} rows={6} />
-          <PromptField label="금지 표현 (쉼표)" value={s.generation.promptConfig.bannedExpressions}
+          <PromptField label="금지 표현 (쉼표)" help="기사에 쓰면 안 되는 표현·상투어입니다. AI가 이 단어들을 피해서 작성합니다." value={s.generation.promptConfig.bannedExpressions}
             onChange={v => setGenPrompt('bannedExpressions', v)} onReset={() => setGenPrompt('bannedExpressions', DEFAULT_PROMPT_CONFIG.bannedExpressions)} rows={2} />
           <Field label={<span>표기 규칙 <HelpTip text="곡명, 앨범명, 아티스트명, 이미지 HTML 같은 반복 표기 방식을 정합니다. 작성과 최종 검수에 같이 반영됩니다." /></span>}>
             <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
@@ -581,13 +581,13 @@ function Field({ label, children }: { label: React.ReactNode; children: React.Re
   );
 }
 
-function PromptField({ label, value, onChange, onReset, rows }: {
-  label: string; value: string; onChange: (v: string) => void; onReset: () => void; rows: number;
+function PromptField({ label, value, onChange, onReset, rows, help }: {
+  label: string; value: string; onChange: (v: string) => void; onReset: () => void; rows: number; help?: string;
 }) {
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
-        <label className="text-sm font-medium text-slate-600">{label}</label>
+        <label className="flex items-center text-sm font-medium text-slate-600">{label}{help && <HelpTip text={help} />}</label>
         <button onClick={onReset} className="text-xs text-indigo-500 hover:underline">기본값 복원</button>
       </div>
       <textarea
