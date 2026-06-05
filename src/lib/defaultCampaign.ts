@@ -146,6 +146,7 @@ export function migrateGroup(raw: any): Group {
     media: 'news_media', blog: 'creator_newsletter', medium: 'creator_newsletter', other: 'news_media',
   };
   const profile: GroupProfile = {
+    ...p,  // 알 수 없는/신규 필드(llm 등) 보존 — 재구성 시 누락 방지
     channelType: p.channelType ?? TARGET_MAP[p.targetType] ?? 'news_media',
     formalityLevel: p.formalityLevel ?? 'standard',
     sourceStrictness: p.sourceStrictness ?? 'standard',
