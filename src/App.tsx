@@ -18,7 +18,7 @@ import { GuideModal } from './components/GuideModal';
 import { TutorialOverlay } from './components/TutorialOverlay';
 import { VerticalSplitter } from './components/VerticalSplitter';
 import { PastaShell } from './components/pasta/PastaShell';
-import { KanbanBoard } from './components/pasta/KanbanBoard';
+import { CampaignShell } from './components/pasta/CampaignShell';
 import { SearchingPipeline } from './components/pasta/SearchingPipeline';
 import { CampaignWorkspace } from './components/pasta/CampaignWorkspace';
 import { loadJson, saveJson } from './lib/storage';
@@ -136,20 +136,13 @@ function PastaRouter() {
               {mode === 'workspace' && openTaskId ? (
                 <CampaignWorkspace taskId={openTaskId} onBack={() => setMode('kanban')} />
               ) : mode === 'kanban' && activeCampaign ? (
-                <div className="flex h-screen flex-col bg-white">
-                  <div className="flex items-center gap-3 border-b border-slate-200 bg-white/80 backdrop-blur-md px-5 py-2.5 text-sm">
-                    <button onClick={() => setMode('pasta')} className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">← 캠페인 목록</button>
-                    <span className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900 text-xs">🍝</span>
-                      <span className="font-bold text-slate-900">{activeCampaign.name}</span>
-                    </span>
-                    <button onClick={() => { setForceSettingsId(activeCampaign.id); setMode('pasta'); }} className="ml-auto rounded-full border border-slate-300 px-4 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">⚙ 설정</button>
-                    <button onClick={() => setMode('workbench')} className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 transition-colors">수동 워크벤치 →</button>
-                  </div>
-                  <div className="min-h-0 flex-1">
-                    <KanbanBoard campaignId={activeCampaign.id} onOpenTask={(taskId) => { setOpenTaskId(taskId); setMode('workspace'); }} />
-                  </div>
-                </div>
+                <CampaignShell
+                  campaign={activeCampaign}
+                  onBackToList={() => setMode('pasta')}
+                  onOpenSettings={() => { setForceSettingsId(activeCampaign.id); setMode('pasta'); }}
+                  onOpenTask={(taskId) => { setOpenTaskId(taskId); setMode('workspace'); }}
+                  onOpenWorkbench={() => setMode('workbench')}
+                />
               ) : (
                 <AppShell
                   onBackToPasta={() => setMode(activeCampaign ? 'kanban' : 'pasta')}

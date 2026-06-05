@@ -15,7 +15,7 @@ const DISCARD_REASONS: { value: DiscardReason; label: string }[] = [
 ];
 
 export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: () => void }) {
-  const { tasks, updateTask, deleteTask } = useTasks();
+  const { tasks, updateTask } = useTasks();
   const { articles } = useArticles();
   const { settings } = useSettings();
 
@@ -78,7 +78,8 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
 
   const discard = (reason: DiscardReason) => {
     if (!confirm(`이 기사 건을 폐기하시겠습니까? (사유: ${DISCARD_REASONS.find(r => r.value === reason)?.label})`)) return;
-    deleteTask(task.id);
+    // 보존 폐기: 삭제 대신 discardReason 기록 → 폐기함에서 복원/영구삭제 가능
+    updateTask(task.id, { discardReason: reason });
     onBack();
   };
 

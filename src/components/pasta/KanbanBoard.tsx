@@ -26,7 +26,11 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   const { isRefreshing, loadingStatus, lastRefreshedAt, articles, refreshNow } = useArticles();
   const { clusters } = useClusters();
   const { campaigns } = useCampaigns();
-  const tasks = useMemo(() => allTasks.filter(t => t.campaignId === campaignId), [allTasks, campaignId]);
+  // 보드는 진행중 태스크만 — 발행됨(→발행함)·폐기됨(→폐기함)은 제외
+  const tasks = useMemo(
+    () => allTasks.filter(t => t.campaignId === campaignId && !t.published && !t.discardReason),
+    [allTasks, campaignId],
+  );
   const retryTask = (id: string) => updateTask(id, { error: undefined, produceAttempts: 0, status: 'producing' });
 
   // 0건 진단: 수집은 됐는데 태스크가 안 생기는 이유를 클러스터 거부 사유로 집계
