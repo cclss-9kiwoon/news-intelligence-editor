@@ -5,6 +5,8 @@ import { HelpTip } from './HelpTip';
 import { IconCopy } from './icons';
 import type { Group, ChannelType, FormalityLevel, SourceStrictness, ArticleWindow, Campaign, Task, ProviderId } from '../../types';
 import { PROVIDERS } from '../../types';
+import { useSettings } from '../../state/SettingsContext';
+import { describeStageLLM, llmLevelLabel } from '../../lib/stageLLM';
 
 const WINDOW_LABEL: Record<ArticleWindow, string> = {
   '1h': '1시간', '24h': '24시간', '7d': '7일', '30d': '30일', breaking: '속보',
@@ -87,6 +89,8 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
 
   const groupCampaigns = campaigns.filter(c => c.groupId === group.id);
   const p = group.profile;
+  const { settings } = useSettings();
+  const llmInfo = describeStageLLM(settings, p); // 그룹 LLM 활성 상태(그룹키→전역 상속)
   const inputCls = 'w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100';
 
   const createCampaign = () => {
@@ -206,7 +210,11 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
 
       {/* 그룹 AI(LLM) 설정 — 이 그룹 캠페인의 기본 AI. 캠페인 단계가 오버라이드. */}
       <div className="mb-5 rounded-2xl border border-white/70 bg-white/70 p-5 shadow-sm backdrop-blur-md">
-        <h3 className="mb-1 font-bold text-slate-800">🤖 AI(LLM) 설정 <HelpTip text="이 그룹 캠페인이 기본으로 쓰는 AI입니다. 키를 여기서 등록하면 기사 작성·검수에 사용됩니다. 캠페인 단계별로 다른 모델/키를 쓰려면 캠페인 설정에서 오버라이드합니다." /></h3>
+        <h3 className="mb-1 flex items-center gap-2 font-bold text-slate-800">🤖 AI(LLM) 설정 <HelpTip text="이 그룹 캠페인이 기본으로 쓰는 AI입니다. 키를 여기서 등록하면 기사 작성·검수에 사용됩니다. 캠페인 단계별로 다른 모델/키를 쓰려면 캠페인 설정에서 오버라이드합니다." />
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${llmInfo.active ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+            {llmInfo.active ? `✓ ${llmInfo.resolved.model} (${llmLevelLabel(llmInfo.keySource)}키)` : '키 미설정'}
+          </span>
+        </h3>
         <p className="mb-4 text-xs text-slate-400">기사 생성에 쓰는 AI. 키 미등록 시 ③ 생성이 안 됩니다.</p>
         <div className="grid grid-cols-2 gap-4">
           <div>

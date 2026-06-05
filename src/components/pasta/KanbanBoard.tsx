@@ -44,6 +44,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   const { campaigns } = useCampaigns();
   const { settings } = useSettings();
   const noLlmKey = !settings.apiKey;  // 그룹 LLM 키는 브리지로 settings.apiKey에 주입됨 → 비면 미설정
+  const autoOff = campaigns.find(c => c.id === campaignId)?.autoCollect?.enabled === false;
   // 보드는 진행중 태스크만 — 발행됨(→발행함)·폐기됨(→폐기함)은 제외
   const tasks = useMemo(
     () => allTasks.filter(t => t.campaignId === campaignId && !t.published && !t.discardReason),
@@ -124,6 +125,11 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
         {noLlmKey && (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-600">
             🔑 AI 키 미설정 — 그룹 설정(🤖 AI)에서 등록해야 기사가 작성됩니다
+          </span>
+        )}
+        {autoOff && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+            ⏸ 자동수집 꺼짐 — 켜야 새 기사 후보가 생성됩니다 (지금 수집은 기사만 갱신)
           </span>
         )}
 
