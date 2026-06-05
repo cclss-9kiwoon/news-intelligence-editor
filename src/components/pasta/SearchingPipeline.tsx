@@ -225,7 +225,12 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       generateStory(srcArticles, writingStageSettings(settings, campaign.settings.generation.writingModel), category)
         .then(async draft => {
           let review;
-          try { review = await reviewDraft(draft, cheapStageSettings(settings)); } catch { review = undefined; }
+          // 검수 ctx: 소스 N≥2/금지매체/워터마크 게이트 활성화 (NIE 24f36a5)
+          const reviewCtx = {
+            sources: t.sources.map(s => ({ source: s.source })),
+            images: srcArticles.flatMap(a => (a.images ?? []).map(im => ({ url: im.url }))),
+          };
+          try { review = await reviewDraft(draft, cheapStageSettings(settings), reviewCtx); } catch { review = undefined; }
           if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review', produceAttempts: attempt });
         })
         .catch((err: unknown) => {
