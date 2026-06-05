@@ -365,7 +365,10 @@ export type Task = {
   discardReason?: DiscardReason;  // 폐기 사유
   priority?: boolean;        // 우선 처리 (①→②승급·③제작 순서 우선). 골든타임 임박 시 자동 set
   paused?: boolean;          // 보류 — 파이프라인이 스킵. [재개]로 해제
+  pausedAt?: number;         // 보류 시각
+  pauseReason?: string;      // 보류 사유 (표시용)
   promotedAt?: number;       // ①→② 승급 시각 (시간당 승급 상한 카운트용)
+  goldenTime?: { startsAt: number; expiresAt: number };  // 후보 유효창(입력값만 저장, 잔여/비율은 렌더 시 계산)
   createdAt: number;
   updatedAt: number;
 };

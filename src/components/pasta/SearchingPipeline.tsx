@@ -49,6 +49,9 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     const p = a?.pubDate ? Date.parse(a.pubDate) : NaN;
     return Number.isNaN(p) ? t.createdAt : p;
   };
+  // goldenTime 입력값(저장)에서 만료/시작 시각 — 없으면 기준기사+window로 폴백(레거시)
+  const expiresAtOf = (t: Task): number => t.goldenTime?.expiresAt ?? refTime(t) + windowMs;
+  const startsAtOf = (t: Task): number => t.goldenTime?.startsAt ?? refTime(t);
 
   // ── 1. ① 대기큐 채우기: 자격 클러스터 전부 생성(LLM 비용 없음, 상한 없음). 실패 클러스터 자가치유 ──
   useEffect(() => {
@@ -64,10 +67,14 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       if (!decision.ok) continue;
       const stale = erroredByCluster.get(cluster.id);
       if (stale) deleteTask(stale);
+      // 골든타임: 대표 기사 pubDate 기준 유효창(startsAt~expiresAt). 1회 확정 저장.
+      const repArt = articles.find(a => a.id === decision.sources[0]?.articleId);
+      const startsAt = repArt?.pubDate && !Number.isNaN(Date.parse(repArt.pubDate)) ? Date.parse(repArt.pubDate) : now;
       const created = addTask({
         campaignId: campaign.id, status: 'searching',
         title: cluster.representativeTitle, clusterId: cluster.id,
         sources: decision.sources, imageCount: decision.imageCount,
+        goldenTime: { startsAt, expiresAt: startsAt + windowMs },
       });
       working.push(created);
     }
@@ -79,7 +86,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     const now = Date.now();
     for (const t of myTasks) {
       if (t.status !== 'searching' || t.error || t.paused) continue;
-      if (now - refTime(t) > windowMs) deleteTask(t.id);
+      if (now > expiresAtOf(t)) deleteTask(t.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSig, articles, windowMs]);
@@ -94,11 +101,11 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     const queue = myTasks.filter(t => t.status === 'searching' && !t.error && !t.paused);
     // 골든타임 임박(잔여 < 20%) 자동 우선 플래그
     for (const t of queue) {
-      if (!t.priority && windowMs > 0 && (windowMs - (now - refTime(t))) < windowMs * 0.2) {
+      if (!t.priority && windowMs > 0 && (expiresAtOf(t) - now) < windowMs * 0.2) {
         updateTask(t.id, { priority: true });
       }
     }
-    queue.sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || refTime(b) - refTime(a));
+    queue.sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || startsAtOf(b) - startsAtOf(a));
 
     for (const t of queue) {
       if (slots <= 0) break;
