@@ -5,6 +5,7 @@ import { useSettings } from '../../state/SettingsContext';
 import { useTasks } from '../../state/TaskContext';
 import { generateStory, judgeExcludedTopic } from '../../lib/promptChain';
 import { judgeTopicAdequacy } from '../../lib/topicJudge';
+import { assessProducibility } from '../../lib/producibility';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
 import { promotionBudget } from '../../lib/promotion';
@@ -31,6 +32,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   const producingRef = useRef<Set<string>>(new Set());
   const topicJudgeRef = useRef<Set<string>>(new Set()); // 제외 주제 AI 판단 진행 중 가드
   const intentJudgeRef = useRef<Set<string>>(new Set()); // 주제 적합성 AI 판단 진행 중 가드
+  const producibilityRef = useRef<Set<string>>(new Set()); // 제작 가능성 판정 진행 중 가드
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -204,7 +206,23 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         continue; // 판단 결과 대기
       }
 
-      updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
+      // ②-B 제작 가능성 — 쓸 이미지(수집 or 라이브러리) 있어야 제작. 없으면 보류(골든 만료 시 컷).
+      if (!producibilityRef.current.has(t.id)) {
+        producibilityRef.current.add(t.id);
+        const imgs = articles
+          .filter(a => t.sources.some(s => s.articleId === a.id))
+          .flatMap(a => (a.images ?? []).map(im => ({ url: im.url })));
+        const cluster = clusters.find(c => c.id === t.clusterId);
+        assessProducibility({ images: imgs, entities: cluster?.entities, groupId: campaign.groupId })
+          .then(prod => {
+            if (!mountedRef.current) return;
+            if (prod.producible) updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
+            // 아니면 보류: topic_review 유지 → 다음 사이클 재평가, 골든 만료(1b) 시 자연 컷
+          })
+          .catch(() => { if (mountedRef.current) updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' }); }) // 실패 시 통과(막힘 방지)
+          .finally(() => { producibilityRef.current.delete(t.id); });
+      }
+      continue; // 제작 가능성 판정 대기
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSig, articles, settings, searchingCfg.excludeTopics, campaign.settings.topicReview.intent]);
