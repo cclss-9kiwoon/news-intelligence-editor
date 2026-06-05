@@ -4,15 +4,14 @@
  * 로직 없음(계산값을 prop으로 받음). 기존 Pasta 글래스/말랑 무드 유지.
  */
 
-// 남은 시간 포맷: ms → "4h 12m" / "12m" / "곧 만료"
+// 남은 시간 포맷(정본) — Pasta 전역 공용. ms → "12분" / "4시간" / "3일" / "곧".
+// 칸반 골든타임·다음 승급 등 모든 잔여시간 표시는 이 함수로 통일(중복 금지).
 export function formatRemaining(ms: number): string {
-  if (ms <= 0) return '만료';
-  const totalMin = Math.floor(ms / 60000);
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m`;
-  return '곧 만료';
+  if (ms <= 0) return '곧';
+  const m = Math.ceil(ms / 60000);
+  if (m < 60) return `${m}분`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}시간` : `${Math.floor(h / 24)}일`;
 }
 
 export type GoldenTimeState = 'ok' | 'warning' | 'expired';
