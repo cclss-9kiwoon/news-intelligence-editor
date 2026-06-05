@@ -224,7 +224,7 @@ function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, 
   return (
     <div
       onClick={onOpen}
-      className={`pasta-springy group cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 hover:shadow-md ${task.paused ? 'opacity-60' : ''}`}
+      className={`pasta-card-in pasta-springy group cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 hover:shadow-md ${task.paused ? 'opacity-60' : ''}`}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-semibold leading-snug text-slate-800 line-clamp-2">

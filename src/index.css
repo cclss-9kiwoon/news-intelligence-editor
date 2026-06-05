@@ -23,13 +23,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR
   60%  { transform: scale(1.03); }
   100% { transform: scale(1); opacity: 1; }
 }
+/* 칸반 카드 단계 진입 — 새 컬럼에 들어올 때 위에서 스르륵(스냅 X, 사람이 흐름 인지) */
+@keyframes pasta-card-in {
+  0%   { transform: translateY(-10px) scale(0.97); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
 .pasta-float { animation: pasta-float 3.5s ease-in-out infinite; }
 .pasta-pop   { animation: pasta-pop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.pasta-card-in { animation: pasta-card-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
 /* 카드 살짝 통통한 hover (부드러운 스프링 느낌) */
 .pasta-springy { transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease; }
 .pasta-springy:hover { transform: translateY(-3px) scale(1.01); }
 
 @media (prefers-reduced-motion: reduce) {
-  .pasta-float, .pasta-pop { animation: none; }
+  .pasta-float, .pasta-pop, .pasta-card-in { animation: none; }
   .pasta-springy:hover { transform: none; }
 }
