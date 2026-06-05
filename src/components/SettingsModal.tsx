@@ -124,7 +124,12 @@ export function SettingsModal({ open, onClose }: Props) {
           </section>
 
           <section>
-            <h3 className="mb-2 font-semibold">{providerCfg.keyLabel}</h3>
+            <h3 className="mb-2 flex items-center gap-2 font-semibold">
+              {providerCfg.keyLabel}
+              {settings.apiKey.trim()
+                ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">✓ 연결됨 · {providerCfg.name}</span>
+                : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">키 미설정</span>}
+            </h3>
             <div className="flex gap-2">
               <input
                 type={showKey ? 'text' : 'password'}
