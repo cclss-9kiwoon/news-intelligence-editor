@@ -46,4 +46,13 @@ describe('promotionBudget', () => {
     const tasks = [task({ status: 'searching' }), task({ status: 'searching' })];
     expect(promotionBudget(tasks, 'c1', 3, NOW)).toBe(3);
   });
+
+  it('error 태스크는 예산 잠식 안 함 (실패분 제외)', () => {
+    // 27 승급됐다 전부 실패(429) → error. 정상 대기분이 막히면 안 됨.
+    const failed = Array.from({ length: 27 }, () => task({ promotedAt: NOW - 1000, error: '429 실패' }));
+    expect(promotionBudget(failed, 'c1', 3, NOW)).toBe(3);
+    // 성공 1 + 실패 27 → 성공만 카운트
+    const mixed = [task({ promotedAt: NOW - 1000 }), ...failed];
+    expect(promotionBudget(mixed, 'c1', 3, NOW)).toBe(2);
+  });
 });

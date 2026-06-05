@@ -17,8 +17,10 @@ export function promotionBudget(
   now: number,
 ): number {
   if (maxPerHour <= 0) return Infinity;
+  // error 태스크는 제외 — LLM 호출만 하고 결과물 0 + 자동재시도도 안 함(error 고정).
+  // 포함하면 실패분이 예산을 1시간 영구잠식해 정상 대기분 승급이 막힘(라이브 버그).
   const promotedLastHour = tasks.filter(
-    t => t.campaignId === campaignId && t.promotedAt != null && now - t.promotedAt <= HOUR_MS,
+    t => t.campaignId === campaignId && t.promotedAt != null && now - t.promotedAt <= HOUR_MS && !t.error,
   ).length;
   return Math.max(0, maxPerHour - promotedLastHour);
 }
