@@ -9,6 +9,7 @@ import { GoldenTimeBar, GaugeChip, InfoChip, formatRemaining } from './kanbanPri
 import type { Task, TaskStatus } from '../../types';
 
 const HOUR = 3600_000;
+const COL_RENDER_LIMIT = 50; // 컬럼당 렌더 상한 — 대량 대기 시 프리즈 방지(나머지는 "외 N건")
 
 // 골든타임 파생값 (저장 안 함, 렌더 계산). gt 없으면 null.
 export type GoldenView = { remainingMs: number; percent: number; state: 'ok' | 'warning' | 'expired' };
@@ -138,6 +139,13 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
       <div className="flex min-h-0 flex-1 gap-5 overflow-x-auto px-4 pb-6 pt-3 sm:px-8">
         {COLUMNS.map(col => {
           const colTasks = tasks.filter(t => t.status === col.status);
+          // ① 대기는 승급 순(우선·속보 먼저)으로 정렬 → 상한 렌더 시 가장 임박한 것부터 보이게
+          if (col.status === 'searching') {
+            colTasks.sort((a, b) =>
+              (b.isBreaking ? 1 : 0) - (a.isBreaking ? 1 : 0) ||
+              (b.priority ? 1 : 0) - (a.priority ? 1 : 0) ||
+              (a.goldenTime?.expiresAt ?? Infinity) - (b.goldenTime?.expiresAt ?? Infinity));
+          }
           const activeCount = colTasks.filter(taskActive).length;
           const isCollapsed = collapsed.has(col.status);
           if (isCollapsed) {
@@ -169,7 +177,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
                 </div>
               </div>
               <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-3 pb-4">
-                {colTasks.map(t => (
+                {colTasks.slice(0, COL_RENDER_LIMIT).map(t => (
                   <TaskCard key={t.id} task={t}
                     onOpen={() => onOpenTask(t.id)}
                     onDelete={() => deleteTask(t.id)}
@@ -181,6 +189,9 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
                     onPublish={() => publishTask(t.id)}
                   />
                 ))}
+                {colTasks.length > COL_RENDER_LIMIT && (
+                  <p className="py-2 text-center text-xs text-slate-400">외 {colTasks.length - COL_RENDER_LIMIT}건 대기 (골든타임 순)</p>
+                )}
                 {colTasks.length === 0 && (
                   <div className="mt-1 flex flex-col items-center gap-1.5 rounded-2xl border-2 border-dashed border-slate-200/70 py-10 text-center">
                     <span className="pasta-float text-lg opacity-50">🍃</span>
