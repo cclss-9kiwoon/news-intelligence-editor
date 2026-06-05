@@ -81,6 +81,7 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
   const { tasks } = useTasks();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
+  const [showContext, setShowContext] = useState(false); // 배포 맥락은 그룹 생성 시 설정 → 기본 접힘
 
   const groupCampaigns = campaigns.filter(c => c.groupId === group.id);
   const p = group.profile;
@@ -120,11 +121,26 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
         )}
       </div>
 
-      {/* 배포 맥락 (profile) 편집 — 캠페인에 상속 */}
-      <div className="mb-5 rounded-2xl border border-white/70 bg-white/70 p-5 shadow-sm backdrop-blur-md">
-        <h3 className="mb-1 font-bold text-slate-800">🎯 배포 맥락</h3>
-        <p className="mb-4 text-xs text-slate-400">채널 정체성. 이 그룹의 모든 캠페인에 자동 적용됩니다.</p>
-        <div className="space-y-4">
+      {/* 배포 맥락 (profile) — 그룹 생성 시 설정됨. 기본 접힘, 필요 시 편집 */}
+      <div className="mb-5 rounded-2xl border border-white/70 bg-white/70 p-4 shadow-sm backdrop-blur-md">
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-slate-800">🎯 배포 맥락 <span className="ml-1 text-xs font-normal text-slate-400">모든 캠페인에 자동 적용</span></h3>
+          <button onClick={() => setShowContext(v => !v)} aria-expanded={showContext}
+            className="shrink-0 rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-50 transition-colors">
+            {showContext ? '닫기' : '편집'}
+          </button>
+        </div>
+        {!showContext && (
+          <div className="mt-2.5 flex flex-wrap gap-1.5 text-[11px] font-mono">
+            <span className="rounded-md bg-slate-900 px-1.5 py-0.5 text-white">{CHANNEL_TYPES.find(t => t.value === p.channelType)?.icon} {CHANNEL_TYPES.find(t => t.value === p.channelType)?.label}</span>
+            <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-amber-700">격식 {FORMALITY.find(f => f.value === p.formalityLevel)?.label}</span>
+            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-slate-600">출처 {SOURCE_STRICTNESS.find(s => s.value === p.sourceStrictness)?.label}</span>
+            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-slate-600">{LANGUAGES.find(l => l.value === p.language)?.label ?? p.language}</span>
+            {p.character && <span className="max-w-[200px] truncate rounded-md bg-slate-100 px-1.5 py-0.5 text-slate-600">{p.character}</span>}
+          </div>
+        )}
+        {showContext && (
+        <div className="mt-4 space-y-4">
           <div>
             <label className="mb-1.5 block text-sm font-medium text-slate-600">배포 채널 유형<HelpTip text="이 채널이 어떤 곳인지에 따라 주제 선정·작성 톤·검수 기준이 자동으로 달라집니다. 전문 보도 매체일수록 팩트와 검수가 엄격하고, 개인 채널일수록 자유롭습니다." /></label>
             <div className="grid grid-cols-2 gap-2">
@@ -183,6 +199,7 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
             </div>
           </div>
         </div>
+        )}
       </div>
 
       <div className="rounded-2xl border border-white/70 bg-white/70 p-5 shadow-sm backdrop-blur-md">

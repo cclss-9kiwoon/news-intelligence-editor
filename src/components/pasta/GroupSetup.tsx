@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useCampaigns } from '../../state/CampaignContext';
 import { HelpTip } from './HelpTip';
-import type { ChannelType, FormalityLevel } from '../../types';
+import type { ChannelType, FormalityLevel, SourceStrictness } from '../../types';
 
 const CHANNEL_TYPES: { value: ChannelType; label: string; icon: string; desc: string }[] = [
   { value: 'news_media', label: '전문 보도 매체', icon: '📰', desc: '뉴스룸 · 속보 중심' },
@@ -16,6 +16,17 @@ const FORMALITY: { value: FormalityLevel; label: string; desc: string; active: s
   { value: 'casual',   label: '캐주얼', desc: '핵심 규칙만, 톤 자유', active: 'border-slate-400 bg-slate-100 text-slate-700', dot: 'bg-slate-400' },
 ];
 
+// 엄격류=앰버 통일(교차검증), 표준=인디고, 느슨=슬레이트 — GroupPanel과 동일 체계
+const SOURCE_STRICTNESS: { value: SourceStrictness; label: string; active: string; dot: string }[] = [
+  { value: 'cross_verified', label: '교차검증', active: 'border-amber-400 bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
+  { value: 'standard',       label: '표준',     active: 'border-indigo-500 bg-indigo-50 text-indigo-700', dot: 'bg-indigo-500' },
+  { value: 'loose',          label: '느슨',     active: 'border-slate-400 bg-slate-100 text-slate-700', dot: 'bg-slate-400' },
+];
+const LANGUAGES: { value: string; label: string }[] = [
+  { value: 'ko', label: '한국어' },
+  { value: 'en', label: '영어' },
+];
+
 const inputCls = 'w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-colors';
 
 export function GroupSetup({ onCreated, onCancel }: { onCreated: (groupId: string) => void; onCancel: () => void }) {
@@ -23,13 +34,15 @@ export function GroupSetup({ onCreated, onCancel }: { onCreated: (groupId: strin
   const [name, setName] = useState('');
   const [channelType, setChannelType] = useState<ChannelType>('news_media');
   const [formalityLevel, setFormalityLevel] = useState<FormalityLevel>('standard');
+  const [sourceStrictness, setSourceStrictness] = useState<SourceStrictness>('standard');
+  const [language, setLanguage] = useState('ko');
   const [character, setCharacter] = useState('');
   const [audience, setAudience] = useState('');
   const [toneBase, setToneBase] = useState('');
 
   const save = () => {
     if (!name.trim()) return;
-    const g = addGroup(name.trim(), { channelType, formalityLevel, character, audience, toneBase });
+    const g = addGroup(name.trim(), { channelType, formalityLevel, sourceStrictness, language, character, audience, toneBase });
     onCreated(g.id);
   };
 
@@ -70,6 +83,27 @@ export function GroupSetup({ onCreated, onCancel }: { onCreated: (groupId: strin
             ))}
           </div>
           <p className="mt-1.5 text-xs text-slate-400">{FORMALITY.find(f => f.value === formalityLevel)?.desc}</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-600">출처 확인 강도 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">①기사 찾기 연동</span><HelpTip text="기사 출처를 얼마나 깐깐하게 보는지. 교차검증 = 서로 다른 원문 2곳 이상 확인된 사실만 / 표준 = 균형 / 느슨 = 2차 매체·SNS 인용도 허용." /></label>
+            <div className="flex gap-1.5">
+              {SOURCE_STRICTNESS.map(ss => (
+                <button key={ss.value} onClick={() => setSourceStrictness(ss.value)}
+                  className={`flex flex-1 items-center justify-center gap-1 rounded-lg border px-1.5 py-2 text-xs font-semibold transition-all ${sourceStrictness === ss.value ? ss.active : 'border-slate-200 bg-white/70 text-slate-500 hover:bg-white'}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${sourceStrictness === ss.value ? ss.dot : 'bg-slate-300'}`} />
+                  {ss.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-600">언어 <span className="font-mono text-[10px] uppercase tracking-wide text-slate-400">②③ 연동</span><HelpTip text="채널 언어. 주제 인지도 판단 기준 언어권과 기사 출력 언어를 결정합니다." /></label>
+            <select className={inputCls} value={language} onChange={e => setLanguage(e.target.value)}>
+              {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label} ({l.value})</option>)}
+            </select>
+          </div>
         </div>
 
         <div>
