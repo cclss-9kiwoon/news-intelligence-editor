@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTasks } from '../../state/TaskContext';
 import { useArticles } from '../../state/ArticlesContext';
 import { useClusters } from '../../state/ClustersContext';
@@ -54,6 +54,18 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   );
   const retryTask = (id: string) => updateTask(id, { error: undefined, produceAttempts: 0, status: 'producing' });
   const publishTask = (id: string) => updateTask(id, { published: true, publishedAt: Date.now() });
+
+  // 컬럼 접기/펼치기 — 캠페인별 localStorage 영속
+  const collapseKey = `pasta:kanbanCollapsed:${campaignId}`;
+  const [collapsed, setCollapsed] = useState<Set<TaskStatus>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(collapseKey) || '[]')); } catch { return new Set(); }
+  });
+  const toggleCollapse = (status: TaskStatus) => setCollapsed(prev => {
+    const next = new Set(prev);
+    next.has(status) ? next.delete(status) : next.add(status);
+    try { localStorage.setItem(collapseKey, JSON.stringify([...next])); } catch { /* ignore */ }
+    return next;
+  });
 
   // 리듬바 수치 (피카소 GaugeChip/InfoChip용)
   const maxPerHour = campaigns.find(c => c.id === campaignId)?.settings.searching.maxPerHour ?? 3;
@@ -117,15 +129,27 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
           <span className="text-slate-300">|</span> 수집 {rhythm.collected}
         </span>
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 px-4 pb-6 pt-3 sm:grid-cols-2 sm:px-8 xl:grid-cols-4">
+      <div className="flex min-h-0 flex-1 gap-5 overflow-x-auto px-4 pb-6 pt-3 sm:px-8">
         {COLUMNS.map(col => {
           const colTasks = tasks.filter(t => t.status === col.status);
           const activeCount = colTasks.filter(taskActive).length;
+          const isCollapsed = collapsed.has(col.status);
+          if (isCollapsed) {
+            return (
+              <button key={col.status} onClick={() => toggleCollapse(col.status)}
+                title="펼치기"
+                className="flex w-12 shrink-0 flex-col items-center gap-2 rounded-2xl border border-white/60 bg-white/55 py-3 backdrop-blur-md shadow-sm hover:bg-white/70">
+                <div className={`h-1.5 w-6 rounded-full ${col.bar}`} />
+                <span className="text-xs font-mono font-semibold text-slate-500">{colTasks.length}</span>
+                <span className="mt-1 text-[13px] font-bold text-slate-700 [writing-mode:vertical-rl]">{col.label}</span>
+              </button>
+            );
+          }
           return (
-            <div key={col.status} className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/60 bg-white/55 backdrop-blur-md shadow-sm">
+            <div key={col.status} className="flex min-h-0 min-w-[260px] flex-1 flex-col overflow-hidden rounded-2xl border border-white/60 bg-white/55 backdrop-blur-md shadow-sm">
               <div className={`h-1.5 w-full ${col.bar}`} />
               <div className="flex items-center justify-between px-4 py-3.5">
-                <span className="text-[15px] font-bold text-slate-800">{col.label}</span>
+                <button onClick={() => toggleCollapse(col.status)} title="접기" className="text-[15px] font-bold text-slate-800 hover:text-slate-500">⌄ {col.label}</button>
                 <div className="flex items-center gap-2">
                   <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wide ${col.badge}`}>
                     {col.auto ? '자동' : '사람'}
