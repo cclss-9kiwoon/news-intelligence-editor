@@ -203,11 +203,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const daumQueries = providers.length
       ? providers.filter(p => p.provider === 'daum' && p.enabled).map(p => p.query)
       : [...(cs.searching.daumQueries ?? [])];
+    const apiEnabled = cs.searching.apiEnabled ?? true;
+    const rssEnabled = cs.searching.rssEnabled ?? true;
     return {
       ...s,
-      rssSources: clone(cs.searching.rssSources),
-      naverQueries: naverQueries.length ? naverQueries : [...cs.searching.naverQueries],
-      daumQueries: daumQueries.length ? daumQueries : [...(cs.searching.daumQueries ?? [])],
+      rssSources: rssEnabled ? clone(cs.searching.rssSources) : clone(cs.searching.rssSources).map(r => ({ ...r, enabled: false })),
+      naverQueries: apiEnabled ? (naverQueries.length ? naverQueries : [...cs.searching.naverQueries]) : [],
+      daumQueries: apiEnabled ? (daumQueries.length ? daumQueries : [...(cs.searching.daumQueries ?? [])]) : [],
       articleWindow: cs.searching.articleWindow,
       clusterThreshold: cs.searching.clusterThreshold,
       promptConfig: clone(cs.generation.promptConfig),

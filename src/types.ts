@@ -249,6 +249,8 @@ export type Group = {
 
 /** 캠페인 소스 설정 — 어디서 어떤 기사를 가져올지 */
 export type SourceConfig = {
+  apiEnabled: boolean;
+  rssEnabled: boolean;
   rssSources: RssSource[];
   searchProviders: SearchProviderConfig[];
   naverQueries: string[];

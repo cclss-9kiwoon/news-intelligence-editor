@@ -11,6 +11,8 @@ function newId(prefix: string): string {
 }
 
 export const DEFAULT_SOURCE_CONFIG: SourceConfig = {
+  apiEnabled: true,
+  rssEnabled: true,
   rssSources: DEFAULT_RSS_SOURCES,
   searchProviders: [
     { provider: 'naver', enabled: true, query: '연예' },
