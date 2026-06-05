@@ -66,7 +66,7 @@ export function shouldClaimCluster(
 ): ClaimDecision {
   const {
     minMediaCount, topicKeywords, excludeKeywords, allowedSources = [], bannedSources = [],
-    entityAllowlist = [], excludeTopics = [], maxPerEntityPerDay = 0, ownSiteDedupe = false,
+    entityAllowlist = [], maxPerEntityPerDay = 0, ownSiteDedupe = false,
   } = searching;
 
   // 이미 점유된 기사 id
@@ -98,9 +98,8 @@ export function shouldClaimCluster(
   if (excludeKeywords.length > 0 && excludeKeywords.some(k => haystack.includes(k.toLowerCase()))) {
     return { ok: false, reason: 'excluded_keyword' };
   }
-  if (excludeTopics.length > 0 && excludeTopics.some(k => k.trim() && haystack.includes(k.toLowerCase()))) {
-    return { ok: false, reason: 'excluded_topic' };
-  }
+  // excludeTopics는 의미 판단(AI)이라 동기 필터에서 처리하지 않음.
+  // 주제 검수 단계(SearchingPipeline)에서 judgeExcludedTopic으로 게이트.
 
   // entityAllowlist: 허용 엔티티 미등장 제외
   const matchedEntity = entityAllowlist.length > 0 ? matchEntity(haystack, entityAllowlist) : null;

@@ -3,7 +3,7 @@ import { useClusters } from '../../state/ClustersContext';
 import { useArticles } from '../../state/ArticlesContext';
 import { useSettings } from '../../state/SettingsContext';
 import { useTasks } from '../../state/TaskContext';
-import { generateStory } from '../../lib/promptChain';
+import { generateStory, judgeExcludedTopic } from '../../lib/promptChain';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
 import type { Campaign, Category, Task } from '../../types';
@@ -21,6 +21,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   const { settings } = useSettings();
   const { tasks, addTask, updateTask, moveTask } = useTasks();
   const producingRef = useRef<Set<string>>(new Set());
+  const topicJudgeRef = useRef<Set<string>>(new Set()); // 제외 주제 AI 판단 진행 중 가드
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -30,7 +31,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
   const myTasks = tasks.filter(t => t.campaignId === campaign.id);
   // deps용 시그니처 (태스크 추가/삭제/상태변경 모두 반영)
-  const taskSig = myTasks.map(t => `${t.id}:${t.status}:${t.draft ? 1 : 0}:${t.error ? 1 : 0}:${t.produceAttempts ?? 0}`).join(',');
+  const taskSig = myTasks.map(t => `${t.id}:${t.status}:${t.draft ? 1 : 0}:${t.error ? 1 : 0}:${t.produceAttempts ?? 0}:${t.topicChecked ? 1 : 0}`).join(',');
 
   // ── 1. 서칭: 클러스터 → 태스크 생성 ──
   useEffect(() => {
@@ -72,9 +73,30 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
   // ── 3. 주제 검수: 주제 선정 판단(topicReview) + 전문 수집 확인 → 제작 전환 / 탈락 ──
   useEffect(() => {
+    const excludeTopics = (campaign.settings.searching.excludeTopics ?? []).filter(x => x.trim());
+
     for (const t of myTasks) {
       if (t.status !== 'topic_review') continue;
       if (t.error) continue; // 이미 탈락 처리된 태스크는 skip (중복 에러 방지)
+
+      // 제외 주제 AI 판단 게이트 — 통과(topicChecked) 전엔 다음 단계로 안 넘김.
+      if (excludeTopics.length > 0 && !t.topicChecked) {
+        if (!topicJudgeRef.current.has(t.id)) {
+          topicJudgeRef.current.add(t.id);
+          const snippets = articles
+            .filter(a => t.sources.some(s => s.articleId === a.id))
+            .map(a => a.description || a.fullText?.slice(0, 300) || '');
+          judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, settings)
+            .then(r => {
+              if (!mountedRef.current) return;
+              if (r.excluded) updateTask(t.id, { error: `제외 주제 해당: ${r.matched || '동일 주제'}` });
+              else updateTask(t.id, { topicChecked: true });
+            })
+            .catch(() => { if (mountedRef.current) updateTask(t.id, { topicChecked: true }); }) // 판단 실패 → 통과(fail-open)
+            .finally(() => { topicJudgeRef.current.delete(t.id); });
+        }
+        continue; // 판단 결과 대기
+      }
 
       const refreshed = t.sources.map(s => {
         const a = articles.find(x => x.id === s.articleId);
@@ -95,7 +117,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSig, articles]);
+  }, [taskSig, articles, settings, campaign.settings.searching.excludeTopics]);
 
   // ── 4. 아티클 제작: LLM 생성 → 결과물 검수 전환 ──
   useEffect(() => {

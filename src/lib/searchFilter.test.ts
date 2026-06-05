@@ -75,10 +75,10 @@ describe('shouldClaimCluster', () => {
     if (d.ok) expect(d.matchedEntity).toBe('aespa');
   });
 
-  it('excludeTopics: rejects cluster containing excluded phrase', () => {
+  it('excludeTopics: 동기 필터에서는 적용하지 않음 (AI 주제검수 단계로 이관)', () => {
     const arts = [art('a1', 'osen', 'aespa 열애설 보도')];
     const d = shouldClaimCluster(cluster('cl1', ['a1'], 'aespa 열애설'), arts, { ...baseCfg, excludeTopics: ['열애설'] }, [], NOW);
-    expect(d).toEqual({ ok: false, reason: 'excluded_topic' });
+    expect(d.ok).toBe(true);
   });
 
   it('maxPerEntityPerDay: rejects once daily cap reached for that entity', () => {

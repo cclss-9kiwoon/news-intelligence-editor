@@ -340,6 +340,7 @@ export type Task = {
   review?: ReviewResult;     // 검수 결과
   error?: string;
   produceAttempts?: number;  // 제작 시도 횟수 (자동 재시도용)
+  topicChecked?: boolean;    // 제외 주제 AI 판단 통과 (주제 검수 단계)
   published?: boolean;       // 발행 완료 (Hydra 배포 훅)
   discardReason?: DiscardReason;  // 폐기 사유
   createdAt: number;

@@ -214,6 +214,42 @@ export async function translateToEnglish(
   };
 }
 
+/**
+ * 제외 주제(excludeTopics) 의미 판단 — AI가 기사가 제외 주제 중 하나에 해당하는지 본다.
+ * 단순 키워드 포함이 아니라 "같은 주제인가"를 판단. excludeTopics 비면 호출 금지(상위에서 가드).
+ */
+export async function judgeExcludedTopic(
+  context: { title: string; snippets: string[] },
+  excludeTopics: string[],
+  settings: Settings,
+): Promise<{ excluded: boolean; matched: string }> {
+  const topics = excludeTopics.filter(t => t.trim());
+  if (topics.length === 0) return { excluded: false, matched: '' };
+
+  const system = [
+    '너는 기사 주제 분류기다. 주어진 기사가 "제외 주제" 목록 중 하나와 본질적으로 같은 주제인지 판단한다.',
+    '단순 단어 일치가 아니라 의미·주제 단위로 본다. 예: 제외 주제 "열애설"이면 "두 사람 사귄다 보도", "연인 인정" 같은 기사도 같은 주제로 본다.',
+    '확실히 해당 주제일 때만 excluded=true. 애매하면 false.',
+    '오직 valid JSON: { "excluded": boolean, "matched": string }  // matched=해당된 제외 주제(없으면 "")',
+  ].join('\n');
+  const user = [
+    `[제외 주제 목록]\n${topics.map((t, i) => `${i + 1}. ${t}`).join('\n')}`,
+    '',
+    `[기사 제목]\n${context.title}`,
+    `[기사 내용 일부]\n${context.snippets.filter(Boolean).join('\n').slice(0, 1500)}`,
+  ].join('\n');
+
+  const out = await chatJson<{ excluded?: boolean; matched?: string }>({
+    apiKey: settings.apiKey,
+    baseUrl: settings.apiBaseUrl,
+    model: settings.model,
+    system,
+    user,
+    temperature: 0,
+  });
+  return { excluded: out.excluded === true, matched: out.matched ?? '' };
+}
+
 export function buildInitialResult(
   articles: Article[],
   story: StoryOutput,

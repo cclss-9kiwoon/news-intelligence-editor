@@ -359,7 +359,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                 onChange={topicKeywords => setSearching({ topicKeywords })}
                 placeholder="컴백 입력 후 Enter" />
             </Field>
-            <Field label={<span>제외 키워드 <HelpTip text="이 단어가 들어간 기사는 제외합니다. 단어 입력 후 Enter로 등록합니다." /></span>}>
+            <Field label={<span>제외 키워드 <HelpTip text="이 단어가 제목·내용에 그대로 들어가면 즉시 제외합니다(문자열 일치). 단어 입력 후 Enter." /></span>}>
               <TagInput
                 values={s.searching.excludeKeywords}
                 onChange={excludeKeywords => setSearching({ excludeKeywords })}
@@ -413,7 +413,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                   onChange={entityAllowlist => setSearching({ entityAllowlist })}
                   placeholder="BTS 입력 후 Enter" />
               </Field>
-              <Field label={<span>제외 주제 <HelpTip text="이 구문이 들어간 기사는 후보에서 뺍니다. 제외 키워드보다 주제·구문 단위로 넓게 거릅니다." /></span>}>
+              <Field label={<span>제외 주제 <HelpTip text="AI가 기사 주제를 판단해 여기 적은 주제와 같다고 보면 제외합니다(단어가 안 겹쳐도 의미로 거름). 주제 검수 단계에서 적용." /></span>}>
                 <TagInput
                   values={s.searching.excludeTopics ?? []}
                   onChange={excludeTopics => setSearching({ excludeTopics })}
