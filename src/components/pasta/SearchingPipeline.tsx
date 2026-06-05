@@ -67,7 +67,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     const working: Task[] = tasks.filter(t => t.campaignId === campaign.id);
 
     // 점진화: 한 사이클에 클러스터 전부 생성 금지(흰화면/프리즈 방지). 상한만큼 모아 1회 벌크 setState.
-    const MAX_NEW_PER_CYCLE = 24;
+    const MAX_NEW_PER_CYCLE = 8;  // 점진적 — 사이클당 소량씩 자연스럽게 쌓이게(와르르 방지)
     const batch: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>[] = [];
     for (const cluster of clusters) {
       if (batch.length >= MAX_NEW_PER_CYCLE) break;

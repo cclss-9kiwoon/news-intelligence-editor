@@ -45,6 +45,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   const { settings } = useSettings();
   const noLlmKey = !settings.apiKey;  // 그룹 LLM 키는 브리지로 settings.apiKey에 주입됨 → 비면 미설정
   const autoOff = campaigns.find(c => c.id === campaignId)?.autoCollect?.enabled === false;
+  const noIntent = !(campaigns.find(c => c.id === campaignId)?.settings.topicReview.intent ?? '').trim();
   // 보드는 진행중 태스크만 — 발행됨(→발행함)·폐기됨(→폐기함)은 제외
   const tasks = useMemo(
     () => allTasks.filter(t => t.campaignId === campaignId && !t.published && !t.discardReason),
@@ -130,6 +131,11 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
         {autoOff && (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
             ⏸ 자동 진행(주기) 꺼짐 — 후보는 쌓이되 ②검수~ 자동 진행 정지. 켜면 작성 시작
+          </span>
+        )}
+        {noIntent && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+            🎯 주제 정의 없음 — 적합성 필터 꺼짐(전건 통과). 설정 ②에서 주제정의 채우면 정예 선별
           </span>
         )}
 
