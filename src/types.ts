@@ -316,6 +316,7 @@ export type Campaign = {
   groupId: string;
   name: string;              // 아티클 종류 ("tier 3 아티클", "K-pop 컴백 속보")
   settings: CampaignSettings;
+  configured?: boolean;      // 설정 1회 완료 여부 — true면 진입 시 칸반 직행
   createdAt: number;
   updatedAt: number;
 };

@@ -9,7 +9,11 @@ type View = 'campaign' | 'group' | 'new-group' | 'template' | 'empty';
 
 const GRADIENT = 'radial-gradient(ellipse 80% 80% at top left, #C5E3F6 0%, transparent 55%), radial-gradient(ellipse at bottom center, #FBE2BC 0%, transparent 55%), radial-gradient(ellipse at right, #F0D5F7 0%, transparent 55%), #FCF4E8';
 
-export function PastaShell({ onOpenCampaign }: { onOpenCampaign: (campaignId: string) => void }) {
+export function PastaShell({ onOpenCampaign, forceSettingsId, onConsumeForceSettings }: {
+  onOpenCampaign: (campaignId: string) => void;
+  forceSettingsId?: string | null;
+  onConsumeForceSettings?: () => void;
+}) {
   const { groups, campaigns } = useCampaigns();
   const [view, setView] = useState<View>(groups.length === 0 ? 'empty' : 'campaign');
   const [selCampaign, setSelCampaign] = useState<string | null>(campaigns[0]?.id ?? null);
@@ -19,6 +23,23 @@ export function PastaShell({ onOpenCampaign }: { onOpenCampaign: (campaignId: st
   useEffect(() => {
     if (groups.length === 0 && view !== 'new-group') setView('empty');
   }, [groups.length, view]);
+
+  // 칸반 ⚙설정에서 진입: 해당 캠페인 설정 화면 강제 표시 (configured여도)
+  useEffect(() => {
+    if (forceSettingsId) {
+      setSelCampaign(forceSettingsId);
+      setView('campaign');
+      onConsumeForceSettings?.();
+    }
+  }, [forceSettingsId, onConsumeForceSettings]);
+
+  // 설정 완료(configured) 캠페인 선택 시 칸반 직행, 아니면 설정 화면
+  const selectCampaign = (id: string) => {
+    const c = campaigns.find(x => x.id === id);
+    if (c?.configured) { onOpenCampaign(id); return; }
+    setSelCampaign(id);
+    setView('campaign');
+  };
 
   // 첫 캠페인 자동 선택
   useEffect(() => {
@@ -36,7 +57,7 @@ export function PastaShell({ onOpenCampaign }: { onOpenCampaign: (campaignId: st
         view={view}
         selectedId={selCampaign}
         selectedGroupId={selGroup}
-        onSelectCampaign={(id) => { setSelCampaign(id); setView('campaign'); }}
+        onSelectCampaign={selectCampaign}
         onSelectGroup={(id) => { setSelGroup(id); setView('group'); }}
         onAddGroup={() => setView('new-group')}
         onSelectTemplate={() => setView('template')}
@@ -52,7 +73,7 @@ export function PastaShell({ onOpenCampaign }: { onOpenCampaign: (campaignId: st
         ) : view === 'template' ? (
           <TemplatePlaceholder />
         ) : view === 'group' && group ? (
-          <GroupPanel group={group} onOpenCampaign={(id) => { setSelCampaign(id); setView('campaign'); }} />
+          <GroupPanel group={group} onOpenCampaign={selectCampaign} />
         ) : campaign ? (
           <CampaignSettingsPanel campaign={campaign} onOpen={() => onOpenCampaign(campaign.id)} />
         ) : (

@@ -102,8 +102,9 @@ function AppShell({ onBackToPasta, campaignName }: { onBackToPasta: () => void; 
 function PastaRouter() {
   const [mode, setMode] = useState<'pasta' | 'kanban' | 'workspace' | 'workbench'>('pasta');
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
+  const [forceSettingsId, setForceSettingsId] = useState<string | null>(null);
   const { applyCampaignSettings } = useSettings();
-  const { campaigns, groups, setActiveCampaign, activeCampaign } = useCampaigns();
+  const { campaigns, groups, setActiveCampaign, activeCampaign, markCampaignConfigured } = useCampaigns();
 
   const openCampaign = (campaignId: string) => {
     const c = campaigns.find(x => x.id === campaignId);
@@ -111,11 +112,18 @@ function PastaRouter() {
     const g = groups.find(x => x.id === c.groupId);
     applyCampaignSettings(c.settings, g?.profile);   // 캠페인 설정 + 그룹 배포맥락 주입
     setActiveCampaign(campaignId);
+    markCampaignConfigured(campaignId);              // 1회 진입 = 설정 완료 → 이후 칸반 직행
     setMode('kanban');
   };
 
   if (mode === 'pasta') {
-    return <PastaShell onOpenCampaign={openCampaign} />;
+    return (
+      <PastaShell
+        onOpenCampaign={openCampaign}
+        forceSettingsId={forceSettingsId}
+        onConsumeForceSettings={() => setForceSettingsId(null)}
+      />
+    );
   }
 
   return (
@@ -135,7 +143,8 @@ function PastaRouter() {
                       <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900 text-xs">🍝</span>
                       <span className="font-bold text-slate-900">{activeCampaign.name}</span>
                     </span>
-                    <button onClick={() => setMode('workbench')} className="ml-auto rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 transition-colors">수동 워크벤치 →</button>
+                    <button onClick={() => { setForceSettingsId(activeCampaign.id); setMode('pasta'); }} className="ml-auto rounded-full border border-slate-300 px-4 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">⚙ 설정</button>
+                    <button onClick={() => setMode('workbench')} className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-700 transition-colors">수동 워크벤치 →</button>
                   </div>
                   <div className="min-h-0 flex-1">
                     <KanbanBoard campaignId={activeCampaign.id} onOpenTask={(taskId) => { setOpenTaskId(taskId); setMode('workspace'); }} />

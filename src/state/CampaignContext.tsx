@@ -25,6 +25,7 @@ type Ctx = {
   duplicateCampaign: (id: string) => Campaign | null;
   renameCampaign: (id: string, name: string) => void;
   deleteCampaign: (id: string) => void;
+  markCampaignConfigured: (id: string) => void;
   updateCampaignSettings: (id: string, patch: Partial<CampaignSettings>) => void;
 
   setActiveCampaign: (id: string | null) => void;
@@ -114,6 +115,10 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     setActiveCampaignId(prev => (prev === id ? null : prev));
   }, []);
 
+  const markCampaignConfigured = useCallback((id: string) => {
+    setCampaigns(prev => prev.map(c => (c.id === id && !c.configured ? { ...c, configured: true } : c)));
+  }, []);
+
   const updateCampaignSettings = useCallback((id: string, patch: Partial<CampaignSettings>) => {
     setCampaigns(prev => prev.map(c =>
       c.id === id
@@ -128,7 +133,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     <CampaignCtx.Provider value={{
       groups, campaigns, activeCampaignId, activeCampaign,
       addGroup, duplicateGroup, updateGroupProfile, renameGroup, deleteGroup,
-      addCampaign, duplicateCampaign, renameCampaign, deleteCampaign, updateCampaignSettings,
+      addCampaign, duplicateCampaign, renameCampaign, deleteCampaign, markCampaignConfigured, updateCampaignSettings,
       setActiveCampaign,
     }}>
       {children}
