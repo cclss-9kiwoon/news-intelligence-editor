@@ -493,7 +493,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                   value={s.searching.maxPerEntityPerDay ?? 0}
                   onChange={e => setSearching({ maxPerEntityPerDay: Math.max(0, Number(e.target.value) || 0) })} />
               </Field>
-              <Field label={<span>시간당 생성 상한 <HelpTip text="한 시간에 만들 새 기사 건수 상한입니다. 자격 묶음이 많아도 우선순위(다매체·최신) 높은 것부터 이 수만큼만 만들고 나머지는 다음 수집에 다시 평가합니다. 0이면 무제한. AI 호출 폭주 방지." /></span>}>
+              <Field label={<span>시간당 승급 상한 <HelpTip text="기사 찾기(대기 큐)에서 검수 단계로 한 시간에 올려보낼 건수 상한입니다. 대기 후보가 많아도 우선·최신순으로 이 수만큼만 올라가고 나머지는 기사 찾기에서 대기합니다. 0이면 무제한. AI 호출 폭주 방지." /></span>}>
                 <input type="number" min={0} max={50} className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
                   value={s.searching.maxPerHour ?? 3}
                   onChange={e => setSearching({ maxPerHour: Math.max(0, Number(e.target.value) || 0) })} />
@@ -591,6 +591,13 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
       {/* ④ 최종 검수 */}
       {step === 4 && (
         <Section title="📌 최종 검수" desc="발행 전 무엇을 확인할지 정합니다 (block=자동 차단, warn=사람 판단)" isLast onSave={() => saveAndNext(4)} saved={savedSteps.has(4)}>
+          <Field label={<span>자동 발행 <HelpTip text="켜면 검수를 통과(Verified)한 기사를 사람 확인 없이 자동 발행합니다. 차단·경고가 있으면 자동이어도 사람 대기로 남습니다. 끄면 모두 사람이 직접 발행." /></span>}>
+            <label className="flex h-[42px] items-center gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 text-sm text-slate-700">
+              <input type="checkbox" checked={s.finalReview.autoPublish ?? false}
+                onChange={e => setReview({ autoPublish: e.target.checked })} />
+              검수 통과 시 자동 발행
+            </label>
+          </Field>
           <Field label={<span>금지 매체 <HelpTip text="최종 검수에서 출처로 쓰면 안 되는 매체입니다. 발견되면 발행 전 차단됩니다." /></span>}>
             <TagInput
               values={s.finalReview.bannedMedia}
