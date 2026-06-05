@@ -20,6 +20,13 @@ function computeGolden(gt: Task['goldenTime'], now: number): GoldenView | null {
   const state = remainingMs <= 0 ? 'expired' : percent < 20 ? 'warning' : 'ok';
   return { remainingMs, percent, state };
 }
+function fmtDur(ms: number): string {
+  if (ms <= 0) return '곧';
+  const m = Math.ceil(ms / 60000);
+  if (m < 60) return `${m}분`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}시간` : `${Math.floor(h / 24)}일`;
+}
 type ColMeta = {
   status: TaskStatus; label: string; auto: boolean;
   bar: string;        // 상단 컬러 바
@@ -64,9 +71,17 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   const maxPerHour = campaigns.find(c => c.id === campaignId)?.settings.searching.maxPerHour ?? 3;
   const rhythm = useMemo(() => {
     const now = Date.now();
-    const promotedLastHour = tasks.filter(t => t.promotedAt && now - t.promotedAt <= HOUR).length;
+    const promotedInWindow = tasks.filter(t => t.promotedAt && now - t.promotedAt <= HOUR);
+    const promotedLastHour = promotedInWindow.length;
     const queueCount = tasks.filter(t => t.status === 'searching' && !t.error && !t.paused).length;
-    return { promotedLastHour, maxPerHour, queueCount, collected: articles.length, atCap: maxPerHour > 0 && promotedLastHour >= maxPerHour };
+    const atCap = maxPerHour > 0 && promotedLastHour >= maxPerHour;
+    // 다음 승급까지: 상한 찼을 때 가장 오래된 승급이 60분 윈도우서 빠질 때까지
+    let nextPromotionMs = 0;
+    if (atCap && promotedInWindow.length > 0) {
+      const oldest = Math.min(...promotedInWindow.map(t => t.promotedAt!));
+      nextPromotionMs = Math.max(0, oldest + HOUR - now);
+    }
+    return { promotedLastHour, maxPerHour, queueCount, collected: articles.length, atCap, nextPromotionMs };
   }, [tasks, maxPerHour, articles.length]);
 
   // 0건 진단: 수집은 됐는데 태스크가 안 생기는 이유를 클러스터 거부 사유로 집계
@@ -122,6 +137,9 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
             : <InfoChip tone={rhythm.atCap ? 'amber' : 'neutral'}>승급 {rhythm.promotedLastHour} · 무제한</InfoChip>}
           <InfoChip tone="blue">① 대기 {rhythm.queueCount}</InfoChip>
           <InfoChip>수집 {rhythm.collected}</InfoChip>
+          {rhythm.atCap && rhythm.nextPromotionMs > 0 && (
+            <InfoChip tone="amber">다음 승급 {fmtDur(rhythm.nextPromotionMs)} 뒤 (멈춤 아님)</InfoChip>
+          )}
         </span>
       </div>
       <div className="flex min-h-0 flex-1 gap-5 overflow-x-auto px-4 pb-6 pt-3 sm:px-8">
@@ -198,7 +216,7 @@ function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, 
   const retrying = task.status === 'producing' && !task.draft && !task.error && attempts >= 1;
   const inProgress = taskActive(task);
   const progressLabel =
-    task.status === 'searching' ? '수집 중'
+    task.status === 'searching' ? '승급 대기'
     : task.status === 'topic_review' ? '주제 검수 중'
     : retrying ? `재시도 ${attempts + 1}/3`
     : '작성 중';
