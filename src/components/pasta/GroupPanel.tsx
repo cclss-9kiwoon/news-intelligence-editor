@@ -1,7 +1,46 @@
 import { useState } from 'react';
 import { useCampaigns } from '../../state/CampaignContext';
+import { useTasks } from '../../state/TaskContext';
 import { HelpTip } from './HelpTip';
-import type { Group, ChannelType, FormalityLevel, SourceStrictness } from '../../types';
+import type { Group, ChannelType, FormalityLevel, SourceStrictness, ArticleWindow, Campaign, Task } from '../../types';
+
+const WINDOW_LABEL: Record<ArticleWindow, string> = {
+  '1h': '1시간', '24h': '24시간', '7d': '7일', '30d': '30일', breaking: '속보',
+};
+
+// 자동 단계에서 작업이 돌아가는 중인지 (칸반 taskActive와 동일 기준)
+function taskActive(t: Task): boolean {
+  if (t.error) return false;
+  if (t.status === 'searching' || t.status === 'topic_review') return true;
+  if (t.status === 'producing' && !t.draft) return true;
+  return false;
+}
+
+function Spinner({ className = '' }: { className?: string }) {
+  return (
+    <svg className={`animate-spin motion-reduce:animate-none ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.4 0 0 5.4 0 12h4z" />
+    </svg>
+  );
+}
+
+// 캠페인 설정 요약 — 어떤 설정의 캠페인인지 한눈에
+function summarize(c: Campaign) {
+  const s = c.settings.searching;
+  const apiOn = s.apiEnabled ?? true;
+  const rssOn = s.rssEnabled ?? true;
+  const sources = [apiOn && 'API', rssOn && 'RSS'].filter(Boolean).join('·') || '수집 꺼짐';
+  const queryCount = s.searchProviders
+    ? s.searchProviders.filter(p => p.enabled && p.query.trim()).length
+    : (s.naverQueries?.length ?? 0) + (s.daumQueries?.length ?? 0);
+  const reviewCount = c.settings.finalReview.reviewRules.filter(r => r.enabled).length;
+  return {
+    window: WINDOW_LABEL[s.articleWindow] ?? s.articleWindow,
+    sources, collectionOn: apiOn || rssOn, queryCount, reviewCount,
+    keywordCount: s.topicKeywords.length,
+  };
+}
 
 const CHANNEL_TYPES: { value: ChannelType; label: string; icon: string }[] = [
   { value: 'news_media', label: '전문 보도 매체', icon: '📰' },
@@ -39,6 +78,7 @@ function formatRelative(ts?: number): string {
 
 export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCampaign: (id: string) => void }) {
   const { renameGroup, campaigns, addCampaign, duplicateCampaign, updateGroupProfile } = useCampaigns();
+  const { tasks } = useTasks();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -157,26 +197,57 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
             >새 캠페인 시작</button>
           </div>
         ) : (
-          <div className="mt-2 space-y-1">
-            {groupCampaigns.map(c => (
-              <div
-                key={c.id}
-                className="group flex w-full items-center justify-between rounded-lg border border-slate-100 bg-white/60 px-3 py-2 text-left text-sm text-slate-700 hover:bg-white"
-              >
-                <button onClick={() => onOpenCampaign(c.id)} className="flex min-w-0 flex-1 items-center gap-2">
-                  <span className="truncate">📋 {c.name}</span>
-                  <span className="shrink-0 text-[11px] text-slate-300">{formatRelative(c.updatedAt)}</span>
-                </button>
-                <span className="ml-2 flex shrink-0 items-center gap-2">
-                  <button
-                    title="복제"
-                    onClick={() => { const copy = duplicateCampaign(c.id); if (copy) onOpenCampaign(copy.id); }}
-                    className="text-slate-300 hover:text-indigo-500"
-                  >📑</button>
-                  <button onClick={() => onOpenCampaign(c.id)} className="text-xs text-slate-400 hover:text-slate-600">설정 →</button>
-                </span>
-              </div>
-            ))}
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {groupCampaigns.map(c => {
+              const sum = summarize(c);
+              const activeCount = tasks.filter(t => t.campaignId === c.id && taskActive(t)).length;
+              const status = activeCount > 0
+                ? { label: `작동 중 · ${activeCount}건`, cls: 'bg-blue-50 text-blue-700', spin: true, dot: '' }
+                : sum.collectionOn
+                  ? { label: '대기', cls: 'bg-slate-100 text-slate-500', spin: false, dot: 'bg-emerald-400' }
+                  : { label: '정지', cls: 'bg-slate-100 text-slate-400', spin: false, dot: 'bg-slate-300' };
+              return (
+                <div
+                  key={c.id}
+                  onClick={() => onOpenCampaign(c.id)}
+                  className="pasta-springy group flex cursor-pointer flex-col rounded-xl border border-slate-200 bg-white/70 p-3.5 text-left shadow-sm hover:border-slate-300 hover:shadow-md"
+                >
+                  {/* 상단: 이름 + 상태 */}
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">📋 {c.name}</span>
+                    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-mono font-semibold ${status.cls}`}>
+                      {status.spin
+                        ? <Spinner className="h-2.5 w-2.5 text-blue-500" />
+                        : <span className={`h-1.5 w-1.5 rounded-full ${status.dot}`} />}
+                      {status.label}
+                    </span>
+                  </div>
+
+                  {/* 설정 요약 칩 */}
+                  <div className="mt-2.5 flex flex-wrap gap-1.5 text-[11px] font-mono">
+                    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-slate-600">⏱ {sum.window}</span>
+                    <span className={`rounded-md px-1.5 py-0.5 ${sum.collectionOn ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-400'}`}>📡 {sum.sources}</span>
+                    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-slate-600">🔎 검색어 {sum.queryCount}</span>
+                    <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-slate-600">🏷 키워드 {sum.keywordCount}</span>
+                    <span className="rounded-md bg-amber-50 px-1.5 py-0.5 text-amber-700">✔ 검수 {sum.reviewCount}</span>
+                  </div>
+
+                  {/* 하단: 갱신 시각 + 액션 */}
+                  <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2">
+                    <span className="text-[11px] text-slate-300">{formatRelative(c.updatedAt) || '—'}</span>
+                    <span className="flex items-center gap-2">
+                      <button
+                        title="복제"
+                        aria-label={`캠페인 복제: ${c.name}`}
+                        onClick={e => { e.stopPropagation(); const copy = duplicateCampaign(c.id); if (copy) onOpenCampaign(copy.id); }}
+                        className="text-slate-300 hover:text-indigo-500"
+                      >📑</button>
+                      <span className="text-xs font-semibold text-slate-400 group-hover:text-slate-700">설정 →</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
