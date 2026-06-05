@@ -6,6 +6,7 @@ import { useTasks } from '../../state/TaskContext';
 import { generateStory, judgeExcludedTopic } from '../../lib/promptChain';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
+import { promotionBudget } from '../../lib/promotion';
 import { judgeBreaking } from '../../lib/breakingDetector';
 import { cheapStageSettings, writingStageSettings } from '../../lib/stageModel';
 import type { Campaign, Category, Task } from '../../types';
@@ -93,32 +94,34 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSig, articles, windowMs]);
 
-  // ── 2. ①→② 승급: 속보는 상한 무시 즉시. 나머지는 시간당 상한 내 우선·최신 순 ──
+  // ── 2. ①→② 승급: maxPerHour 절대 초과 금지. 속보는 바이패스 아니라 '우선순위'로 처리. ──
+  // (이전 버그: 속보 즉시승급이 maxPerHour 무시 → BREAKING_KEYWORDS가 컴백/결혼 등 광범위라
+  //  대부분 태스크가 isBreaking으로 상한 우회 → 9>3 폭주. 이제 속보도 예산 내 우선 승급.)
   useEffect(() => {
     const now = Date.now();
     const queue = myTasks.filter(t => t.status === 'searching' && !t.error && !t.paused);
+    if (queue.length === 0) return;
 
-    // 속보 즉시 승급 (maxPerHour 무시)
-    const breaking = queue.filter(t => t.isBreaking);
-    for (const t of breaking) updateTask(t.id, { status: 'topic_review', promotedAt: now });
+    // 예산 = maxPerHour − 최근1시간 승급수 (순수함수). 같은 사이클은 로컬 카운터로 추가 차감.
+    let budget = promotionBudget(myTasks, campaign.id, maxPerHour, now);
+    if (budget <= 0) return;
 
-    const promotedLastHour = myTasks.filter(t => t.promotedAt && now - t.promotedAt <= HOUR_MS).length;
-    let slots = maxPerHour > 0 ? maxPerHour - promotedLastHour : Infinity;
-    if (slots <= 0) return;
-
-    const rest = queue.filter(t => !t.isBreaking);
     // 골든타임 임박(잔여 < 20%) 자동 우선 플래그
-    for (const t of rest) {
+    for (const t of queue) {
       if (!t.priority && windowMs > 0 && (expiresAtOf(t) - now) < windowMs * 0.2) {
         updateTask(t.id, { priority: true });
       }
     }
-    rest.sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || startsAtOf(b) - startsAtOf(a));
+    // 정렬: 속보 → 우선 → 최신. (속보=먼저 승급, 단 예산은 공유 — 절대 초과 X)
+    const sorted = [...queue].sort((a, b) =>
+      (b.isBreaking ? 1 : 0) - (a.isBreaking ? 1 : 0) ||
+      (b.priority ? 1 : 0) - (a.priority ? 1 : 0) ||
+      startsAtOf(b) - startsAtOf(a));
 
-    for (const t of rest) {
-      if (slots <= 0) break;
+    for (const t of sorted) {
+      if (budget <= 0) break;
       updateTask(t.id, { status: 'topic_review', promotedAt: now });
-      slots--;
+      budget--; // 동일 사이클 즉시 차감 → 레이스 차단
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSig, articles, maxPerHour, windowMs]);
@@ -196,8 +199,14 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
           try { review = await reviewDraft(draft, cheapStageSettings(settings)); } catch { review = undefined; }
           if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review', produceAttempts: attempt });
         })
-        .catch(() => {
+        .catch((err: unknown) => {
           if (!mountedRef.current) return;
+          // 429/quota 소진(서킷 throw)이면 재시도 카운트 올리지 말고 보류 — 무한 재시도/폭주 방지.
+          // 서킷 cooldown 해제 후 자연 재개. (status 429 = OpenAIError 또는 서킷 차단)
+          if ((err as { status?: number })?.status === 429) {
+            producingRef.current.delete(t.id);
+            return;
+          }
           if (attempt < MAX_ATTEMPTS) {
             // 자동 재시도: producing 유지, attempts만 증가 (다음 사이클에 재실행)
             updateTask(t.id, { produceAttempts: attempt });
