@@ -15,6 +15,7 @@ type Ctx = {
 
   // group CRUD
   addGroup: (name: string, profile?: Partial<import('../types').GroupProfile>) => Group;
+  duplicateGroup: (id: string) => Group | null;
   updateGroupProfile: (id: string, patch: Partial<import('../types').GroupProfile>) => void;
   renameGroup: (id: string, name: string) => void;
   deleteGroup: (id: string) => void;
@@ -60,6 +61,20 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     setGroups(prev => [...prev, g]);
     return g;
   }, []);
+
+  const duplicateGroup = useCallback((id: string) => {
+    const src = groups.find(g => g.id === id);
+    if (!src) return null;
+    const ng = makeGroup(`${src.name} 복사`, src.profile);
+    const newCamps = campaigns.filter(c => c.groupId === id).map(c => {
+      const nc = makeCampaign(ng.id, c.name);
+      nc.settings = JSON.parse(JSON.stringify(c.settings));
+      return nc;
+    });
+    setGroups(prev => [...prev, ng]);
+    if (newCamps.length) setCampaigns(prev => [...prev, ...newCamps]);
+    return ng;
+  }, [groups, campaigns]);
 
   const updateGroupProfile = useCallback((id: string, patch: Partial<import('../types').GroupProfile>) => {
     setGroups(prev => prev.map(g => (g.id === id ? { ...g, profile: { ...g.profile, ...patch } } : g)));
@@ -112,7 +127,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   return (
     <CampaignCtx.Provider value={{
       groups, campaigns, activeCampaignId, activeCampaign,
-      addGroup, updateGroupProfile, renameGroup, deleteGroup,
+      addGroup, duplicateGroup, updateGroupProfile, renameGroup, deleteGroup,
       addCampaign, duplicateCampaign, renameCampaign, deleteCampaign, updateCampaignSettings,
       setActiveCampaign,
     }}>
