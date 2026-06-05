@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { SettingsProvider, useSettings } from './state/SettingsContext';
 import { CampaignProvider, useCampaigns } from './state/CampaignContext';
 import { TaskProvider } from './state/TaskContext';
@@ -100,11 +100,32 @@ function AppShell({ onBackToPasta, campaignName }: { onBackToPasta: () => void; 
 }
 
 function PastaRouter() {
-  const [mode, setMode] = useState<'pasta' | 'kanban' | 'workspace' | 'workbench'>('pasta');
+  // reload 시 마지막 위치 복원 — workspace는 openTaskId 없으니 kanban으로 폴백
+  const [mode, setMode] = useState<'pasta' | 'kanban' | 'workspace' | 'workbench'>(() => {
+    const m = loadJson<string>('pasta:mode', 'pasta');
+    return m === 'kanban' || m === 'workbench' ? (m as 'kanban' | 'workbench') : 'pasta';
+  });
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [forceSettingsId, setForceSettingsId] = useState<string | null>(null);
   const { applyCampaignSettings } = useSettings();
   const { campaigns, groups, setActiveCampaign, activeCampaign, markCampaignConfigured } = useCampaigns();
+
+  useEffect(() => { saveJson('pasta:mode', mode); }, [mode]);
+
+  // 마운트 시 복원: 칸반/워크벤치였으면 활성 캠페인 설정 재주입(파이프라인용). 캠페인 없으면 목록으로.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current) return; restored.current = true;
+    if (mode !== 'pasta') {
+      if (activeCampaign) {
+        const g = groups.find(x => x.id === activeCampaign.groupId);
+        applyCampaignSettings(activeCampaign.settings, g?.profile);
+      } else {
+        setMode('pasta');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openCampaign = (campaignId: string) => {
     const c = campaigns.find(x => x.id === campaignId);

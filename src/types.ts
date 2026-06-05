@@ -285,6 +285,7 @@ export type SourceConfig = {
 
 /** ② 주제 검수 설정 — 어떤 주제를 고르나 */
 export type TopicReviewConfig = {
+  intent?: string;            // 캠페인 주제 정의(자연어) — ② AI 적합성 선별 기준. 주력(키워드는 보조)
   selectionCriteria: string;  // 주제 선정 기준 (최신성/인지도/다양성)
   dedupeRules: string;        // 중복·앵글 회피 규칙
   priority: string;           // 우선순위

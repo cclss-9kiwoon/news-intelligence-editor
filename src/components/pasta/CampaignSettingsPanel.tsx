@@ -538,6 +538,9 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
       {/* ② 주제 검수 */}
       {step === 2 && (
         <Section title="📌 주제 검수" desc="어떤 주제를 고르나 + 쓸 만한 출처가 모였나" auto sequential={!isConfigured} onSave={() => saveAndNext(2)} saved={savedSteps.has(2)}>
+          <PromptField label="주제 정의 (주력)" help="이 캠페인이 다룰 주제를 자연어로 적습니다. AI가 이 정의에 맞는 기사만 검수 단계로 올립니다. 포함 키워드보다 이게 주력 선별 기준입니다." value={s.topicReview.intent ?? ''}
+            onChange={v => setTopic({ intent: v })} onReset={() => setTopic({ intent: '' })} rows={2} />
+          <p className="-mt-2 text-[11px] text-slate-400">예: "K-pop 컴백·신보 발매 소식" / "아이돌 일상·예능·SNS" / "연예계 사건·사고·논란"{group?.profile.character ? ` · 채널 성격: ${group.profile.character}` : ''}</p>
           <PromptField label="주제 선정 기준" help="AI가 어떤 주제를 기사로 고를지 판단하는 기준입니다. 최신성·인지도·다양성 같은 우선 가치를 적습니다." value={s.topicReview.selectionCriteria}
             onChange={v => setTopic({ selectionCriteria: v })} onReset={() => setTopic({ selectionCriteria: '' })} rows={3} />
           <PromptField label="같은 내용 중복 피하기" help="이미 다룬 주제를 또 쓰지 않도록 하는 규칙. 같은 소재라도 다른 관점이면 허용할지 등을 적습니다." value={s.topicReview.dedupeRules}

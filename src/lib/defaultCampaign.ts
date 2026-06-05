@@ -60,6 +60,7 @@ export function makeDefaultCampaignSettings(): CampaignSettings {
       searchProviders: DEFAULT_SOURCE_CONFIG.searchProviders.map(p => ({ ...p })),
     },
     topicReview: {
+      intent: '',
       selectionCriteria: '최신성 우선, 인지도 높은 주제, 다양성 확보.',
       dedupeRules: '같은 내용 중복 금지. 이미 다룬 주제는 다른 관점일 때만 허용.',
       priority: '속보 > 발표 > 차트/마일스톤 > 일반.',
