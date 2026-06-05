@@ -90,10 +90,12 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
     setDaumStatus({ state: result.ok ? 'ok' : 'error', message: result.message });
   };
 
-  // 설정은 onChange로 이미 자동 저장됨. 이 버튼은 단계 확정 + 다음 단계 전환 + 연결선 진행.
+  // 설정은 onChange로 자동 저장됨. 신규(미설정) 캠페인은 순차 진행(다음 단계),
+  // 기존 캠페인(configured)은 단계별 독립 저장(전환 없이 해당 단계만 확정).
+  const isConfigured = campaign.configured ?? false;
   const saveAndNext = (n: Step) => {
     setSavedSteps(prev => new Set(prev).add(n));
-    if (n < 4) setStep((n + 1) as Step);
+    if (!isConfigured && n < 4) setStep((n + 1) as Step);
   };
 
   const setSearching = (patch: Partial<SourceConfig>) =>
@@ -206,7 +208,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
 
       {/* ① 기사 찾기 */}
       {step === 1 && (
-        <Section title="📌 기사 찾기" desc="어디서 어떤 기사를 가져올지" auto onSave={() => saveAndNext(1)} saved={savedSteps.has(1)}>
+        <Section title="📌 기사 찾기" desc="어디서 어떤 기사를 가져올지" auto sequential={!isConfigured} onSave={() => saveAndNext(1)} saved={savedSteps.has(1)}>
           <div className="rounded-2xl border border-slate-200 bg-white/65 p-4">
             <div className="mb-3 flex items-center justify-between">
               <div>
@@ -521,7 +523,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
 
       {/* ② 주제 검수 */}
       {step === 2 && (
-        <Section title="📌 주제 검수" desc="어떤 주제를 고르나 + 쓸 만한 출처가 모였나" auto onSave={() => saveAndNext(2)} saved={savedSteps.has(2)}>
+        <Section title="📌 주제 검수" desc="어떤 주제를 고르나 + 쓸 만한 출처가 모였나" auto sequential={!isConfigured} onSave={() => saveAndNext(2)} saved={savedSteps.has(2)}>
           <PromptField label="주제 선정 기준" help="AI가 어떤 주제를 기사로 고를지 판단하는 기준입니다. 최신성·인지도·다양성 같은 우선 가치를 적습니다." value={s.topicReview.selectionCriteria}
             onChange={v => setTopic({ selectionCriteria: v })} onReset={() => setTopic({ selectionCriteria: '' })} rows={3} />
           <PromptField label="같은 내용 중복 피하기" help="이미 다룬 주제를 또 쓰지 않도록 하는 규칙. 같은 소재라도 다른 관점이면 허용할지 등을 적습니다." value={s.topicReview.dedupeRules}
@@ -533,7 +535,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
 
       {/* ③ 생성 */}
       {step === 3 && (
-        <Section title="📌 기사 작성" desc="어떻게 쓸지 정합니다 (AI 지시문 + 표기 규칙)" auto onSave={() => saveAndNext(3)} saved={savedSteps.has(3)}>
+        <Section title="📌 기사 작성" desc="어떻게 쓸지 정합니다 (AI 지시문 + 표기 규칙)" auto sequential={!isConfigured} onSave={() => saveAndNext(3)} saved={savedSteps.has(3)}>
           <Field label={<span>작성 AI 모델 <HelpTip text="기사 본문을 쓰는 AI 모델입니다. 높은 모델일수록 품질이 좋지만 비용·한도 부담이 큽니다. 주제 판단·검수는 자동으로 저렴한 모델을 써서 한도를 아낍니다. 비우면 기본 모델 사용." /></span>}>
             <select className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
               value={s.generation.writingModel ?? ''}
@@ -601,7 +603,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
 
       {/* ④ 최종 검수 */}
       {step === 4 && (
-        <Section title="📌 최종 검수" desc="발행 전 무엇을 확인할지 정합니다 (block=자동 차단, warn=사람 판단)" isLast onSave={() => saveAndNext(4)} saved={savedSteps.has(4)}>
+        <Section title="📌 최종 검수" desc="발행 전 무엇을 확인할지 정합니다 (block=자동 차단, warn=사람 판단)" isLast sequential={!isConfigured} onSave={() => saveAndNext(4)} saved={savedSteps.has(4)}>
           <Field label={<span>자동 발행 <HelpTip text="켜면 검수를 통과(Verified)한 기사를 사람 확인 없이 자동 발행합니다. 차단·경고가 있으면 자동이어도 사람 대기로 남습니다. 끄면 모두 사람이 직접 발행." /></span>}>
             <label className="flex h-[42px] items-center gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 text-sm text-slate-700">
               <input type="checkbox" checked={s.finalReview.autoPublish ?? false}
@@ -638,11 +640,15 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
   );
 }
 
-function Section({ title, desc, children, onSave, saved, isLast, auto }: {
+function Section({ title, desc, children, onSave, saved, isLast, auto, sequential }: {
   title: string; desc: string; children: React.ReactNode;
-  onSave?: () => void; saved?: boolean; isLast?: boolean; auto?: boolean;
+  onSave?: () => void; saved?: boolean; isLast?: boolean; auto?: boolean; sequential?: boolean;
 }) {
   const btnColor = auto ? 'bg-blue-500 hover:bg-blue-600' : 'bg-amber-500 hover:bg-amber-600';
+  // 신규=순차(다음 단계/설정 완료), 기존=단계별 저장(전환 없음)
+  const label = sequential
+    ? (saved ? '✓ 완료' : isLast ? '설정 완료' : '다음 단계 →')
+    : '저장';
   return (
     <div className="mb-5 rounded-2xl border border-white/70 bg-white/70 p-5 shadow-sm backdrop-blur-md">
       <h3 className="font-bold text-slate-800">{title}</h3>
@@ -654,7 +660,7 @@ function Section({ title, desc, children, onSave, saved, isLast, auto }: {
           <button
             onClick={onSave}
             className={`rounded-full px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors ${btnColor}`}
-          >{saved ? '✓ 완료' : isLast ? '설정 완료' : '다음 단계 →'}</button>
+          >{label}</button>
         </div>
       )}
     </div>
