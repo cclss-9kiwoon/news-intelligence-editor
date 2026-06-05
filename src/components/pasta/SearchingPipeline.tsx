@@ -6,7 +6,7 @@ import { useTasks } from '../../state/TaskContext';
 import { generateStory, judgeExcludedTopic } from '../../lib/promptChain';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
-import type { Campaign, Category, Task } from '../../types';
+import type { Campaign, Category, Task, TaskSource } from '../../types';
 
 const SOURCE_REVIEW_TIMEOUT_MS = 90_000; // 전문 수집 대기 상한
 
@@ -45,22 +45,33 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     // 다음 클러스터 판정에서 claimedArticleIds·entityCountToday에 반영되게 한다.
     const working: Task[] = tasks.filter(t => t.campaignId === campaign.id);
 
+    // 시간당 생성 상한: 최근 60분 생성분 카운트 → 남은 만큼만. 0/미지정 처리.
+    const cap = searching.maxPerHour ?? 3;
+    let remaining = cap > 0 ? cap - working.filter(t => now - t.createdAt <= 3600_000).length : Infinity;
+    if (remaining <= 0) return;
+
+    // 자격 클러스터 후보 수집 (점유 판정). 클러스터는 기사 비공유라 배치 판정 안전.
+    const candidates: { cluster: typeof clusters[number]; sources: TaskSource[]; imageCount: number; mediaCount: number }[] = [];
     for (const cluster of clusters) {
       const decision = shouldClaimCluster(cluster, articles, searching, working, now);
       if (!decision.ok) continue;
+      candidates.push({
+        cluster, sources: decision.sources, imageCount: decision.imageCount,
+        mediaCount: new Set(decision.sources.map(s => s.source)).size,
+      });
+    }
 
+    // 우선순위: 다매체 desc → 최신(클러스터 createdAt) desc. 상한 초과분은 버림(다음 수집에 재평가).
+    candidates.sort((a, b) => b.mediaCount - a.mediaCount || b.cluster.createdAt - a.cluster.createdAt);
+
+    for (const c of candidates) {
+      if (remaining <= 0) break;
       addTask({
         campaignId: campaign.id, status: 'searching',
-        title: cluster.representativeTitle, clusterId: cluster.id, sources: decision.sources,
-        imageCount: decision.imageCount,
+        title: c.cluster.representativeTitle, clusterId: c.cluster.id, sources: c.sources,
+        imageCount: c.imageCount,
       });
-
-      // 동일 사이클 누적용 합성 태스크 (다음 판정의 claimed/entity 카운트에 반영)
-      working.push({
-        id: `__pending_${cluster.id}`, campaignId: campaign.id, status: 'searching',
-        title: cluster.representativeTitle, clusterId: cluster.id, sources: decision.sources,
-        imageCount: decision.imageCount, createdAt: now, updatedAt: now,
-      });
+      remaining--;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusters, articles, taskSig, campaign.id, campaign.autoCollect?.enabled]);

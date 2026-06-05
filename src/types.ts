@@ -274,6 +274,7 @@ export type SourceConfig = {
   entityAllowlist: string[];   // 허용 엔티티(인물/브랜드). 비면 전체 허용
   excludeTopics: string[];     // 제외 주제(구문 단위, 대소문자 무시)
   maxPerEntityPerDay: number;  // 엔티티당 하루 최대 기사 건수 (0=무제한)
+  maxPerHour?: number;         // 시간당 신규 태스크 생성 상한 (기본 3, 0=무제한). 초과분은 버림
   ownSiteDedupe: boolean;      // 자체 기보도 제목과 중복되면 스킵
   imageSourcePolicy: string;   // 이미지 출처 정책 (검수 프롬프트에 주입)
 };

@@ -33,6 +33,7 @@ export const DEFAULT_SOURCE_CONFIG: SourceConfig = {
   entityAllowlist: [],
   excludeTopics: [],
   maxPerEntityPerDay: 0,
+  maxPerHour: 3,
   ownSiteDedupe: false,
   imageSourcePolicy: '',
 };

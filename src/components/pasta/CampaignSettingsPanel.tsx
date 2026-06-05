@@ -493,6 +493,11 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                   value={s.searching.maxPerEntityPerDay ?? 0}
                   onChange={e => setSearching({ maxPerEntityPerDay: Math.max(0, Number(e.target.value) || 0) })} />
               </Field>
+              <Field label={<span>시간당 생성 상한 <HelpTip text="한 시간에 만들 새 기사 건수 상한입니다. 자격 묶음이 많아도 우선순위(다매체·최신) 높은 것부터 이 수만큼만 만들고 나머지는 다음 수집에 다시 평가합니다. 0이면 무제한. AI 호출 폭주 방지." /></span>}>
+                <input type="number" min={0} max={50} className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
+                  value={s.searching.maxPerHour ?? 3}
+                  onChange={e => setSearching({ maxPerHour: Math.max(0, Number(e.target.value) || 0) })} />
+              </Field>
               <Field label={<span>자체 기보도 중복 회피 <HelpTip text="이미 제작·발행한 기사 제목과 겹치는 주제는 새로 만들지 않습니다." /></span>}>
                 <label className="flex h-[42px] items-center gap-2 rounded-lg border border-slate-200 bg-white/80 px-3 text-sm text-slate-700">
                   <input type="checkbox" checked={s.searching.ownSiteDedupe ?? false}
