@@ -559,14 +559,18 @@ function Section({ title, desc, children, onSave, saved, isLast, auto }: {
 }
 
 function ApiStatusBadge({ status }: { status: ApiStatus }) {
-  const icon = status.state === 'ok' ? '✅' : status.state === 'error' ? '❌' : '⚪';
+  const testing = status.state === 'testing';
+  // 무드 통일: ok=그린 / error=레드 / testing=앰버 펄스 / idle=뉴트럴
+  const icon = status.state === 'ok' ? '✅' : status.state === 'error' ? '❌' : testing ? '◌' : '⚪';
   const tone = status.state === 'ok'
     ? 'bg-green-50 text-green-700 border-green-200'
     : status.state === 'error'
       ? 'bg-red-50 text-red-700 border-red-200'
-      : 'bg-slate-50 text-slate-500 border-slate-200';
+      : testing
+        ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
+        : 'bg-slate-50 text-slate-500 border-slate-200';
   return (
-    <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>
+    <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${tone}`}>
       {icon} {status.message}
     </span>
   );
