@@ -17,11 +17,13 @@ export function CampaignSidebar({
   view, selectedId, selectedGroupId,
   onSelectCampaign, onSelectGroup, onAddGroup, onSelectTemplate,
 }: Props) {
-  const { groups, campaigns, addCampaign, duplicateCampaign, renameGroup, deleteGroup, deleteCampaign } = useCampaigns();
+  const { groups, campaigns, addCampaign, duplicateCampaign, renameCampaign, renameGroup, deleteGroup, deleteCampaign } = useCampaigns();
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [newCampaignName, setNewCampaignName] = useState('');
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
   const [groupNameDraft, setGroupNameDraft] = useState('');
+  const [editingCampaign, setEditingCampaign] = useState<string | null>(null);
+  const [campNameDraft, setCampNameDraft] = useState('');
 
   return (
     <div className="flex h-full flex-col gap-1 overflow-y-auto border-r border-slate-200 bg-white p-3 text-sm">
@@ -80,22 +82,44 @@ export function CampaignSidebar({
                     view === 'campaign' && selectedId === c.id ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                   onClick={() => onSelectCampaign(c.id)}
+                  onDoubleClick={() => { setEditingCampaign(c.id); setCampNameDraft(c.name); }}
                 >
-                  <span className="truncate">📋 {c.name}</span>
-                  <span className="ml-1 flex shrink-0 items-center gap-1">
-                    <button
-                      title="복제"
-                      onClick={(e) => { e.stopPropagation(); const copy = duplicateCampaign(c.id); if (copy) onSelectCampaign(copy.id); }}
-                      className={view === 'campaign' && selectedId === c.id ? 'text-slate-300 hover:text-white' : 'text-slate-300 hover:text-indigo-500'}
-                    >📑</button>
-                    <button
-                      title="삭제"
-                      onClick={(e) => { e.stopPropagation(); if (confirm(`캠페인 "${c.name}" 삭제?`)) deleteCampaign(c.id); }}
-                      className={view === 'campaign' && selectedId === c.id ? 'text-slate-300 hover:text-white' : 'text-slate-300 hover:text-red-500'}
-                    >🗑</button>
-                  </span>
+                  {editingCampaign === c.id ? (
+                    <input
+                      autoFocus
+                      className="w-full rounded border px-1.5 py-0.5 text-xs text-slate-700"
+                      value={campNameDraft}
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => setCampNameDraft(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && campNameDraft.trim()) { renameCampaign(c.id, campNameDraft.trim()); setEditingCampaign(null); }
+                        else if (e.key === 'Escape') setEditingCampaign(null);
+                      }}
+                      onBlur={() => { if (campNameDraft.trim()) renameCampaign(c.id, campNameDraft.trim()); setEditingCampaign(null); }}
+                    />
+                  ) : (
+                    <>
+                      <span className="truncate" title="더블클릭으로 이름 변경">📋 {c.name}</span>
+                      <span className="ml-1 flex shrink-0 items-center gap-1">
+                        <button
+                          title="복제"
+                          onClick={(e) => { e.stopPropagation(); const copy = duplicateCampaign(c.id); if (copy) onSelectCampaign(copy.id); }}
+                          className={view === 'campaign' && selectedId === c.id ? 'text-slate-300 hover:text-white' : 'text-slate-300 hover:text-indigo-500'}
+                        >📑</button>
+                        <button
+                          title="삭제"
+                          onClick={(e) => { e.stopPropagation(); if (confirm(`캠페인 "${c.name}" 삭제?`)) deleteCampaign(c.id); }}
+                          className={view === 'campaign' && selectedId === c.id ? 'text-slate-300 hover:text-white' : 'text-slate-300 hover:text-red-500'}
+                        >🗑</button>
+                      </span>
+                    </>
+                  )}
                 </div>
               ))}
+
+              {groupCampaigns.length === 0 && addingTo !== group.id && (
+                <p className="px-2 py-1 text-[11px] italic text-slate-300">캠페인 없음</p>
+              )}
 
               {addingTo === group.id ? (
                 <input
