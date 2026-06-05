@@ -52,8 +52,40 @@ export function getLlmConcurrency(): { active: number; queued: number } {
   return { active: activeLlm, queued: llmQueue.length };
 }
 
+// ─── 429 글로벌 서킷브레이커 (총량 폭주 차단) ───────────────────────
+// 동시상한은 동시성만 묶음(총 호출량 X). quota 소진(429)이 시작되면
+// 모든 chatJson을 cooldown 동안 즉시 차단(호출 안 함) → 444 폭주 원천 차단.
+// 연속 429마다 cooldown 지수 증가. 성공 1회면 리셋.
+const BASE_COOLDOWN_MS = 60_000;        // 첫 429 후 60초
+const MAX_COOLDOWN_MS = 15 * 60_000;    // 상한 15분
+let circuitOpenUntil = 0;
+let consecutive429 = 0;
+// Date.now 대신 주입 가능(테스트). 기본은 실시간.
+let nowFn: () => number = () => Date.now();
+export function _setNowFn(fn: () => number) { nowFn = fn; } // 테스트 전용
+
+function isCircuitOpen(): boolean { return nowFn() < circuitOpenUntil; }
+function trip429(): void {
+  consecutive429++;
+  const cooldown = Math.min(BASE_COOLDOWN_MS * 2 ** (consecutive429 - 1), MAX_COOLDOWN_MS);
+  circuitOpenUntil = nowFn() + cooldown;
+}
+function resetCircuit(): void { consecutive429 = 0; circuitOpenUntil = 0; }
+
+/** 관측용 — 서킷 상태(차단 여부/해제 시각/연속 429). UI 배너·일시정지용 */
+export function getLlmCircuitState(): { open: boolean; until: number; consecutive429: number } {
+  return { open: isCircuitOpen(), until: circuitOpenUntil, consecutive429 };
+}
+export function resetLlmCircuit(): void { resetCircuit(); } // 테스트/수동 해제용
+
 export async function chatJson<T = unknown>(args: ChatJsonArgs): Promise<T> {
   if (!args.apiKey) throw new OpenAIError('API key is empty', 0);
+
+  // 서킷 차단 중이면 호출조차 안 함 (444 폭주 차단). 슬롯도 안 잡음.
+  if (isCircuitOpen()) {
+    const secs = Math.ceil((circuitOpenUntil - nowFn()) / 1000);
+    throw new OpenAIError(`LLM 한도 소진 — ${secs}초 후 재시도 (rate limit cooldown)`, 429);
+  }
 
   await acquireLlmSlot();
   try {
@@ -75,6 +107,8 @@ export async function chatJson<T = unknown>(args: ChatJsonArgs): Promise<T> {
     });
 
     if (!res.ok) {
+      // 429 → 서킷 트립(이후 cooldown 동안 전 호출 차단). 그 외는 서킷 영향 없음.
+      if (res.status === 429) trip429();
       let body: { error?: { message?: string } } = {};
       try { body = await res.json(); } catch { /* ignore */ }
       throw new OpenAIError(body.error?.message || `HTTP ${res.status}`, res.status);
@@ -86,6 +120,7 @@ export async function chatJson<T = unknown>(args: ChatJsonArgs): Promise<T> {
     if (parsed === undefined) {
       throw new OpenAIError('Response was not valid JSON: ' + content.slice(0, 200), 0);
     }
+    resetCircuit();   // 성공 → 서킷 리셋
     return parsed;
   } finally {
     releaseLlmSlot();
