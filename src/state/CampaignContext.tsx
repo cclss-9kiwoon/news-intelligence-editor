@@ -21,6 +21,7 @@ type Ctx = {
 
   // campaign CRUD
   addCampaign: (groupId: string, name: string) => Campaign;
+  duplicateCampaign: (id: string) => Campaign | null;
   renameCampaign: (id: string, name: string) => void;
   deleteCampaign: (id: string) => void;
   updateCampaignSettings: (id: string, patch: Partial<CampaignSettings>) => void;
@@ -80,6 +81,15 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     return c;
   }, []);
 
+  const duplicateCampaign = useCallback((id: string) => {
+    const src = campaigns.find(c => c.id === id);
+    if (!src) return null;
+    const copy = makeCampaign(src.groupId, `${src.name} 복사`);
+    copy.settings = JSON.parse(JSON.stringify(src.settings));
+    setCampaigns(prev => [...prev, copy]);
+    return copy;
+  }, [campaigns]);
+
   const renameCampaign = useCallback((id: string, name: string) => {
     setCampaigns(prev => prev.map(c => (c.id === id ? { ...c, name, updatedAt: Date.now() } : c)));
   }, []);
@@ -103,7 +113,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     <CampaignCtx.Provider value={{
       groups, campaigns, activeCampaignId, activeCampaign,
       addGroup, updateGroupProfile, renameGroup, deleteGroup,
-      addCampaign, renameCampaign, deleteCampaign, updateCampaignSettings,
+      addCampaign, duplicateCampaign, renameCampaign, deleteCampaign, updateCampaignSettings,
       setActiveCampaign,
     }}>
       {children}

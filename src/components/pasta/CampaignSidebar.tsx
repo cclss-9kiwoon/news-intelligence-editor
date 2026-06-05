@@ -17,7 +17,7 @@ export function CampaignSidebar({
   view, selectedId, selectedGroupId,
   onSelectCampaign, onSelectGroup, onAddGroup, onSelectTemplate,
 }: Props) {
-  const { groups, campaigns, addCampaign, deleteGroup, deleteCampaign } = useCampaigns();
+  const { groups, campaigns, addCampaign, duplicateCampaign, deleteGroup, deleteCampaign } = useCampaigns();
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [newCampaignName, setNewCampaignName] = useState('');
 
@@ -62,10 +62,18 @@ export function CampaignSidebar({
                   onClick={() => onSelectCampaign(c.id)}
                 >
                   <span className="truncate">📋 {c.name}</span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); if (confirm(`캠페인 "${c.name}" 삭제?`)) deleteCampaign(c.id); }}
-                    className={view === 'campaign' && selectedId === c.id ? 'text-slate-300 hover:text-white' : 'text-slate-300 hover:text-red-500'}
-                  >🗑</button>
+                  <span className="ml-1 flex shrink-0 items-center gap-1">
+                    <button
+                      title="복제"
+                      onClick={(e) => { e.stopPropagation(); const copy = duplicateCampaign(c.id); if (copy) onSelectCampaign(copy.id); }}
+                      className={view === 'campaign' && selectedId === c.id ? 'text-slate-300 hover:text-white' : 'text-slate-300 hover:text-indigo-500'}
+                    >📑</button>
+                    <button
+                      title="삭제"
+                      onClick={(e) => { e.stopPropagation(); if (confirm(`캠페인 "${c.name}" 삭제?`)) deleteCampaign(c.id); }}
+                      className={view === 'campaign' && selectedId === c.id ? 'text-slate-300 hover:text-white' : 'text-slate-300 hover:text-red-500'}
+                    >🗑</button>
+                  </span>
                 </div>
               ))}
 
