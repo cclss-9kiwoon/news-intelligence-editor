@@ -46,8 +46,9 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     const working: Task[] = tasks.filter(t => t.campaignId === campaign.id);
 
     // 시간당 생성 상한: 최근 60분 생성분 카운트 → 남은 만큼만. 0/미지정 처리.
+    // 실패(error) 태스크는 생산 부하가 아니므로 카운트 제외.
     const cap = searching.maxPerHour ?? 3;
-    let remaining = cap > 0 ? cap - working.filter(t => now - t.createdAt <= 3600_000).length : Infinity;
+    let remaining = cap > 0 ? cap - working.filter(t => !t.error && now - t.createdAt <= 3600_000).length : Infinity;
     if (remaining <= 0) return;
 
     // 자격 클러스터 후보 수집 (점유 판정). 클러스터는 기사 비공유라 배치 판정 안전.
