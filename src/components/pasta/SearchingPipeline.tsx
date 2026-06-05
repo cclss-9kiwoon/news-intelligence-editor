@@ -48,9 +48,10 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     const erroredByCluster = new Map<string, string>();
     campaignTasks.filter(t => t.error).forEach(t => erroredByCluster.set(t.clusterId, t.id));
 
-    // 시간당 생성 상한: 최근 60분 생성분 카운트 → 남은 만큼만. error 제외.
+    // 시간당 생성 상한: 최근 60분 "생성된 모든 태스크"(실패 포함) 카운트 → 남은 만큼만.
+    // 실패도 카운트해야 LLM 장애(429 등) 시 무한 재생성(runaway) 방지.
     const cap = searching.maxPerHour ?? 3;
-    let remaining = cap > 0 ? cap - working.filter(t => now - t.createdAt <= 3600_000).length : Infinity;
+    let remaining = cap > 0 ? cap - campaignTasks.filter(t => now - t.createdAt <= 3600_000).length : Infinity;
     if (remaining <= 0) return;
 
     // 자격 클러스터 후보 수집 (점유 판정). 클러스터는 기사 비공유라 배치 판정 안전.
