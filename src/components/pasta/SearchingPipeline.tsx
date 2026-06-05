@@ -6,6 +6,7 @@ import { useTasks } from '../../state/TaskContext';
 import { generateStory, judgeExcludedTopic } from '../../lib/promptChain';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
+import { cheapStageSettings, writingStageSettings } from '../../lib/stageModel';
 import type { Campaign, Category, Task } from '../../types';
 
 const SOURCE_REVIEW_TIMEOUT_MS = 90_000; // 전문 수집 대기 상한
@@ -141,7 +142,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
           const snippets = articles
             .filter(a => t.sources.some(s => s.articleId === a.id))
             .map(a => a.description || a.fullText?.slice(0, 300) || '');
-          judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, settings)
+          judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, cheapStageSettings(settings))
             .then(r => {
               if (!mountedRef.current) return;
               if (r.excluded) updateTask(t.id, { error: `제외 주제 해당: ${r.matched || '동일 주제'}` });
@@ -174,10 +175,10 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       const attempt = (t.produceAttempts ?? 0) + 1;
       const MAX_ATTEMPTS = 3;
 
-      generateStory(srcArticles, settings, category)
+      generateStory(srcArticles, writingStageSettings(settings, campaign.settings.generation.writingModel), category)
         .then(async draft => {
           let review;
-          try { review = await reviewDraft(draft, settings); } catch { review = undefined; }
+          try { review = await reviewDraft(draft, cheapStageSettings(settings)); } catch { review = undefined; }
           if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review', produceAttempts: attempt });
         })
         .catch(() => {

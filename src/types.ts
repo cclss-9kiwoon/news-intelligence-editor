@@ -293,6 +293,7 @@ export type GenerationConfig = {
   referenceArticles: ReferenceArticle[];
   styleGuide: string;               // 자유 가이드라인
   outputLanguage: OutputLanguage;
+  writingModel?: string;            // ③ 작성 전용 모델(비면 글로벌). 높을수록 품질↑
 };
 
 /** ④ 결과물 검수 설정 — 무엇을 검수하나 */

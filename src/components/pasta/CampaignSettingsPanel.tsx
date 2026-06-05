@@ -12,6 +12,7 @@ import { HelpTip } from './HelpTip';
 import { TagInput } from './TagInput';
 import { IconTrash } from './icons';
 import type { ReferenceArticle } from '../../types';
+import { PROVIDERS } from '../../types';
 
 const WINDOWS: { value: ArticleWindow; label: string }[] = [
   { value: '1h', label: '1시간' },
@@ -533,6 +534,16 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
       {/* ③ 생성 */}
       {step === 3 && (
         <Section title="📌 기사 작성" desc="어떻게 쓸지 정합니다 (AI 지시문 + 표기 규칙)" auto onSave={() => saveAndNext(3)} saved={savedSteps.has(3)}>
+          <Field label={<span>작성 AI 모델 <HelpTip text="기사 본문을 쓰는 AI 모델입니다. 높은 모델일수록 품질이 좋지만 비용·한도 부담이 큽니다. 주제 판단·검수는 자동으로 저렴한 모델을 써서 한도를 아낍니다. 비우면 기본 모델 사용." /></span>}>
+            <select className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
+              value={s.generation.writingModel ?? ''}
+              onChange={e => setGen({ writingModel: e.target.value })}>
+              <option value="">기본 모델 ({settings.model})</option>
+              {(PROVIDERS[settings.provider]?.models ?? []).map(m => (
+                <option key={m.id} value={m.id}>{m.label}{m.note ? ` · ${m.note}` : ''}</option>
+              ))}
+            </select>
+          </Field>
           <PromptField label="에디터 역할" help="AI가 어떤 매체의 어떤 에디터로서 글을 쓸지 정합니다. 매체 성격과 전문 분야를 적습니다." value={s.generation.promptConfig.editorRole}
             onChange={v => setGenPrompt('editorRole', v)} onReset={() => setGenPrompt('editorRole', DEFAULT_PROMPT_CONFIG.editorRole)} rows={1} />
           <PromptField label="발행 가이드" help="분량·구조·인용 방식 등 기사 작성의 큰 원칙입니다. 리드문 구성, 단어 수, 인용 패턴 등을 적습니다." value={s.generation.promptConfig.publishingGuide}
