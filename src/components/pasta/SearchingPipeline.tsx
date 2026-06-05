@@ -61,7 +61,8 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   //   실패(error) 태스크도 클러스터 점유 유지 → 재생성 안 함(무한 재생성 루프 방지).
   //   실패 건은 사람이 카드에서 [다시 시도]로 복구. ──
   useEffect(() => {
-    if (campaign.autoCollect && campaign.autoCollect.enabled === false) return;
+    // ① 큐 채우기는 LLM 비용 0 → 자동수집 OFF여도 채움(수집된 기사로 후보 표시).
+    // 자동수집(주기) OFF = ②승급(AI 작업) 정지. 지금수집은 ① 채워서 1회 결과 보임.
     const now = Date.now();
     const working: Task[] = tasks.filter(t => t.campaignId === campaign.id);
 
@@ -107,6 +108,8 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   // (이전 버그: 속보 즉시승급이 maxPerHour 무시 → BREAKING_KEYWORDS가 컴백/결혼 등 광범위라
   //  대부분 태스크가 isBreaking으로 상한 우회 → 9>3 폭주. 이제 속보도 예산 내 우선 승급.)
   useEffect(() => {
+    // 자동 수집(주기) OFF = AI 승급 정지(②③ 작업 안 함). ①엔 후보 쌓이되 ②로 자동 안 올라감.
+    if (campaign.autoCollect && campaign.autoCollect.enabled === false) return;
     const now = Date.now();
     const queue = myTasks.filter(t => t.status === 'searching' && !t.error && !t.paused);
     if (queue.length === 0) return;
@@ -133,7 +136,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       budget--; // 동일 사이클 즉시 차감 → 레이스 차단
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSig, articles, maxPerHour, windowMs]);
+  }, [taskSig, articles, maxPerHour, windowMs, campaign.autoCollect?.enabled]);
 
   // ── 3. ② 검수: 전문 수집 대기 + 제외 주제 AI 판단 → 제작 전환 / 탈락 ──
   useEffect(() => {

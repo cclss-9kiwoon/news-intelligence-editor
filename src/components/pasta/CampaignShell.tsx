@@ -64,7 +64,7 @@ export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTa
             {isRefreshing ? '수집 중…' : '지금 수집'}
           </button>
           <label className="flex items-center justify-between rounded-lg px-1 py-1 text-sm text-slate-600">
-            <span className="flex items-center gap-1.5"><IconBolt className="h-3.5 w-3.5 text-slate-400" /> 자동 수집</span>
+            <span className="flex items-center gap-1.5"><IconBolt className="h-3.5 w-3.5 text-slate-400" /> 자동 수집(주기)</span>
             <input type="checkbox" className="accent-slate-900" checked={auto.enabled}
               onChange={e => setCampaignAutoCollect(campaign.id, { enabled: e.target.checked })} />
           </label>
