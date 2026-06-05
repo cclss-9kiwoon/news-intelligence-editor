@@ -69,11 +69,13 @@ export function CampaignSidebar({
                   <span className="flex shrink-0 items-center gap-1">
                     <button
                       title="그룹 복제 (캠페인 포함)"
+                      aria-label={`그룹 복제: ${group.name}`}
                       onClick={(e) => { e.stopPropagation(); const ng = duplicateGroup(group.id); if (ng) onSelectGroup(ng.id); }}
                       className="text-slate-300 hover:text-indigo-500"
                     >📑</button>
                     <button
                       title="삭제"
+                      aria-label={`그룹 삭제: ${group.name}`}
                       onClick={(e) => { e.stopPropagation(); if (confirm(`그룹 "${group.name}" 삭제? 캠페인도 함께 삭제됩니다.`)) deleteGroup(group.id); }}
                       className="text-slate-300 hover:text-red-500"
                     >🗑</button>
@@ -111,11 +113,13 @@ export function CampaignSidebar({
                       <span className="ml-1 flex shrink-0 items-center gap-1">
                         <button
                           title="복제"
+                          aria-label={`캠페인 복제: ${c.name}`}
                           onClick={(e) => { e.stopPropagation(); const copy = duplicateCampaign(c.id); if (copy) onSelectCampaign(copy.id); }}
                           className={view === 'campaign' && selectedId === c.id ? 'text-slate-300 hover:text-white' : 'text-slate-300 hover:text-indigo-500'}
                         >📑</button>
                         <button
                           title="삭제"
+                          aria-label={`캠페인 삭제: ${c.name}`}
                           onClick={(e) => { e.stopPropagation(); if (confirm(`캠페인 "${c.name}" 삭제?`)) deleteCampaign(c.id); }}
                           className={view === 'campaign' && selectedId === c.id ? 'text-slate-300 hover:text-white' : 'text-slate-300 hover:text-red-500'}
                         >🗑</button>

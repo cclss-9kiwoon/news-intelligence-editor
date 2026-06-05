@@ -193,7 +193,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <h4 className="font-semibold text-slate-800">① 검색 API 설정</h4>
-                <p className="text-xs text-slate-400">네이버/다음 검색 API로 넓게 찾습니다.</p>
+                <p className="text-xs text-slate-400">네이버/다음 검색 API로 넓게 찾습니다. <span className="text-slate-400">(API 키는 모든 캠페인 공통)</span></p>
               </div>
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
                 <input
@@ -492,7 +492,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
               {s.generation.referenceArticles.map(r => (
                 <div key={r.id} className="flex items-center justify-between rounded-lg border border-slate-100 bg-white/60 px-2 py-1.5 text-xs">
                   <span className="truncate text-slate-700">📄 {r.title} <span className="text-slate-400">({r.body.length}자)</span></span>
-                  <button onClick={() => removeReference(r.id)} className="ml-2 shrink-0 text-slate-300 hover:text-red-500">🗑</button>
+                  <button onClick={() => removeReference(r.id)} aria-label={`참고 기사 삭제: ${r.title}`} className="ml-2 shrink-0 text-slate-300 hover:text-red-500">🗑</button>
                 </div>
               ))}
             </div>
@@ -563,7 +563,7 @@ function Section({ title, desc, children, onSave, saved, isLast, auto }: {
           <button
             onClick={onSave}
             className={`rounded-full px-5 py-2 text-sm font-semibold text-white shadow-sm transition-colors ${btnColor}`}
-          >{saved ? '저장됨 ✓' : isLast ? '저장 완료' : '저장하고 다음 →'}</button>
+          >{saved ? '✓ 완료' : isLast ? '설정 완료' : '다음 단계 →'}</button>
         </div>
       )}
     </div>
