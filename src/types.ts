@@ -300,6 +300,7 @@ export type FinalReviewConfig = {
   reviewRules: ReviewRule[];        // 커스텀 LLM 검수 항목 (block=자동차단, warn=사람판단)
   allowedMedia: string[];
   bannedMedia: string[];
+  autoPublish?: boolean;            // on=③→④ 진입 후 Verified(passed)면 자동 발행. 미통과는 사람 대기
 };
 
 /** 캠페인 단위 설정 — 칸반 4단계 구조 */
@@ -361,6 +362,9 @@ export type Task = {
   published?: boolean;       // 발행 완료 (Hydra 배포 훅)
   publishedAt?: number;      // 발행 시각 (발행함 뷰 정렬/표시)
   discardReason?: DiscardReason;  // 폐기 사유
+  priority?: boolean;        // 우선 처리 (①→②승급·③제작 순서 우선). 골든타임 임박 시 자동 set
+  paused?: boolean;          // 보류 — 파이프라인이 스킵. [재개]로 해제
+  promotedAt?: number;       // ①→② 승급 시각 (시간당 승급 상한 카운트용)
   createdAt: number;
   updatedAt: number;
 };

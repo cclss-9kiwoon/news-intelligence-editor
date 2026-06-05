@@ -6,9 +6,13 @@ import { useTasks } from '../../state/TaskContext';
 import { generateStory, judgeExcludedTopic } from '../../lib/promptChain';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
-import type { Campaign, Category, Task, TaskSource } from '../../types';
+import type { Campaign, Category, Task } from '../../types';
 
 const SOURCE_REVIEW_TIMEOUT_MS = 90_000; // 전문 수집 대기 상한
+const HOUR_MS = 3600_000;
+const WINDOW_MS: Record<string, number> = {
+  '1h': HOUR_MS, '24h': 24 * HOUR_MS, '7d': 7 * 24 * HOUR_MS, '30d': 30 * 24 * HOUR_MS, breaking: 30 * 24 * HOUR_MS,
+};
 
 /**
  * Pasta 자동 파이프라인: 서칭 → 주제 검수 → 아티클 제작 자동 전환.
@@ -29,65 +33,88 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     return () => { mountedRef.current = false; };
   }, []);
 
+  const searchingCfg = campaign.settings.searching;
+  const windowMs = WINDOW_MS[searchingCfg.articleWindow] ?? 24 * HOUR_MS;
+  const maxPerHour = searchingCfg.maxPerHour ?? 3;
+  const autoPublish = !!campaign.settings.finalReview.autoPublish;
+
   const myTasks = tasks.filter(t => t.campaignId === campaign.id);
-  // deps용 시그니처 (태스크 추가/삭제/상태변경 모두 반영)
-  const taskSig = myTasks.map(t => `${t.id}:${t.status}:${t.draft ? 1 : 0}:${t.error ? 1 : 0}:${t.produceAttempts ?? 0}:${t.topicChecked ? 1 : 0}`).join(',');
+  // deps용 시그니처 (상태/플래그 변화 반영 — paused/priority 포함해 보드 조작 즉시 반영)
+  const taskSig = myTasks.map(t => `${t.id}:${t.status}:${t.draft ? 1 : 0}:${t.error ? 1 : 0}:${t.produceAttempts ?? 0}:${t.topicChecked ? 1 : 0}:${t.paused ? 1 : 0}:${t.priority ? 1 : 0}:${t.published ? 1 : 0}`).join(',');
 
-  // ── 1. 서칭: 클러스터 → 태스크 생성 ──
+  // 기준기사 시각 (만료·골든타임·승급정렬용) — 대표 기사 pubDate, 없으면 생성시각
+  const refTime = (t: Task): number => {
+    const a = articles.find(x => x.id === t.sources[0]?.articleId);
+    const p = a?.pubDate ? Date.parse(a.pubDate) : NaN;
+    return Number.isNaN(p) ? t.createdAt : p;
+  };
+
+  // ── 1. ① 대기큐 채우기: 자격 클러스터 전부 생성(LLM 비용 없음, 상한 없음). 실패 클러스터 자가치유 ──
   useEffect(() => {
-    // 자동 수집 off면 신규 태스크 생성만 멈춤 (RSS 폴링·진행중 태스크는 유지)
     if (campaign.autoCollect && campaign.autoCollect.enabled === false) return;
-    const searching = campaign.settings.searching;
     const now = Date.now();
-
-    // 점유 판정은 lib/searchFilter.shouldClaimCluster(순수함수)에 위임.
-    // 실패(error) 태스크는 클러스터 점유를 해제 → 같은 클러스터를 새로 시도 가능(자가치유).
     const campaignTasks = tasks.filter(t => t.campaignId === campaign.id);
     const working: Task[] = campaignTasks.filter(t => !t.error);
-    // 클러스터별 stale error 태스크 (재점유 시 교체 삭제용)
     const erroredByCluster = new Map<string, string>();
     campaignTasks.filter(t => t.error).forEach(t => erroredByCluster.set(t.clusterId, t.id));
 
-    // 시간당 생성 상한: 최근 60분 "생성된 모든 태스크"(실패 포함) 카운트 → 남은 만큼만.
-    // 실패도 카운트해야 LLM 장애(429 등) 시 무한 재생성(runaway) 방지.
-    const cap = searching.maxPerHour ?? 3;
-    let remaining = cap > 0 ? cap - campaignTasks.filter(t => now - t.createdAt <= 3600_000).length : Infinity;
-    if (remaining <= 0) return;
-
-    // 자격 클러스터 후보 수집 (점유 판정). 클러스터는 기사 비공유라 배치 판정 안전.
-    const candidates: { cluster: typeof clusters[number]; sources: TaskSource[]; imageCount: number; mediaCount: number }[] = [];
     for (const cluster of clusters) {
-      const decision = shouldClaimCluster(cluster, articles, searching, working, now);
+      const decision = shouldClaimCluster(cluster, articles, searchingCfg, working, now);
       if (!decision.ok) continue;
-      candidates.push({
-        cluster, sources: decision.sources, imageCount: decision.imageCount,
-        mediaCount: new Set(decision.sources.map(s => s.source)).size,
-      });
-    }
-
-    // 우선순위: 다매체 desc → 최신(클러스터 createdAt) desc. 상한 초과분은 버림(다음 수집에 재평가).
-    candidates.sort((a, b) => b.mediaCount - a.mediaCount || b.cluster.createdAt - a.cluster.createdAt);
-
-    for (const c of candidates) {
-      if (remaining <= 0) break;
-      // 같은 클러스터의 실패 태스크가 있으면 교체(삭제) → 중복 방지 + 재시도
-      const stale = erroredByCluster.get(c.cluster.id);
+      const stale = erroredByCluster.get(cluster.id);
       if (stale) deleteTask(stale);
-      addTask({
+      const created = addTask({
         campaignId: campaign.id, status: 'searching',
-        title: c.cluster.representativeTitle, clusterId: c.cluster.id, sources: c.sources,
-        imageCount: c.imageCount,
+        title: cluster.representativeTitle, clusterId: cluster.id,
+        sources: decision.sources, imageCount: decision.imageCount,
       });
-      remaining--;
+      working.push(created);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusters, articles, taskSig, campaign.id, campaign.autoCollect?.enabled]);
 
-  // ── 2. 기사 찾기: 전문 수집 대기 → 모이면 주제 검수로 (없으면 이 단계에 머묾) ──
+  // ── 1b. ① 만료: 기준기사가 articleWindow 벗어난 대기 후보 자동 폐기(완전 삭제). 보류는 면제 ──
   useEffect(() => {
+    const now = Date.now();
     for (const t of myTasks) {
-      if (t.status !== 'searching' || t.error) continue;
+      if (t.status !== 'searching' || t.error || t.paused) continue;
+      if (now - refTime(t) > windowMs) deleteTask(t.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskSig, articles, windowMs]);
 
+  // ── 2. ①→② 승급: 시간당 상한 내에서 우선·최신 순. 골든타임 임박 시 자동 우선 ──
+  useEffect(() => {
+    const now = Date.now();
+    const promotedLastHour = myTasks.filter(t => t.promotedAt && now - t.promotedAt <= HOUR_MS).length;
+    let slots = maxPerHour > 0 ? maxPerHour - promotedLastHour : Infinity;
+    if (slots <= 0) return;
+
+    const queue = myTasks.filter(t => t.status === 'searching' && !t.error && !t.paused);
+    // 골든타임 임박(잔여 < 20%) 자동 우선 플래그
+    for (const t of queue) {
+      if (!t.priority && windowMs > 0 && (windowMs - (now - refTime(t))) < windowMs * 0.2) {
+        updateTask(t.id, { priority: true });
+      }
+    }
+    queue.sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || refTime(b) - refTime(a));
+
+    for (const t of queue) {
+      if (slots <= 0) break;
+      updateTask(t.id, { status: 'topic_review', promotedAt: now });
+      slots--;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskSig, articles, maxPerHour, windowMs]);
+
+  // ── 3. ② 검수: 전문 수집 대기 + 제외 주제 AI 판단 → 제작 전환 / 탈락 ──
+  useEffect(() => {
+    const excludeTopics = (searchingCfg.excludeTopics ?? []).filter(x => x.trim());
+
+    for (const t of myTasks) {
+      if (t.status !== 'topic_review' || t.error || t.paused) continue;
+
+      // 전문 수집 대기 (승급 시각 기준 타임아웃)
       const refreshed = t.sources.map(s => {
         const a = articles.find(x => x.id === s.articleId);
         return a ? { ...s, hasFullText: !!a.fullText } : s;
@@ -98,26 +125,16 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         .filter(a => t.sources.some(s => s.articleId === a.id))
         .reduce((n, a) => n + (a.images?.length ?? 0), 0);
 
-      if (fullTextCount > 0) {
-        updateTask(t.id, { sources: refreshed, imageCount, status: 'topic_review' });
-      } else if (Date.now() - t.createdAt > SOURCE_REVIEW_TIMEOUT_MS) {
-        updateTask(t.id, { sources: refreshed, error: '전문 수집 실패 (출처 0건)' });
-      } else if (changed) {
-        updateTask(t.id, { sources: refreshed, imageCount });
+      if (fullTextCount === 0) {
+        if (Date.now() - (t.promotedAt ?? t.createdAt) > SOURCE_REVIEW_TIMEOUT_MS) {
+          updateTask(t.id, { sources: refreshed, error: '전문 수집 실패 (출처 0건)' });
+        } else if (changed) {
+          updateTask(t.id, { sources: refreshed, imageCount });
+        }
+        continue;
       }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSig, articles]);
 
-  // ── 3. 주제 검수: 제외 주제 AI 판단 게이트 → 제작 전환 / 탈락 ──
-  useEffect(() => {
-    const excludeTopics = (campaign.settings.searching.excludeTopics ?? []).filter(x => x.trim());
-
-    for (const t of myTasks) {
-      if (t.status !== 'topic_review') continue;
-      if (t.error) continue; // 이미 탈락 처리된 태스크는 skip (중복 에러 방지)
-
-      // 제외 주제 AI 판단 게이트 — 통과(topicChecked) 전엔 다음 단계로 안 넘김.
+      // 제외 주제 AI 판단 게이트 — 통과(topicChecked) 전엔 제작으로 안 넘김.
       if (excludeTopics.length > 0 && !t.topicChecked) {
         if (!topicJudgeRef.current.has(t.id)) {
           topicJudgeRef.current.add(t.id);
@@ -130,21 +147,21 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
               if (r.excluded) updateTask(t.id, { error: `제외 주제 해당: ${r.matched || '동일 주제'}` });
               else updateTask(t.id, { topicChecked: true });
             })
-            .catch(() => { if (mountedRef.current) updateTask(t.id, { topicChecked: true }); }) // 판단 실패 → 통과(fail-open). PM ② 견고화에서 보류로 교체 예정
+            .catch(() => { if (mountedRef.current) updateTask(t.id, { topicChecked: true }); }) // fail-open. PM ② 견고화에서 보류로 교체 예정
             .finally(() => { topicJudgeRef.current.delete(t.id); });
         }
         continue; // 판단 결과 대기
       }
 
-      updateTask(t.id, { status: 'producing' });
+      updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSig, articles, settings, campaign.settings.searching.excludeTopics]);
+  }, [taskSig, articles, settings, searchingCfg.excludeTopics]);
 
-  // ── 4. 아티클 제작: LLM 생성 → 결과물 검수 전환 ──
+  // ── 4. ③ 제작: LLM 생성 → 결과물 검수 전환 ──
   useEffect(() => {
     for (const t of myTasks) {
-      if (t.status !== 'producing' || t.draft || t.error) continue;
+      if (t.status !== 'producing' || t.draft || t.error || t.paused) continue;
       if (producingRef.current.has(t.id)) continue;
       producingRef.current.add(t.id);
 
@@ -180,6 +197,17 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSig, articles, settings]);
+
+  // ── 5. ④ 자동 발행: autoPublish on + Verified(검수 통과)면 자동 발행. 미통과는 사람 대기 ──
+  useEffect(() => {
+    if (!autoPublish) return;
+    const now = Date.now();
+    for (const t of myTasks) {
+      if (t.status !== 'final_review' || t.published || t.error || t.paused) continue;
+      if (t.review?.passed) updateTask(t.id, { published: true, publishedAt: now });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskSig, autoPublish]);
 
   return null;
 }

@@ -73,6 +73,7 @@ export function makeDefaultCampaignSettings(): CampaignSettings {
       reviewRules: clone(DEFAULT_PROJECT_PROFILE.reviewRules),
       allowedMedia: [],
       bannedMedia: [],
+      autoPublish: false,
     },
     categories: DEFAULT_CATEGORIES.map(c => ({ ...c })),
     activeCategoryId: DEFAULT_CATEGORIES[0]?.id ?? 'music',
