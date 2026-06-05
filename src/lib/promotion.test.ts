@@ -47,12 +47,16 @@ describe('promotionBudget', () => {
     expect(promotionBudget(tasks, 'c1', 3, NOW)).toBe(3);
   });
 
-  it('error 태스크는 예산 잠식 안 함 (실패분 제외)', () => {
-    // 27 승급됐다 전부 실패(429) → error. 정상 대기분이 막히면 안 됨.
-    const failed = Array.from({ length: 27 }, () => task({ promotedAt: NOW - 1000, error: '429 실패' }));
-    expect(promotionBudget(failed, 'c1', 3, NOW)).toBe(3);
-    // 성공 1 + 실패 27 → 성공만 카운트
-    const mixed = [task({ promotedAt: NOW - 1000 }), ...failed];
-    expect(promotionBudget(mixed, 'c1', 3, NOW)).toBe(2);
+  it('승급 행위 자체로 카운트 — error/보류도 슬롯 소비 (38/2 폭주 방지)', () => {
+    // 승급 후 실패(error)·보류도 promotedAt 있으면 예산 차감 (결과 무관).
+    const promoted = Array.from({ length: 5 }, () => task({ promotedAt: NOW - 1000, error: '429 실패' }));
+    expect(promotionBudget(promoted, 'c1', 2, NOW)).toBe(0); // 5 승급 > 2 → 0
+    const held = [task({ promotedAt: NOW - 1000 }), task({ promotedAt: NOW - 1000 })];
+    expect(promotionBudget(held, 'c1', 2, NOW)).toBe(0); // 2 승급 → 0
+  });
+
+  it('1시간 지난 승급은 회복 (롤링 윈도)', () => {
+    const old = Array.from({ length: 5 }, () => task({ promotedAt: NOW - HOUR - 1000, error: 'x' }));
+    expect(promotionBudget(old, 'c1', 2, NOW)).toBe(2); // 전부 1h 지남 → 예산 회복
   });
 });

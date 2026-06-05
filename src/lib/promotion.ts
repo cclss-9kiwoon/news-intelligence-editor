@@ -17,10 +17,11 @@ export function promotionBudget(
   now: number,
 ): number {
   if (maxPerHour <= 0) return Infinity;
-  // error 태스크는 제외 — LLM 호출만 하고 결과물 0 + 자동재시도도 안 함(error 고정).
-  // 포함하면 실패분이 예산을 1시간 영구잠식해 정상 대기분 승급이 막힘(라이브 버그).
+  // 승급 '행위' 자체가 시간당 슬롯을 소비 — 결과(성공/실패/보류) 무관하게 promotedAt 기준 카운트.
+  // error/보류 제외하면, fail-closed 보류·실패분이 예산을 안 깎아 무한 재승급(38/2 폭주) 발생.
+  // 1시간 롤링 윈도라 영구 잠식 아님 — promotedAt가 1h 지나면 자연 회복.
   const promotedLastHour = tasks.filter(
-    t => t.campaignId === campaignId && t.promotedAt != null && now - t.promotedAt <= HOUR_MS && !t.error,
+    t => t.campaignId === campaignId && t.promotedAt != null && now - t.promotedAt <= HOUR_MS,
   ).length;
   return Math.max(0, maxPerHour - promotedLastHour);
 }
