@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import type { Settings, ModelId, RssSource, ProviderId, Category, ArticleWindow, PromptConfig, ReferenceArticle, ProjectProfile, FormatRules, ReviewRule, CampaignSettings, GroupProfile } from '../types';
+import type { Settings, ModelId, RssSource, ProviderId, Category, ArticleWindow, PromptConfig, ReferenceArticle, ProjectProfile, FormatRules, ReviewRule, CampaignSettings, GroupProfile, QueryPreset, SearchProviderConfig } from '../types';
 import { PROVIDERS } from '../types';
 import { DEFAULT_SETTINGS, DEFAULT_PROMPT_CONFIG, DEFAULT_PROJECT_PROFILE } from '../lib/defaultSettings';
 import { loadJson, saveJson, STORAGE_KEYS, backupSettingsToFile, restoreSettingsFromFile } from '../lib/storage';
@@ -33,6 +33,8 @@ type Ctx = {
   resetPromptConfigField: (field: keyof PromptConfig) => void;
   addReferenceArticle: (article: ReferenceArticle) => void;
   removeReferenceArticle: (id: string) => void;
+  addQueryPreset: (name: string, providers: SearchProviderConfig[]) => void;
+  removeQueryPreset: (id: string) => void;
   updateProjectProfile: (patch: Partial<ProjectProfile>) => void;
   updateFormatRules: (patch: Partial<FormatRules>) => void;
   addReviewRule: () => void;
@@ -59,6 +61,7 @@ function mergeWithDefaults(stored: Partial<Settings>): Settings {
       formatRules: { ...DEFAULT_PROJECT_PROFILE.formatRules, ...(stored.projectProfile?.formatRules || {}) },
       reviewRules: stored.projectProfile?.reviewRules || DEFAULT_PROJECT_PROFILE.reviewRules,
     },
+    queryPresets: stored.queryPresets || [],
   };
 }
 
@@ -161,6 +164,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setSettings(s => ({ ...s, projectProfile: { ...s.projectProfile, reviewRules: s.projectProfile.reviewRules.map(r => r.id === id ? { ...r, ...patch } : r) } })), []);
   const removeReviewRule = useCallback((id: string) =>
     setSettings(s => ({ ...s, projectProfile: { ...s.projectProfile, reviewRules: s.projectProfile.reviewRules.filter(r => r.id !== id) } })), []);
+  const addQueryPreset = useCallback((name: string, providers: SearchProviderConfig[]) =>
+    setSettings(s => {
+      const preset: QueryPreset = {
+        id: `preset-${Date.now()}`,
+        name: name.trim() || '이름 없는 프리셋',
+        providers: providers.map(p => ({ ...p })), // deep clone (얕은 객체라 충분)
+        createdAt: Date.now(),
+      };
+      return { ...s, queryPresets: [...s.queryPresets, preset] };
+    }), []);
+  const removeQueryPreset = useCallback((id: string) =>
+    setSettings(s => ({ ...s, queryPresets: s.queryPresets.filter(p => p.id !== id) })), []);
   const resetSettings = useCallback(() => setSettings(DEFAULT_SETTINGS), []);
   // Pasta: 캠페인 스코프 설정을 현재 Settings에 주입 (계정 전역 필드는 유지)
   // 4단계 CampaignSettings → 평면 Settings 브리지. 그룹 배포맥락(profile)도 주입.
@@ -241,6 +256,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setNaverClientId, setNaverClientSecret, setNaverQueries, setDaumRestApiKey, setDaumQueries,
     updatePromptConfig, resetPromptConfigField, addReferenceArticle, removeReferenceArticle,
     updateProjectProfile, updateFormatRules, addReviewRule, updateReviewRule, removeReviewRule,
+    addQueryPreset, removeQueryPreset,
     resetSettings, applyCampaignSettings,
   };
   return <SettingsCtx.Provider value={value}>{children}</SettingsCtx.Provider>;

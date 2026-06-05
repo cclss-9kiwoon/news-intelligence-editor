@@ -92,4 +92,5 @@ export const DEFAULT_SETTINGS: Settings = {
   promptConfig: DEFAULT_PROMPT_CONFIG,
   referenceArticles: [],
   projectProfile: DEFAULT_PROJECT_PROFILE,
+  queryPresets: [],
 };

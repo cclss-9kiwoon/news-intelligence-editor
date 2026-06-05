@@ -31,6 +31,7 @@ const SETTINGS: Settings = {
   promptConfig: DEFAULT_PROMPT_CONFIG,
   referenceArticles: [],
   projectProfile: DEFAULT_PROJECT_PROFILE,
+  queryPresets: [],
 };
 
 const ARTICLE_A: Article = {

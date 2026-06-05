@@ -216,6 +216,14 @@ export type SearchProviderConfig = {
   query: string;
 };
 
+/** 검색어 프리셋 — naver/daum 검색어 묶음을 이름 붙여 전역 저장/재사용 (캠페인 간 공유) */
+export type QueryPreset = {
+  id: string;
+  name: string;
+  providers: SearchProviderConfig[];
+  createdAt: number;
+};
+
 // ─── Pasta: Group / Campaign 계층 ───────────────────────────────────
 // Hydra 모듈화. 그룹(회사) → 캠페인(아티클 종류) → [태스크는 Phase 2 칸반].
 // 계정 전역 설정(provider/apiKey/model 등)은 Settings에 유지.
@@ -371,4 +379,5 @@ export type Settings = {
   promptConfig: PromptConfig;
   referenceArticles: ReferenceArticle[];
   projectProfile: ProjectProfile;
+  queryPresets: QueryPreset[];   // 검색어 프리셋 (전역 공유)
 };

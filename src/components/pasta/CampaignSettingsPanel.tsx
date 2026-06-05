@@ -38,6 +38,8 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
     setNaverQueries,
     setDaumRestApiKey,
     setDaumQueries,
+    addQueryPreset,
+    removeQueryPreset,
   } = useSettings();
   const [step, setStep] = useState<Step>(1);
   const [savedSteps, setSavedSteps] = useState<Set<Step>>(new Set());
@@ -117,6 +119,18 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
   };
   const removeSearchProvider = (idx: number) => {
     setSearchProviders(searchProviders.filter((_, i) => i !== idx));
+  };
+  // 검색어 프리셋 (전역 Settings.queryPresets)
+  const saveQueryPreset = () => {
+    if (searchProviders.length === 0) { alert('저장할 검색어가 없습니다.'); return; }
+    const name = prompt('프리셋 이름:', `프리셋 ${settings.queryPresets.length + 1}`);
+    if (name === null) return;
+    addQueryPreset(name, searchProviders);
+  };
+  const applyQueryPreset = (id: string) => {
+    const preset = settings.queryPresets.find(p => p.id === id);
+    if (!preset) return;
+    setSearchProviders(preset.providers.map(p => ({ ...p })));
   };
   const setTopic = (patch: Partial<TopicReviewConfig>) =>
     updateCampaignSettings(campaign.id, { topicReview: { ...s.topicReview, ...patch } });
@@ -292,6 +306,31 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
               <div className="flex gap-2">
                 <button onClick={() => addSearchProvider('naver')} className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">+ 네이버 검색어</button>
                 <button onClick={() => addSearchProvider('daum')} className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">+ 다음 검색어</button>
+              </div>
+
+              {/* 검색어 프리셋 — 전역 저장/불러오기 (캠페인 간 재사용) */}
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white/60 px-3 py-2">
+                <span className="text-xs font-semibold text-slate-500">검색어 프리셋</span>
+                <select
+                  value=""
+                  onChange={e => { if (e.target.value) applyQueryPreset(e.target.value); e.target.value = ''; }}
+                  className="rounded-lg border border-slate-200 bg-white/80 px-2 py-1 text-xs"
+                  disabled={settings.queryPresets.length === 0}
+                >
+                  <option value="">{settings.queryPresets.length === 0 ? '저장된 프리셋 없음' : '불러오기…'}</option>
+                  {settings.queryPresets.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.providers.length})</option>
+                  ))}
+                </select>
+                <button onClick={saveQueryPreset} className="rounded-full border border-indigo-300 px-3 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50">+ 현재 검색어 저장</button>
+                {settings.queryPresets.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => { if (confirm(`프리셋 "${p.name}" 삭제?`)) removeQueryPreset(p.id); }}
+                    className="rounded-full border border-slate-200 px-2 py-1 text-[10px] text-slate-400 hover:bg-red-50 hover:text-red-500"
+                    title={`${p.name} 삭제`}
+                  >✕ {p.name}</button>
+                ))}
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                 <p className="mb-3 text-xs leading-relaxed text-slate-500">
