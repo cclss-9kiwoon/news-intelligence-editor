@@ -42,6 +42,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-5 px-4 pb-6 pt-3 sm:grid-cols-2 sm:px-8 xl:grid-cols-4">
         {COLUMNS.map(col => {
           const colTasks = tasks.filter(t => t.status === col.status);
+          const activeCount = colTasks.filter(taskActive).length;
           return (
             <div key={col.status} className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/60 bg-white/55 backdrop-blur-md shadow-sm">
               <div className={`h-1.5 w-full ${col.bar}`} />
@@ -52,7 +53,9 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
                     {col.auto ? '자동' : '사람'}
                   </span>
                   <span className="flex items-center gap-1.5 text-xs font-mono font-semibold text-slate-500">
-                    <span className={`h-2 w-2 rounded-full ${col.dot}`} />
+                    {activeCount > 0
+                      ? <Spinner className={`h-3.5 w-3.5 ${col.auto ? 'text-blue-500' : 'text-amber-500'}`} />
+                      : <span className={`h-2 w-2 rounded-full ${col.dot}`} />}
                     {colTasks.length}
                   </span>
                 </div>
@@ -82,6 +85,12 @@ function TaskCard({ task, onOpen, onDelete, onRetry }: { task: Task; onOpen: () 
   const verified = task.status === 'final_review' && task.review?.passed;
   const attempts = task.produceAttempts ?? 0;
   const retrying = task.status === 'producing' && !task.draft && !task.error && attempts >= 1;
+  const inProgress = taskActive(task);
+  const progressLabel =
+    task.status === 'searching' ? '수집 중'
+    : task.status === 'topic_review' ? '주제 검수 중'
+    : retrying ? `재시도 ${attempts + 1}/3`
+    : '작성 중';
 
   return (
     <div
@@ -96,6 +105,14 @@ function TaskCard({ task, onOpen, onDelete, onRetry }: { task: Task; onOpen: () 
           className="shrink-0 text-slate-300 hover:text-red-500 transition-colors"
         >🗑</button>
       </div>
+
+      {/* 진행 중 표시 — 자동 단계에서 작업이 돌아가는 중 (스피너 + 라벨) */}
+      {inProgress && (
+        <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-mono font-semibold text-blue-700">
+          <Spinner className="h-3 w-3 text-blue-500" />
+          {progressLabel}
+        </span>
+      )}
 
       {/* 발행됨 뱃지 — Hydra 배포 완료 */}
       {task.published && (
@@ -159,6 +176,24 @@ function TaskCard({ task, onOpen, onDelete, onRetry }: { task: Task; onOpen: () 
         )}
       </div>
     </div>
+  );
+}
+
+// 자동 단계에서 실제로 작업이 돌아가는 중인지 (에러·완료 제외)
+function taskActive(t: Task): boolean {
+  if (t.error) return false;
+  if (t.status === 'searching' || t.status === 'topic_review') return true;
+  if (t.status === 'producing' && !t.draft) return true;
+  return false;
+}
+
+// 돌아가는 스피너 — 진행 중 가시화. prefers-reduced-motion 시 정지(라벨로 상태 전달).
+function Spinner({ className = '' }: { className?: string }) {
+  return (
+    <svg className={`animate-spin motion-reduce:animate-none ${className}`} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.4 0 0 5.4 0 12h4z" />
+    </svg>
   );
 }
 
