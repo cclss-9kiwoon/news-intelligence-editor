@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveStageLLM } from './stageLLM';
+import { resolveStageLLM, describeStageLLM } from './stageLLM';
 import { DEFAULT_SETTINGS } from './defaultSettings';
 import type { Settings, GroupProfile } from '../types';
 
@@ -49,5 +49,39 @@ describe('resolveStageLLM', () => {
     expect(r.provider).toBe('gemini');
     expect(r.baseUrl).toBe('https://stage');
     expect(r.apiKey).toBe('global-key'); // 미지정은 글로벌
+  });
+});
+
+describe('describeStageLLM', () => {
+  it('전역만 — keySource/modelSource=global, active', () => {
+    const s = describeStageLLM(SETTINGS);
+    expect(s.keySource).toBe('global');
+    expect(s.modelSource).toBe('global');
+    expect(s.active).toBe(true);
+  });
+
+  it('그룹 키 → keySource=group', () => {
+    const group: GroupProfile = { ...baseGroup, llm: { apiKey: 'g' } };
+    const s = describeStageLLM(SETTINGS, group);
+    expect(s.keySource).toBe('group');
+    expect(s.modelSource).toBe('global'); // 그룹이 model 미지정
+  });
+
+  it('단계 모델 + 그룹 키 → modelSource=stage, keySource=group', () => {
+    const group: GroupProfile = { ...baseGroup, llm: { apiKey: 'g' } };
+    const s = describeStageLLM(SETTINGS, group, { model: 'sm' });
+    expect(s.modelSource).toBe('stage');
+    expect(s.keySource).toBe('group');
+  });
+
+  it('키 전무면 active=false', () => {
+    const s = describeStageLLM({ ...SETTINGS, apiKey: '' });
+    expect(s.active).toBe(false);
+  });
+
+  it('enabled=false 단계는 무시 → 그룹/전역으로', () => {
+    const group: GroupProfile = { ...baseGroup, llm: { apiKey: 'g' } };
+    const s = describeStageLLM(SETTINGS, group, { apiKey: 'stagekey', enabled: false });
+    expect(s.keySource).toBe('group');
   });
 });

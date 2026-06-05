@@ -34,3 +34,29 @@ export function resolveStageLLM(
     baseUrl: stage?.baseUrl ?? grp?.baseUrl ?? settings.apiBaseUrl,
   };
 }
+
+// ─── 활성 상태 설명 (배지 UI용) ─────────────────────────────────────
+export type LLMLevel = 'stage' | 'group' | 'global';
+export type StageLLMStatus = {
+  resolved: ResolvedLLM;
+  keySource: LLMLevel;     // 실제 적용된 apiKey가 온 레벨
+  modelSource: LLMLevel;   // 실제 적용된 model이 온 레벨
+  active: boolean;         // 키 존재 → LLM 호출 가능
+};
+
+const LEVEL_LABEL: Record<LLMLevel, string> = { stage: '단계', group: '그룹', global: '전역' };
+export function llmLevelLabel(level: LLMLevel): string { return LEVEL_LABEL[level]; }
+
+/** 단계 LLM이 어느 레벨에서 키·모델을 가져와 활성인지 — 배지 표시용 */
+export function describeStageLLM(
+  settings: Settings,
+  group?: GroupProfile,
+  stageConfig?: StageLLMConfig,
+): StageLLMStatus {
+  const stage = active(stageConfig);
+  const grp = active(group?.llm);
+  const resolved = resolveStageLLM(settings, group, stageConfig);
+  const keySource: LLMLevel = stage?.apiKey ? 'stage' : grp?.apiKey ? 'group' : 'global';
+  const modelSource: LLMLevel = stage?.model ? 'stage' : grp?.model ? 'group' : 'global';
+  return { resolved, keySource, modelSource, active: resolved.apiKey.trim() !== '' };
+}
