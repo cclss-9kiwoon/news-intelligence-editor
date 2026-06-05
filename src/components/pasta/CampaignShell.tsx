@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { Campaign } from '../../types';
 import { useCampaigns } from '../../state/CampaignContext';
 import { useArticles } from '../../state/ArticlesContext';
@@ -35,6 +35,16 @@ export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTa
   const { setCampaignAutoCollect } = useCampaigns();
   const { isRefreshing, refreshNow } = useArticles();
   const auto = campaign.autoCollect ?? { enabled: true, intervalMin: 30 as const };
+
+  // 자동 수집(주기): enabled면 intervalMin마다 refreshNow. 글로벌 RSS 폴링과 별개로 캠페인 주기 구동.
+  const refreshRef = useRef(refreshNow);
+  refreshRef.current = refreshNow;
+  useEffect(() => {
+    if (!auto.enabled) return;
+    const ms = Math.max(5, auto.intervalMin) * 60_000;
+    const id = setInterval(() => { if (!document.hidden) refreshRef.current(); }, ms);
+    return () => clearInterval(id);
+  }, [auto.enabled, auto.intervalMin]);
 
   return (
     <div className="flex h-screen bg-white">
