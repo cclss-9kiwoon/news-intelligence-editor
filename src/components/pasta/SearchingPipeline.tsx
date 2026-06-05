@@ -19,7 +19,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   const { clusters } = useClusters();
   const { articles } = useArticles();
   const { settings } = useSettings();
-  const { tasks, addTask, updateTask } = useTasks();
+  const { tasks, addTask, updateTask, deleteTask } = useTasks();
   const producingRef = useRef<Set<string>>(new Set());
   const topicJudgeRef = useRef<Set<string>>(new Set()); // 제외 주제 AI 판단 진행 중 가드
   const mountedRef = useRef(true);
@@ -41,14 +41,16 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     const now = Date.now();
 
     // 점유 판정은 lib/searchFilter.shouldClaimCluster(순수함수)에 위임.
-    // 같은 사이클 내 중복 점유 방지: claim 시 합성 태스크를 working에 push해
-    // 다음 클러스터 판정에서 claimedArticleIds·entityCountToday에 반영되게 한다.
-    const working: Task[] = tasks.filter(t => t.campaignId === campaign.id);
+    // 실패(error) 태스크는 클러스터 점유를 해제 → 같은 클러스터를 새로 시도 가능(자가치유).
+    const campaignTasks = tasks.filter(t => t.campaignId === campaign.id);
+    const working: Task[] = campaignTasks.filter(t => !t.error);
+    // 클러스터별 stale error 태스크 (재점유 시 교체 삭제용)
+    const erroredByCluster = new Map<string, string>();
+    campaignTasks.filter(t => t.error).forEach(t => erroredByCluster.set(t.clusterId, t.id));
 
-    // 시간당 생성 상한: 최근 60분 생성분 카운트 → 남은 만큼만. 0/미지정 처리.
-    // 실패(error) 태스크는 생산 부하가 아니므로 카운트 제외.
+    // 시간당 생성 상한: 최근 60분 생성분 카운트 → 남은 만큼만. error 제외.
     const cap = searching.maxPerHour ?? 3;
-    let remaining = cap > 0 ? cap - working.filter(t => !t.error && now - t.createdAt <= 3600_000).length : Infinity;
+    let remaining = cap > 0 ? cap - working.filter(t => now - t.createdAt <= 3600_000).length : Infinity;
     if (remaining <= 0) return;
 
     // 자격 클러스터 후보 수집 (점유 판정). 클러스터는 기사 비공유라 배치 판정 안전.
@@ -67,6 +69,9 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
     for (const c of candidates) {
       if (remaining <= 0) break;
+      // 같은 클러스터의 실패 태스크가 있으면 교체(삭제) → 중복 방지 + 재시도
+      const stale = erroredByCluster.get(c.cluster.id);
+      if (stale) deleteTask(stale);
       addTask({
         campaignId: campaign.id, status: 'searching',
         title: c.cluster.representativeTitle, clusterId: c.cluster.id, sources: c.sources,
