@@ -86,6 +86,7 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [showContext, setShowContext] = useState(false); // 배포 맥락은 그룹 생성 시 설정 → 기본 접힘
+  const [llmSaved, setLlmSaved] = useState(false); // 그룹 LLM 저장 확인 플래시
 
   const groupCampaigns = campaigns.filter(c => c.groupId === group.id);
   const p = group.profile;
@@ -246,6 +247,13 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
                 onChange={e => updateGroupProfile(group.id, { llm: { ...p.llm, baseUrl: e.target.value || undefined } })} />
             </div>
           )}
+        </div>
+        <div className="mt-4 flex items-center justify-end gap-3 border-t border-slate-100 pt-3">
+          {llmSaved && <span className="text-xs font-mono text-green-600">✓ 저장됨</span>}
+          <button
+            onClick={() => { updateGroupProfile(group.id, { llm: { ...p.llm } }); setLlmSaved(true); setTimeout(() => setLlmSaved(false), 2000); }}
+            className="rounded-full bg-slate-900 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-slate-700 transition-colors"
+          >AI 설정 저장</button>
         </div>
       </div>
 
