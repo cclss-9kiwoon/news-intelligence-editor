@@ -39,7 +39,7 @@ const COLUMNS: ColMeta[] = [
 
 export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; onOpenTask: (taskId: string) => void }) {
   const { tasks: allTasks, deleteTask, updateTask, togglePriority, pauseTask, resumeTask, discardTask } = useTasks();
-  const { isRefreshing, loadingStatus, lastRefreshedAt, articles, refreshNow } = useArticles();
+  const { isRefreshing, loadingStatus, lastRefreshedAt, articles, refreshNow, collectError } = useArticles();
   const { clusters } = useClusters();
   const { campaigns } = useCampaigns();
   const { settings } = useSettings();
@@ -138,6 +138,11 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
             🎯 주제 정의 없음 — 적합성 필터 꺼짐(전건 통과). 설정 ②에서 주제정의 채우면 정예 선별
           </span>
         )}
+        {collectError && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-600">
+            ⚠ 수집 일부 실패: {collectError}{/401|인증|key|키/i.test(collectError) ? ' — 캠페인 설정 ①에서 검색 API 키 확인' : ''}
+          </span>
+        )}
 
         {noTaskHint && (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/80 bg-amber-50/80 px-3 py-1 text-xs text-amber-700 backdrop-blur-md">
@@ -148,12 +153,12 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
         {/* 리듬바: 승급 처리량 게이지 + 대기·수집 보조 칩 */}
         <span data-rhythm className="inline-flex items-center gap-1.5">
           {rhythm.maxPerHour > 0
-            ? <GaugeChip label="승급" value={rhythm.promotedLastHour} max={rhythm.maxPerHour} />
-            : <InfoChip tone={rhythm.atCap ? 'amber' : 'neutral'}>승급 {rhythm.promotedLastHour} · 무제한</InfoChip>}
+            ? <GaugeChip label="시간당 처리" value={rhythm.promotedLastHour} max={rhythm.maxPerHour} />
+            : <InfoChip tone={rhythm.atCap ? 'amber' : 'neutral'}>시간당 처리 {rhythm.promotedLastHour} · 무제한</InfoChip>}
           <InfoChip tone="blue">① 대기 {rhythm.queueCount}</InfoChip>
           <InfoChip>수집 {rhythm.collected}</InfoChip>
           {rhythm.atCap && rhythm.nextPromotionMs > 0 && (
-            <InfoChip tone="amber">다음 승급 {formatRemaining(rhythm.nextPromotionMs)} 뒤 (멈춤 아님)</InfoChip>
+            <InfoChip tone="amber">다음 처리 {formatRemaining(rhythm.nextPromotionMs)} 뒤 (멈춤 아님)</InfoChip>
           )}
         </span>
       </div>
@@ -241,7 +246,7 @@ function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, 
   const retrying = task.status === 'producing' && !task.draft && !task.error && attempts >= 1;
   const inProgress = taskActive(task);
   const progressLabel =
-    task.status === 'searching' ? '승급 대기'
+    task.status === 'searching' ? '처리 대기'
     : task.status === 'topic_review' ? '주제 검수 중'
     : retrying ? `재시도 ${attempts + 1}/3`
     : '작성 중';
