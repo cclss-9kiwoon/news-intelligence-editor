@@ -70,7 +70,7 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
   const publish = () => {
     if (!confirm('이 아티클을 발행하시겠습니까? (Hydra 배포)')) return;
     saveDraft();
-    updateTask(task.id, { published: true });
+    updateTask(task.id, { published: true, publishedAt: Date.now() });
     // Hydra 배포 훅 (stub)
     console.log('[pasta] publish → Hydra 배포 연결 지점', task.id);
     onBack();

@@ -94,6 +94,7 @@ export function makeCampaign(groupId: string, name: string): Campaign {
     groupId,
     name: name || '새 캠페인',
     settings: makeDefaultCampaignSettings(),
+    autoCollect: { enabled: true, intervalMin: 30 },
     createdAt: now,
     updatedAt: now,
   };

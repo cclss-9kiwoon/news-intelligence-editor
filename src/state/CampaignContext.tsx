@@ -26,6 +26,7 @@ type Ctx = {
   renameCampaign: (id: string, name: string) => void;
   deleteCampaign: (id: string) => void;
   markCampaignConfigured: (id: string) => void;
+  setCampaignAutoCollect: (id: string, patch: Partial<import('../types').AutoCollectConfig>) => void;
   updateCampaignSettings: (id: string, patch: Partial<CampaignSettings>) => void;
 
   setActiveCampaign: (id: string | null) => void;
@@ -41,6 +42,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     initCampaigns: loadJson<any[]>(CAMPAIGNS_KEY, []).map((c: any) => ({
       ...c,
       settings: migrateCampaignSettings(c.settings),
+      autoCollect: c.autoCollect ?? { enabled: true, intervalMin: 30 },
     })),
   }));
   const [groups, setGroups] = useState<Group[]>(initGroups);
@@ -119,6 +121,14 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     setCampaigns(prev => prev.map(c => (c.id === id && !c.configured ? { ...c, configured: true } : c)));
   }, []);
 
+  const setCampaignAutoCollect = useCallback((id: string, patch: Partial<import('../types').AutoCollectConfig>) => {
+    setCampaigns(prev => prev.map(c => {
+      if (c.id !== id) return c;
+      const cur = c.autoCollect ?? { enabled: true, intervalMin: 30 as const };
+      return { ...c, autoCollect: { ...cur, ...patch }, updatedAt: Date.now() };
+    }));
+  }, []);
+
   const updateCampaignSettings = useCallback((id: string, patch: Partial<CampaignSettings>) => {
     setCampaigns(prev => prev.map(c =>
       c.id === id
@@ -133,7 +143,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     <CampaignCtx.Provider value={{
       groups, campaigns, activeCampaignId, activeCampaign,
       addGroup, duplicateGroup, updateGroupProfile, renameGroup, deleteGroup,
-      addCampaign, duplicateCampaign, renameCampaign, deleteCampaign, markCampaignConfigured, updateCampaignSettings,
+      addCampaign, duplicateCampaign, renameCampaign, deleteCampaign, markCampaignConfigured, setCampaignAutoCollect, updateCampaignSettings,
       setActiveCampaign,
     }}>
       {children}

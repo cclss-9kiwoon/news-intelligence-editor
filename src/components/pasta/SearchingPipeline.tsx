@@ -35,6 +35,8 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
   // ── 1. 서칭: 클러스터 → 태스크 생성 ──
   useEffect(() => {
+    // 자동 수집 off면 신규 태스크 생성만 멈춤 (RSS 폴링·진행중 태스크는 유지)
+    if (campaign.autoCollect && campaign.autoCollect.enabled === false) return;
     const searching = campaign.settings.searching;
     const now = Date.now();
 
@@ -61,7 +63,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clusters, articles, taskSig, campaign.id]);
+  }, [clusters, articles, taskSig, campaign.id, campaign.autoCollect?.enabled]);
 
   // ── 2. 서칭 → 주제 검수 (즉시 전환) ──
   useEffect(() => {
