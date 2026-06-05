@@ -3,6 +3,7 @@ import { useTasks } from '../../state/TaskContext';
 import { useArticles } from '../../state/ArticlesContext';
 import { useSettings } from '../../state/SettingsContext';
 import { generateStory } from '../../lib/promptChain';
+import { TagInput } from './TagInput';
 import type { DiscardReason, Category, StoryOutput } from '../../types';
 
 const DISCARD_REASONS: { value: DiscardReason; label: string }[] = [
@@ -20,7 +21,7 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
   const task = tasks.find(t => t.id === taskId);
   const [headline, setHeadline] = useState(task?.draft?.headline ?? '');
   const [body, setBody] = useState(task?.draft?.body ?? '');
-  const [tags, setTags] = useState((task?.draft?.tags ?? []).join(', '));
+  const [tags, setTags] = useState<string[]>(task?.draft?.tags ?? []);
   const [regenerating, setRegenerating] = useState(false);
   const [discarding, setDiscarding] = useState(false);
 
@@ -41,7 +42,7 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
       ...(draft ?? { summary: '', headline: '', body: '', tags: [], imagePrompt: '' }),
       headline,
       body,
-      tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+      tags,
     };
     updateTask(task.id, { draft: updated });
   };
@@ -56,7 +57,7 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
       const fresh = await generateStory(srcArticles, settings, category);
       setHeadline(fresh.headline);
       setBody(fresh.body);
-      setTags(fresh.tags.join(', '));
+      setTags(fresh.tags);
       updateTask(task.id, { draft: fresh });
     } catch (err) {
       alert(`재생성 실패: ${err instanceof Error ? err.message : String(err)}`);
@@ -167,12 +168,8 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
             />
           </div>
           <div>
-            <label className="mb-1 block text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400">태그 (쉼표)</label>
-            <input
-              className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-colors"
-              value={tags}
-              onChange={e => setTags(e.target.value)}
-            />
+            <label className="mb-1 block text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400">태그</label>
+            <TagInput values={tags} onChange={setTags} placeholder="태그 입력 후 Enter" />
           </div>
         </div>
 
@@ -195,7 +192,7 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
             </div>
             <p className="text-sm font-semibold leading-snug text-slate-900">{stripHtml(headline) || '헤드라인'}</p>
             <p className="mt-1.5 text-xs leading-relaxed text-slate-600 line-clamp-6">{stripHtml(body).slice(0, 240) || '본문 미리보기'}</p>
-            <p className="mt-2.5 text-xs text-indigo-500">{tags.split(',').map(t => t.trim()).filter(Boolean).map(t => `#${t}`).join(' ')}</p>
+            <p className="mt-2.5 text-xs text-indigo-500">{tags.map(t => `#${t}`).join(' ')}</p>
             <div className="mt-3 flex items-center gap-5 border-t border-slate-100 pt-2.5 text-[11px] font-mono text-slate-400">
               <span>💬 0</span><span>🔁 0</span><span>♥ 0</span><span>📊 0</span>
             </div>

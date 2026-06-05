@@ -298,15 +298,18 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
                   검색 API(네이버/다음)로 들어온 기사의 원문 매체를 거릅니다. 허용 목록이 있으면 그 매체만, 차단 목록은 항상 제외. RSS는 직접 선택한 피드라 대부분 통과됩니다.
                 </p>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label={<span>허용 매체 (쉼표) <HelpTip text="검색 API로 찾은 기사 중 이 매체 기사만 통과시킵니다. 비우면 모든 매체를 허용합니다." /></span>}>
-                    <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="디스패치, 스타뉴스"
-                      value={(s.searching.allowedSources ?? []).join(', ')}
-                      onChange={e => setSearching({ allowedSources: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
+                  <Field label={<span>허용 매체 <HelpTip text="검색 API로 찾은 기사 중 이 매체 기사만 통과시킵니다. 비우면 모든 매체를 허용합니다." /></span>}>
+                    <TagInput
+                      values={s.searching.allowedSources ?? []}
+                      onChange={allowedSources => setSearching({ allowedSources })}
+                      placeholder="디스패치 입력 후 Enter" />
                   </Field>
-                  <Field label={<span>차단 매체 (쉼표) <HelpTip text="검색 API로 찾은 기사 중 제외할 매체입니다. 허용 목록보다 우선 적용됩니다." /></span>}>
-                    <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="Soompi, Koreaboo"
-                      value={(s.searching.bannedSources ?? []).join(', ')}
-                      onChange={e => setSearching({ bannedSources: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
+                  <Field label={<span>차단 매체 <HelpTip text="검색 API로 찾은 기사 중 제외할 매체입니다. 허용 목록보다 우선 적용됩니다." /></span>}>
+                    <TagInput
+                      values={s.searching.bannedSources ?? []}
+                      onChange={bannedSources => setSearching({ bannedSources })}
+                      placeholder="Soompi 입력 후 Enter"
+                      tone="rose" />
                   </Field>
                 </div>
               </div>
@@ -404,15 +407,18 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
               <p className="text-xs text-slate-400">인물·브랜드 단위로 범위와 중복을 다듬습니다. 비우면 적용 안 함.</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <Field label={<span>허용 인물·브랜드 (쉼표) <HelpTip text="이 인물·브랜드가 언급된 기사만 후보로 만듭니다. 비우면 모두 허용합니다." /></span>}>
-                <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="BTS, BLACKPINK, aespa"
-                  value={(s.searching.entityAllowlist ?? []).join(', ')}
-                  onChange={e => setSearching({ entityAllowlist: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
+              <Field label={<span>허용 인물·브랜드 <HelpTip text="이 인물·브랜드가 언급된 기사만 후보로 만듭니다. 비우면 모두 허용합니다." /></span>}>
+                <TagInput
+                  values={s.searching.entityAllowlist ?? []}
+                  onChange={entityAllowlist => setSearching({ entityAllowlist })}
+                  placeholder="BTS 입력 후 Enter" />
               </Field>
-              <Field label={<span>제외 주제 (쉼표) <HelpTip text="이 구문이 들어간 기사는 후보에서 뺍니다. 제외 키워드보다 주제·구문 단위로 넓게 거릅니다." /></span>}>
-                <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="열애설, 논란"
-                  value={(s.searching.excludeTopics ?? []).join(', ')}
-                  onChange={e => setSearching({ excludeTopics: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
+              <Field label={<span>제외 주제 <HelpTip text="이 구문이 들어간 기사는 후보에서 뺍니다. 제외 키워드보다 주제·구문 단위로 넓게 거릅니다." /></span>}>
+                <TagInput
+                  values={s.searching.excludeTopics ?? []}
+                  onChange={excludeTopics => setSearching({ excludeTopics })}
+                  placeholder="열애설 입력 후 Enter"
+                  tone="rose" />
               </Field>
               <Field label={<span>인물·브랜드당 하루 최대 건수 <HelpTip text="같은 인물·브랜드 기사를 하루에 몇 건까지 만들지 제한합니다. 0이면 무제한. 허용 인물·브랜드 목록이 있어야 동작합니다." /></span>}>
                 <input type="number" min={0} max={20} className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
@@ -512,10 +518,12 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
       {/* ④ 최종 검수 */}
       {step === 4 && (
         <Section title="📌 최종 검수" desc="발행 전 무엇을 확인할지 정합니다 (block=자동 차단, warn=사람 판단)" isLast onSave={() => saveAndNext(4)} saved={savedSteps.has(4)}>
-          <Field label={<span>금지 매체 (쉼표) <HelpTip text="최종 검수에서 출처로 쓰면 안 되는 매체입니다. 발견되면 발행 전 차단됩니다." /></span>}>
-            <input className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm" placeholder="Soompi, Koreaboo"
-              value={s.finalReview.bannedMedia.join(', ')}
-              onChange={e => setReview({ bannedMedia: e.target.value.split(',').map(x => x.trim()).filter(Boolean) })} />
+          <Field label={<span>금지 매체 <HelpTip text="최종 검수에서 출처로 쓰면 안 되는 매체입니다. 발견되면 발행 전 차단됩니다." /></span>}>
+            <TagInput
+              values={s.finalReview.bannedMedia}
+              onChange={bannedMedia => setReview({ bannedMedia })}
+              placeholder="Soompi 입력 후 Enter"
+              tone="rose" />
           </Field>
           <Field label={<span>검수 규칙 ({s.finalReview.reviewRules.length}) <HelpTip text="켜진 항목만 검사합니다. 자동 차단은 발행 전 막고, 사람 판단은 경고만 표시합니다." /></span>}>
             <div className="space-y-1">
