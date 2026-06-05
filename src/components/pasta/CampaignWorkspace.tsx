@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTasks } from '../../state/TaskContext';
 import { useArticles } from '../../state/ArticlesContext';
 import { useSettings } from '../../state/SettingsContext';
+import { useCampaigns } from '../../state/CampaignContext';
 import { generateStory } from '../../lib/promptChain';
 import { TagInput } from './TagInput';
 import { TaskSourcePanel } from './TaskSourcePanel';
-import type { DiscardReason, Category, StoryOutput } from '../../types';
+import type { DiscardReason, Category, StoryOutput, ChannelType } from '../../types';
 
 const DISCARD_REASONS: { value: DiscardReason; label: string }[] = [
   { value: 'low_quality', label: '품질 부족' },
@@ -18,13 +19,29 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
   const { tasks, updateTask } = useTasks();
   const { articles } = useArticles();
   const { settings } = useSettings();
+  const { campaigns, groups } = useCampaigns();
 
   const task = tasks.find(t => t.id === taskId);
+  const group = groups.find(g => g.id === campaigns.find(c => c.id === task?.campaignId)?.groupId);
+  const profile = group?.profile;
+
   const [headline, setHeadline] = useState(task?.draft?.headline ?? '');
   const [body, setBody] = useState(task?.draft?.body ?? '');
   const [tags, setTags] = useState<string[]>(task?.draft?.tags ?? []);
   const [regenerating, setRegenerating] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  const [checkedFacts, setCheckedFacts] = useState<Set<number>>(new Set());
+
+  // (1) draft state 누수 방지 — taskId 바뀌면 에디터 state를 새 태스크 draft로 동기화
+  useEffect(() => {
+    const t = tasks.find(x => x.id === taskId);
+    setHeadline(t?.draft?.headline ?? '');
+    setBody(t?.draft?.body ?? '');
+    setTags(t?.draft?.tags ?? []);
+    setCheckedFacts(new Set());
+    setDiscarding(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId]);
 
   if (!task) {
     return (
@@ -37,6 +54,16 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
   const draft = task.draft;
   const sourceFacts = draft?.sourceFacts ?? [];
   const srcArticles = articles.filter(a => task.sources.some(s => s.articleId === a.id));
+
+  // (2) 미저장 이탈 가드
+  const dirty =
+    headline !== (draft?.headline ?? '') ||
+    body !== (draft?.body ?? '') ||
+    JSON.stringify(tags) !== JSON.stringify(draft?.tags ?? []);
+  const guardedBack = () => {
+    if (dirty && !confirm('저장하지 않은 편집이 있습니다. 저장하지 않고 나가시겠습니까?')) return;
+    onBack();
+  };
 
   const saveDraft = () => {
     const updated: StoryOutput = {
@@ -87,7 +114,8 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
     <div className="flex h-full flex-col" style={{ background: 'radial-gradient(ellipse 80% 80% at top left, #C5E3F6 0%, transparent 55%), radial-gradient(ellipse at bottom center, #FBE2BC 0%, transparent 55%), radial-gradient(ellipse at right, #F0D5F7 0%, transparent 55%), #FCF4E8' }}>
       {/* 헤더 */}
       <div className="flex items-center gap-2 border-b border-slate-200/60 bg-white/70 backdrop-blur-md px-5 py-2.5 text-sm">
-        <button onClick={onBack} aria-label="칸반 보드로 돌아가기" className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">← 칸반</button>
+        <button onClick={guardedBack} aria-label="칸반 보드로 돌아가기" className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">← 칸반</button>
+        {dirty && <span className="text-[10px] text-amber-600" title="저장하지 않은 변경 있음">● 미저장</span>}
         <span className="font-bold text-slate-800 truncate">📰 {task.title}</span>
         {task.review && (
           <span className={`ml-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-mono font-semibold ${task.review.passed ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
@@ -129,14 +157,28 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
           )}
 
           <div>
-            <h4 className="mb-1.5 text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400">팩트 대조 ({sourceFacts.length})</h4>
+            <h4 className="mb-1.5 text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400">
+              팩트 대조 ({checkedFacts.size}/{sourceFacts.length})
+            </h4>
             <div className="space-y-1.5">
-              {sourceFacts.map((f, i) => (
-                <label key={i} className="flex items-start gap-2 rounded-lg border border-slate-100 bg-white/70 px-2.5 py-1.5 text-xs text-slate-600 cursor-pointer hover:bg-white">
-                  <input type="checkbox" className="mt-0.5 accent-indigo-500" />
-                  <span>{f}</span>
-                </label>
-              ))}
+              {sourceFacts.map((f, i) => {
+                const checked = checkedFacts.has(i);
+                return (
+                  <label key={i} className="flex items-start gap-2 rounded-lg border border-slate-100 bg-white/70 px-2.5 py-1.5 text-xs text-slate-600 cursor-pointer hover:bg-white">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => setCheckedFacts(prev => {
+                        const next = new Set(prev);
+                        if (next.has(i)) next.delete(i); else next.add(i);
+                        return next;
+                      })}
+                      className="mt-0.5 accent-indigo-500"
+                    />
+                    <span className={checked ? 'text-slate-400 line-through' : ''}>{f}</span>
+                  </label>
+                );
+              })}
               {sourceFacts.length === 0 && <p className="text-xs text-slate-300">팩트 없음</p>}
             </div>
           </div>
@@ -166,30 +208,49 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
           </div>
         </div>
 
-        {/* 우: 채널 프리뷰 (X 트윗 스타일 글래스 카드) */}
+        {/* 우: 채널 프리뷰 — 그룹 채널 유형별 분기 */}
         <div className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l border-white/60 bg-white/45 backdrop-blur-md p-4">
           <h3 className="text-xs font-mono font-semibold uppercase tracking-wide text-slate-500">📱 채널 프리뷰</h3>
-          <div className="rounded-2xl border border-white/70 bg-white/90 p-4 shadow-sm backdrop-blur-md">
-            <div className="mb-2.5 flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-xs text-white">a</div>
-              <div className="min-w-0">
-                <p className="flex items-center gap-1 text-sm font-bold text-slate-900">
-                  allkpop
-                  <svg className="h-3.5 w-3.5 text-green-500" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm3.54 6.54l-4 4a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 1 1 1.06-1.06L7 8.94l3.47-3.47a.75.75 0 1 1 1.07 1.07z" />
-                  </svg>
+          {(() => {
+            const channelName = group?.name?.trim() || '채널';
+            const handle = '@' + channelName.toLowerCase().replace(/[^a-z0-9]+/g, '');
+            const ct: ChannelType = profile?.channelType ?? 'vertical_curation';
+            const UI: Record<ChannelType, { badge: string; badgeBg: string; isSocial: boolean }> = {
+              news_media: { badge: '기사', badgeBg: 'bg-slate-700', isSocial: false },
+              vertical_curation: { badge: 'X', badgeBg: 'bg-black', isSocial: true },
+              brand_corporate: { badge: '공식', badgeBg: 'bg-indigo-600', isSocial: true },
+              creator_newsletter: { badge: '뉴스레터', badgeBg: 'bg-amber-600', isSocial: false },
+            };
+            const u = UI[ct];
+            const initial = channelName.charAt(0) || '·';
+            return (
+              <div className="rounded-2xl border border-white/70 bg-white/90 p-4 shadow-sm backdrop-blur-md">
+                <div className="mb-2.5 flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-xs text-white">{initial}</div>
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-1 text-sm font-bold text-slate-900">
+                      {channelName}
+                      <svg className="h-3.5 w-3.5 text-green-500" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm3.54 6.54l-4 4a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 1 1 1.06-1.06L7 8.94l3.47-3.47a.75.75 0 1 1 1.07 1.07z" />
+                      </svg>
+                    </p>
+                    <p className="truncate text-xs text-slate-400">{u.isSocial ? handle : (profile?.character || channelName)}</p>
+                  </div>
+                  <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-mono font-bold text-white ${u.badgeBg}`}>{u.badge}</span>
+                </div>
+                <p className="text-sm font-semibold leading-snug text-slate-900">{stripHtml(headline) || '헤드라인'}</p>
+                <p className={`mt-1.5 text-xs leading-relaxed text-slate-600 ${u.isSocial ? 'line-clamp-6' : ''}`}>
+                  {stripHtml(body).slice(0, u.isSocial ? 240 : 600) || '본문 미리보기'}
                 </p>
-                <p className="text-xs text-slate-400">@allkpop</p>
+                <p className="mt-2.5 text-xs text-indigo-500">{tags.map(t => `#${t}`).join(' ')}</p>
+                {u.isSocial && (
+                  <div className="mt-3 flex items-center gap-5 border-t border-slate-100 pt-2.5 text-[11px] font-mono text-slate-400">
+                    <span>💬 0</span><span>🔁 0</span><span>♥ 0</span><span>📊 0</span>
+                  </div>
+                )}
               </div>
-              <span className="ml-auto rounded-full bg-black px-2 py-0.5 text-[10px] font-mono font-bold text-white">X</span>
-            </div>
-            <p className="text-sm font-semibold leading-snug text-slate-900">{stripHtml(headline) || '헤드라인'}</p>
-            <p className="mt-1.5 text-xs leading-relaxed text-slate-600 line-clamp-6">{stripHtml(body).slice(0, 240) || '본문 미리보기'}</p>
-            <p className="mt-2.5 text-xs text-indigo-500">{tags.map(t => `#${t}`).join(' ')}</p>
-            <div className="mt-3 flex items-center gap-5 border-t border-slate-100 pt-2.5 text-[11px] font-mono text-slate-400">
-              <span>💬 0</span><span>🔁 0</span><span>♥ 0</span><span>📊 0</span>
-            </div>
-          </div>
+            );
+          })()}
           <p className="text-xs text-slate-400">발행하면 연결된 배포 채널로 전송됩니다.</p>
         </div>
       </div>
