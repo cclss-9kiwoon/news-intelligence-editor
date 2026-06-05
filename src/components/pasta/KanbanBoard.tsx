@@ -5,7 +5,7 @@ import { useClusters } from '../../state/ClustersContext';
 import { useCampaigns } from '../../state/CampaignContext';
 import { shouldClaimCluster } from '../../lib/searchFilter';
 import { IconTrash, IconRefresh } from './icons';
-import { GoldenTimeBar, GaugeChip, InfoChip } from './kanbanPrimitives';
+import { GoldenTimeBar, GaugeChip, InfoChip, formatRemaining } from './kanbanPrimitives';
 import type { Task, TaskStatus } from '../../types';
 
 const HOUR = 3600_000;
@@ -19,13 +19,6 @@ function computeGolden(gt: Task['goldenTime'], now: number): GoldenView | null {
   const percent = Math.max(0, Math.min(100, Math.round((remainingMs / total) * 100)));
   const state = remainingMs <= 0 ? 'expired' : percent < 20 ? 'warning' : 'ok';
   return { remainingMs, percent, state };
-}
-function fmtDur(ms: number): string {
-  if (ms <= 0) return '곧';
-  const m = Math.ceil(ms / 60000);
-  if (m < 60) return `${m}분`;
-  const h = Math.floor(m / 60);
-  return h < 24 ? `${h}시간` : `${Math.floor(h / 24)}일`;
 }
 type ColMeta = {
   status: TaskStatus; label: string; auto: boolean;
@@ -138,7 +131,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
           <InfoChip tone="blue">① 대기 {rhythm.queueCount}</InfoChip>
           <InfoChip>수집 {rhythm.collected}</InfoChip>
           {rhythm.atCap && rhythm.nextPromotionMs > 0 && (
-            <InfoChip tone="amber">다음 승급 {fmtDur(rhythm.nextPromotionMs)} 뒤 (멈춤 아님)</InfoChip>
+            <InfoChip tone="amber">다음 승급 {formatRemaining(rhythm.nextPromotionMs)} 뒤 (멈춤 아님)</InfoChip>
           )}
         </span>
       </div>
