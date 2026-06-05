@@ -93,12 +93,19 @@ function buildStorySystem(category: Category, settings: Settings): string {
   return sections.join('\n');
 }
 
+// 매체당 본문 길이 상한 — 다수 매체 입력 시 컨텍스트 토큰 오버플로 방지
+const MAX_ARTICLE_CHARS = 6000;
+
 function buildStoryUser(articles: Article[]): string {
   const parts: string[] = [`[같은 이슈를 다룬 ${articles.length}개 매체 기사]`, ''];
   articles.forEach((a, i) => {
+    const raw = a.fullText || a.description || '';
+    const body = raw.length > MAX_ARTICLE_CHARS
+      ? `${raw.slice(0, MAX_ARTICLE_CHARS)}… (이하 생략)`
+      : raw;
     parts.push(`--- 매체 ${i + 1}: ${a.source} ---`);
     parts.push(`제목: ${a.title}`);
-    parts.push(`본문: ${a.fullText || a.description}`);
+    parts.push(`본문: ${body}`);
     if (a.pubDate) parts.push(`발행: ${a.pubDate}`);
     parts.push('');
   });
