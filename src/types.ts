@@ -240,6 +240,16 @@ export type FormalityLevel = 'strict' | 'standard' | 'casual';
 // 소스 검증 강도 → ①서칭 소스정책에 상속.
 export type SourceStrictness = 'cross_verified' | 'standard' | 'loose';
 
+/** 단계/그룹 LLM 오버라이드 — 비운 필드는 상위(그룹→글로벌 settings) 상속.
+ * 우선순위: 단계 llm → 그룹 llm → 글로벌 settings. apiKey도 단계/그룹별 가능(quota 분산). */
+export type StageLLMConfig = {
+  provider?: ProviderId;
+  model?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  enabled?: boolean;   // false면 이 단계 오버라이드 무시(상위 상속)
+};
+
 export type GroupProfile = {
   channelType: ChannelType;     // 배포 채널 유형
   formalityLevel: FormalityLevel; // 격식 수준 (검수 엄격도 연동)
@@ -248,6 +258,7 @@ export type GroupProfile = {
   character: string;            // 채널 성격 "이 채널이 어떤 곳인가"
   audience: string;             // 타겟 독자
   toneBase: string;             // 전반 톤·스타일 베이스
+  llm?: StageLLMConfig;         // 그룹 기본 LLM(provider/키/모델). 캠페인 단계가 오버라이드
 };
 
 export type Group = {
@@ -289,6 +300,7 @@ export type TopicReviewConfig = {
   selectionCriteria: string;  // 주제 선정 기준 (최신성/인지도/다양성)
   dedupeRules: string;        // 중복·앵글 회피 규칙
   priority: string;           // 우선순위
+  llm?: StageLLMConfig;       // ② 단계 LLM 오버라이드(주제판단). 비면 그룹/글로벌 상속
 };
 
 /** ③ 생성 설정 — 어떻게 쓰나 */
@@ -298,7 +310,8 @@ export type GenerationConfig = {
   referenceArticles: ReferenceArticle[];
   styleGuide: string;               // 자유 가이드라인
   outputLanguage: OutputLanguage;
-  writingModel?: string;            // ③ 작성 전용 모델(비면 글로벌). 높을수록 품질↑
+  writingModel?: string;            // ③ 작성 전용 모델(비면 글로벌). 높을수록 품질↑ (레거시, llm.model로 흡수 예정)
+  llm?: StageLLMConfig;             // ③ 단계 LLM 오버라이드(작성). 비면 그룹/글로벌 상속
 };
 
 /** ④ 결과물 검수 설정 — 무엇을 검수하나 */
@@ -307,6 +320,7 @@ export type FinalReviewConfig = {
   allowedMedia: string[];
   bannedMedia: string[];
   autoPublish?: boolean;            // on=③→④ 진입 후 Verified(passed)면 자동 발행. 미통과는 사람 대기
+  llm?: StageLLMConfig;             // ④ 단계 LLM 오버라이드(검수). 비면 그룹/글로벌 상속
 };
 
 /** 캠페인 단위 설정 — 칸반 4단계 구조 */
