@@ -18,7 +18,7 @@ export const ALLKPOP_TOPIC_RULES = {
 - 컴백 발표류는 allkpop이 빠르게 커버 → 차트결과/마일스톤형이 중복 회피에 유리.`,
   allowedSources: ['디스패치', '네이버', '다음', '스타뉴스', 'OSEN', '스포츠경향', 'Newsen', '한터뉴스'],
   bannedSources: ['Soompi', 'Korea Herald', 'Koreaboo'],
-  minMediaCount: 2, // 한국 매체 2곳+ 교차검증
+  minMediaCount: 1, // 1=수집 우선(같은 사건 다매체가 드물어 2는 사실상 0건). 교차검증은 ②주제검수·④검수에서 처리.
 };
 
 // ── ③ 생성 (RW 작성/표기 규칙) ──

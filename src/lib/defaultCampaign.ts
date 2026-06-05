@@ -29,7 +29,7 @@ export const DEFAULT_SOURCE_CONFIG: SourceConfig = {
   clusterThreshold: 0.35,
   topicKeywords: [],
   excludeKeywords: [],
-  minMediaCount: 2,
+  minMediaCount: 1,   // 1=기사 1건이면 후보 생성(수집 잘 됨). 2+=교차검증(같은 사건 다매체 묶일 때만)
   entityAllowlist: [],
   excludeTopics: [],
   maxPerEntityPerDay: 0,
