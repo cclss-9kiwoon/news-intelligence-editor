@@ -5,6 +5,7 @@ import type { Campaign, SourceConfig, TopicReviewConfig, GenerationConfig, Final
 import { DEFAULT_PROMPT_CONFIG } from '../../lib/defaultSettings';
 import { makeAllkpopCampaignSettings } from '../../lib/allkpopPreset';
 import { extractArticleText } from '../../lib/scraper';
+import { getRssBackoffUntil, RSS_BACKOFF_MS, RSS_CACHE_TTL_MS } from '../../lib/rss';
 import { testNaverConnection } from '../../lib/naver';
 import { testDaumConnection } from '../../lib/daum';
 import { HelpTip } from './HelpTip';
@@ -40,6 +41,7 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
     setDaumQueries,
     addQueryPreset,
     removeQueryPreset,
+    setRssPollMinutes,
   } = useSettings();
   const [step, setStep] = useState<Step>(1);
   const [savedSteps, setSavedSteps] = useState<Set<Step>>(new Set());
@@ -371,13 +373,39 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
               </label>
             </div>
             <div className={`space-y-1 transition-opacity ${rssEnabled ? '' : 'pointer-events-none opacity-45'}`}>
-              {s.searching.rssSources.map(src => (
-                <label key={src.id} className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={src.enabled}
-                    onChange={e => setSearching({ rssSources: s.searching.rssSources.map(x => x.id === src.id ? { ...x, enabled: e.target.checked } : x) })} />
-                  <span className={src.enabled ? 'text-slate-800' : 'text-slate-400'}>{src.name}</span>
-                </label>
-              ))}
+              {s.searching.rssSources.map(src => {
+                const backoffUntil = getRssBackoffUntil(src.id);
+                const backoffMin = backoffUntil ? Math.ceil((backoffUntil - Date.now()) / 60_000) : 0;
+                return (
+                  <label key={src.id} className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={src.enabled}
+                      onChange={e => setSearching({ rssSources: s.searching.rssSources.map(x => x.id === src.id ? { ...x, enabled: e.target.checked } : x) })} />
+                    <span className={src.enabled ? 'text-slate-800' : 'text-slate-400'}>{src.name}</span>
+                    {backoffUntil && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700" title="요청 거부(429 등)로 일시 중단됨. 자동 재시도 예정.">
+                        ⏸ {backoffMin}분 후 재시도
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+
+            {/* 폴링 주기 + 캐시/백오프 정책 노출 */}
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                폴링 주기
+                <select
+                  value={settings.rssPollMinutes}
+                  onChange={e => setRssPollMinutes(Number(e.target.value))}
+                  className="rounded-lg border border-slate-200 bg-white/80 px-2 py-1 text-xs font-normal"
+                >
+                  {[1, 3, 5, 10, 15, 30].map(m => <option key={m} value={m}>{m}분</option>)}
+                </select>
+              </label>
+              <span className="text-[11px] text-slate-400">
+                응답 {Math.round(RSS_CACHE_TTL_MS / 60_000)}분 캐시 · 요청 거부 시 {Math.round(RSS_BACKOFF_MS / 60_000)}분 백오프 후 자동 재시도
+              </span>
             </div>
           </div>
 

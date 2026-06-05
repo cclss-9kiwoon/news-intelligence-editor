@@ -167,7 +167,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const addQueryPreset = useCallback((name: string, providers: SearchProviderConfig[]) =>
     setSettings(s => {
       const preset: QueryPreset = {
-        id: `preset-${Date.now()}`,
+        id: crypto.randomUUID(),
         name: name.trim() || '이름 없는 프리셋',
         providers: providers.map(p => ({ ...p })), // deep clone (얕은 객체라 충분)
         createdAt: Date.now(),
