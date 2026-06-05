@@ -17,9 +17,11 @@ export function CampaignSidebar({
   view, selectedId, selectedGroupId,
   onSelectCampaign, onSelectGroup, onAddGroup, onSelectTemplate,
 }: Props) {
-  const { groups, campaigns, addCampaign, duplicateCampaign, deleteGroup, deleteCampaign } = useCampaigns();
+  const { groups, campaigns, addCampaign, duplicateCampaign, renameGroup, deleteGroup, deleteCampaign } = useCampaigns();
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [newCampaignName, setNewCampaignName] = useState('');
+  const [editingGroup, setEditingGroup] = useState<string | null>(null);
+  const [groupNameDraft, setGroupNameDraft] = useState('');
 
   return (
     <div className="flex h-full flex-col gap-1 overflow-y-auto border-r border-slate-200 bg-white p-3 text-sm">
@@ -44,12 +46,30 @@ export function CampaignSidebar({
                 groupSelected ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 hover:bg-slate-50'
               }`}
               onClick={() => onSelectGroup(group.id)}
+              onDoubleClick={() => { setEditingGroup(group.id); setGroupNameDraft(group.name); }}
             >
-              <span className="font-medium text-slate-700">📁 {group.name}</span>
-              <button
-                onClick={(e) => { e.stopPropagation(); if (confirm(`그룹 "${group.name}" 삭제? 캠페인도 함께 삭제됩니다.`)) deleteGroup(group.id); }}
-                className="text-slate-300 hover:text-red-500"
-              >🗑</button>
+              {editingGroup === group.id ? (
+                <input
+                  autoFocus
+                  className="w-full rounded border px-1.5 py-0.5 text-sm font-medium text-slate-700"
+                  value={groupNameDraft}
+                  onClick={e => e.stopPropagation()}
+                  onChange={e => setGroupNameDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && groupNameDraft.trim()) { renameGroup(group.id, groupNameDraft.trim()); setEditingGroup(null); }
+                    else if (e.key === 'Escape') setEditingGroup(null);
+                  }}
+                  onBlur={() => { if (groupNameDraft.trim()) renameGroup(group.id, groupNameDraft.trim()); setEditingGroup(null); }}
+                />
+              ) : (
+                <>
+                  <span className="font-medium text-slate-700" title="더블클릭으로 이름 변경">📁 {group.name}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); if (confirm(`그룹 "${group.name}" 삭제? 캠페인도 함께 삭제됩니다.`)) deleteGroup(group.id); }}
+                    className="text-slate-300 hover:text-red-500"
+                  >🗑</button>
+                </>
+              )}
             </div>
 
             <div className="ml-3 mt-1 flex flex-col gap-0.5">
