@@ -1,0 +1,138 @@
+/**
+ * 서칭 필터 — 클러스터 점유(claim) 판정 순수 로직.
+ *
+ * SearchingPipeline.tsx useEffect 안에 인라인이던 필터를 순수함수로 추출.
+ * 단위 테스트 가능 + 동작 동일. 컴포넌트는 shouldClaimCluster를 호출만 한다.
+ *
+ * 동일 사이클 내 중복 점유 방지(claimedArticleIds·entityCountToday 누적)는
+ * 컴포넌트가 claim 시 합성 태스크를 existingTasks에 push해서 재현한다.
+ */
+import type { SourceConfig, Task, TaskSource, Cluster, Article } from '../types';
+import { normalizeLink } from './rss';
+
+const DAY_MS = 86_400_000;
+
+/** source 문자열이 rules 중 하나라도 부분일치하는가 (대소문자 무시). rules 비면 false */
+export function sourceMatches(source: string, rules: string[]): boolean {
+  if (rules.length === 0) return false;
+  const normalized = source.toLowerCase();
+  return rules.some(rule => normalized.includes(rule.toLowerCase()));
+}
+
+/** 원문 식별 키 — utm 제거 + m. → www. 정규화 (동일 원문 중복 카운트 방지) */
+export function originalKey(link: string): string {
+  return normalizeLink(link).replace(/^https?:\/\/m\./, 'https://www.');
+}
+
+/** 제목 정규화 — 소문자 + 기호 제거 + 공백 단일화 (중복 판정용) */
+export function normalizeTitle(t: string): string {
+  return t.toLowerCase().replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim();
+}
+
+/** entityAllowlist 중 haystack(소문자)에 등장하는 첫 엔티티. 없으면 null */
+export function matchEntity(haystack: string, allowlist: string[]): string | null {
+  for (const e of allowlist) {
+    if (e.trim() && haystack.includes(e.toLowerCase())) return e;
+  }
+  return null;
+}
+
+/** 점유 판정 사유 (테스트·디버깅용 식별자) */
+export type ClaimReason =
+  | 'already_claimed'        // 클러스터 기사 중 이미 점유된 것 존재
+  | 'no_articles'            // 소스 필터(allowed/banned) 후 기사 0건
+  | 'below_min_media'        // 매체 수 < minMediaCount
+  | 'no_topic_keyword'       // 포함 키워드 미등장
+  | 'excluded_keyword'       // 제외 키워드 등장
+  | 'excluded_topic'         // 제외 주제 등장
+  | 'no_allowed_entity'      // 허용 엔티티 미등장
+  | 'entity_daily_limit'     // 엔티티 일일 상한 초과
+  | 'own_site_dup';          // 자체 기보도 제목과 중복
+
+export type ClaimDecision =
+  | { ok: true; sources: TaskSource[]; matchedEntity: string | null; imageCount: number }
+  | { ok: false; reason: ClaimReason };
+
+/**
+ * 클러스터를 태스크로 점유할지 판정.
+ * existingTasks로부터 점유/기보도/엔티티 카운트를 산출하므로 자체완결(순수).
+ */
+export function shouldClaimCluster(
+  cluster: Cluster,
+  articles: Article[],
+  searching: SourceConfig,
+  existingTasks: Task[],
+  now: number,
+): ClaimDecision {
+  const {
+    minMediaCount, topicKeywords, excludeKeywords, allowedSources = [], bannedSources = [],
+    entityAllowlist = [], excludeTopics = [], maxPerEntityPerDay = 0, ownSiteDedupe = false,
+  } = searching;
+
+  // 이미 점유된 기사 id
+  const claimedArticleIds = new Set<string>();
+  existingTasks.forEach(t => t.sources.forEach(s => claimedArticleIds.add(s.articleId)));
+  if (cluster.articleIds.some(id => claimedArticleIds.has(id))) {
+    return { ok: false, reason: 'already_claimed' };
+  }
+
+  // 소스 필터
+  const clusterArticles = articles
+    .filter(a => cluster.articleIds.includes(a.id))
+    .filter(a => allowedSources.length === 0 || sourceMatches(a.source, allowedSources))
+    .filter(a => !sourceMatches(a.source, bannedSources));
+  if (clusterArticles.length === 0) return { ok: false, reason: 'no_articles' };
+
+  // 매체 수 하한 (매체 수와 원문 수 중 작은 값 기준)
+  const distinctOriginalCount = new Set(clusterArticles.map(a => originalKey(a.link))).size;
+  const mediaCount = new Set(clusterArticles.map(a => a.source)).size;
+  if (Math.min(mediaCount, distinctOriginalCount) < minMediaCount) {
+    return { ok: false, reason: 'below_min_media' };
+  }
+
+  // 키워드 필터
+  const haystack = clusterArticles.map(a => `${a.title} ${a.description}`).join(' ').toLowerCase();
+  if (topicKeywords.length > 0 && !topicKeywords.some(k => haystack.includes(k.toLowerCase()))) {
+    return { ok: false, reason: 'no_topic_keyword' };
+  }
+  if (excludeKeywords.length > 0 && excludeKeywords.some(k => haystack.includes(k.toLowerCase()))) {
+    return { ok: false, reason: 'excluded_keyword' };
+  }
+  if (excludeTopics.length > 0 && excludeTopics.some(k => k.trim() && haystack.includes(k.toLowerCase()))) {
+    return { ok: false, reason: 'excluded_topic' };
+  }
+
+  // entityAllowlist: 허용 엔티티 미등장 제외
+  const matchedEntity = entityAllowlist.length > 0 ? matchEntity(haystack, entityAllowlist) : null;
+  if (entityAllowlist.length > 0 && !matchedEntity) {
+    return { ok: false, reason: 'no_allowed_entity' };
+  }
+
+  // maxPerEntityPerDay: 오늘 생성분의 엔티티별 카운트 상한
+  if (maxPerEntityPerDay > 0 && matchedEntity) {
+    let countToday = 0;
+    for (const t of existingTasks) {
+      if (now - t.createdAt > DAY_MS) continue;
+      if (matchEntity(t.title.toLowerCase(), entityAllowlist) === matchedEntity) countToday++;
+    }
+    if (countToday >= maxPerEntityPerDay) return { ok: false, reason: 'entity_daily_limit' };
+  }
+
+  // ownSiteDedupe: 기보도/제작 제목과 중복 제외
+  if (ownSiteDedupe) {
+    const publishedTitles = new Set(
+      existingTasks.filter(t => t.published || t.status === 'final_review' || !!t.draft)
+        .map(t => normalizeTitle(t.title)),
+    );
+    if (publishedTitles.has(normalizeTitle(cluster.representativeTitle))) {
+      return { ok: false, reason: 'own_site_dup' };
+    }
+  }
+
+  const sources: TaskSource[] = clusterArticles.map(a => ({
+    articleId: a.id, title: a.title, source: a.source, hasFullText: !!a.fullText,
+  }));
+  const imageCount = clusterArticles.reduce((n, a) => n + (a.images?.length ?? 0), 0);
+
+  return { ok: true, sources, matchedEntity, imageCount };
+}

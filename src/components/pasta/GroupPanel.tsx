@@ -26,8 +26,19 @@ const FORMALITY: { value: FormalityLevel; label: string; active: string; dot: st
   { value: 'casual',   label: '캐주얼', active: 'border-slate-400 bg-slate-100 text-slate-700', dot: 'bg-slate-400' },
 ];
 
+function formatRelative(ts?: number): string {
+  if (!ts) return '';
+  const diff = Date.now() - ts;
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return '방금';
+  if (min < 60) return `${min}분 전`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}시간 전`;
+  return `${Math.floor(hr / 24)}일 전`;
+}
+
 export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCampaign: (id: string) => void }) {
-  const { renameGroup, campaigns, addCampaign, updateGroupProfile } = useCampaigns();
+  const { renameGroup, campaigns, addCampaign, duplicateCampaign, updateGroupProfile } = useCampaigns();
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState('');
 
@@ -148,14 +159,23 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
         ) : (
           <div className="mt-2 space-y-1">
             {groupCampaigns.map(c => (
-              <button
+              <div
                 key={c.id}
-                onClick={() => onOpenCampaign(c.id)}
-                className="flex w-full items-center justify-between rounded-lg border border-slate-100 bg-white/60 px-3 py-2 text-left text-sm text-slate-700 hover:bg-white"
+                className="group flex w-full items-center justify-between rounded-lg border border-slate-100 bg-white/60 px-3 py-2 text-left text-sm text-slate-700 hover:bg-white"
               >
-                <span>📋 {c.name}</span>
-                <span className="text-xs text-slate-400">설정 →</span>
-              </button>
+                <button onClick={() => onOpenCampaign(c.id)} className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="truncate">📋 {c.name}</span>
+                  <span className="shrink-0 text-[11px] text-slate-300">{formatRelative(c.updatedAt)}</span>
+                </button>
+                <span className="ml-2 flex shrink-0 items-center gap-2">
+                  <button
+                    title="복제"
+                    onClick={() => { const copy = duplicateCampaign(c.id); if (copy) onOpenCampaign(copy.id); }}
+                    className="text-slate-300 hover:text-indigo-500"
+                  >📑</button>
+                  <button onClick={() => onOpenCampaign(c.id)} className="text-xs text-slate-400 hover:text-slate-600">설정 →</button>
+                </span>
+              </div>
             ))}
           </div>
         )}
