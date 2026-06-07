@@ -10,6 +10,7 @@ import { fetchDaumArticles } from '../lib/daum';
 const HIDDEN_MULTIPLIER = 3;
 const MIN_POLL_MS = 60_000;
 const MAX_ARTICLES = 200;
+const MIN_SPINNER_MS = 600;   // #2: 스피너 최소 노출(깜빡임 방지)
 
 type EnrichStats = {
   enriched: number;
@@ -47,6 +48,8 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
   const [enrichMethod, setEnrichMethod] = useState<'naver' | 'jina' | 'none'>('none');
   const [collectError, setCollectError] = useState<string | null>(null);
   const inFlightRef = useRef(false);
+  // 진행 중인 수집 promise — 폴러/수동이 서로 합류(join)할 수 있게 공유.
+  const inFlightPromiseRef = useRef<Promise<void> | null>(null);
 
   const sourcesRef = useRef(settings.rssSources);
   useEffect(() => { sourcesRef.current = settings.rssSources; }, [settings.rssSources]);
@@ -150,32 +153,33 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
            !a.link.startsWith('manual://') && !a.link.startsWith('simulator://'),
     );
     if (needsEnrichment.length > 0) {
+      // #3: enrichment를 await — isRefreshing/inFlight를 전문추출 완료까지 유지(스피너 조기 종료 방지).
+      // 과거 fire-and-forget(.then)이라 fetch+분류만 로딩 표시 → 소스 적으면 깜빡임.
       setLoadingStatus(`전문 추출 중 (0/${needsEnrichment.length})...`);
-      enrichArticlesWithFullText(incoming, naverIdRef.current, naverSecretRef.current, (done, total) => {
+      const stats = await enrichArticlesWithFullText(incoming, naverIdRef.current, naverSecretRef.current, (done, total) => {
         setLoadingStatus(`전문 추출 중 (${done}/${total})...`);
-      }).then(stats => {
-        setLoadingStatus('');
-        const total = initialEnriched + stats.total;
-        setEnrichStats({
-          enriched: initialEnriched + stats.enriched,
-          failed: stats.failed + stats.blocked,
-          skipped: stats.skipped,
-          total,
-        });
-        if (stats.enriched > 0 && stats.updates.size > 0) {
-          setEnrichMethod(getLastEnrichMethod());
-          // Immutable merge: create new article objects with enriched data
-          setArticles(prev => prev.map(a => {
-            const patch = stats.updates.get(a.link);
-            if (!patch) return a;
-            return {
-              ...a,
-              fullText: patch.fullText,
-              ...(patch.images ? { images: patch.images } : {}),
-            };
-          }));
-        }
       });
+      setLoadingStatus('');
+      const total = initialEnriched + stats.total;
+      setEnrichStats({
+        enriched: initialEnriched + stats.enriched,
+        failed: stats.failed + stats.blocked,
+        skipped: stats.skipped,
+        total,
+      });
+      if (stats.enriched > 0 && stats.updates.size > 0) {
+        setEnrichMethod(getLastEnrichMethod());
+        // Immutable merge: create new article objects with enriched data
+        setArticles(prev => prev.map(a => {
+          const patch = stats.updates.get(a.link);
+          if (!patch) return a;
+          return {
+            ...a,
+            fullText: patch.fullText,
+            ...(patch.images ? { images: patch.images } : {}),
+          };
+        }));
+      }
     } else {
       setLoadingStatus('');
     }
@@ -184,15 +188,22 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
   const pollOnce = useCallback(async () => {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
+    const p = (async () => {
+      try {
+        await fetchClassifyAndEnrich();
+      } catch (err) {
+        console.warn('[articles] poll failed', err);
+        setCollectError('수집 중 오류 발생');
+      }
+    })();
+    inFlightPromiseRef.current = p;
     try {
-      await fetchClassifyAndEnrich();
-    } catch (err) {
-      console.warn('[articles] poll failed', err);
-      setCollectError('수집 중 오류 발생');
+      await p;
     } finally {
       setIsInitialLoading(false);
       setLoadingStatus('');
       inFlightRef.current = false;
+      if (inFlightPromiseRef.current === p) inFlightPromiseRef.current = null;
     }
   }, [fetchClassifyAndEnrich]);
 
@@ -235,20 +246,44 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const forceRefresh = useCallback(async () => {
-    if (inFlightRef.current) return;
-    inFlightRef.current = true;
+    // (c) inFlight 체크 *전에* 즉시 스피너 — 클릭이 조용히 무시되는 먹통 체감 제거.
     setIsRefreshing(true);
-    try {
+    const startedAt = Date.now();
+    // #2: 스피너 최소 노출 보장 후 해제 (깜빡임 방지).
+    const releaseSpinner = async () => {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < MIN_SPINNER_MS) {
+        await new Promise(r => setTimeout(r, MIN_SPINNER_MS - elapsed));
+      }
+      setIsRefreshing(false);
+      setLoadingStatus('');
+    };
+
+    // (a) 이미 수집 중(백그라운드 폴러 등) — bare return 금지. 진행 중 작업에 합류해
+    //     완료까지 스피너 유지하고, 사용자에 "이미 수집 중" 표시.
+    if (inFlightRef.current && inFlightPromiseRef.current) {
+      setLoadingStatus('이미 수집 중…');
+      try { await inFlightPromiseRef.current; } catch { /* 오류는 해당 실행에서 collectError로 노출됨 */ }
+      await releaseSpinner();
+      return;
+    }
+
+    inFlightRef.current = true;
+    const p = (async () => {
       clearAllRssCache();
       await fetchClassifyAndEnrich();
       setLastRefreshedAt(Date.now());
+    })();
+    inFlightPromiseRef.current = p;
+    try {
+      await p;
     } catch (err) {
       console.warn('[articles] refresh failed', err);
       setCollectError('수집 중 오류 발생');
     } finally {
       inFlightRef.current = false;
-      setIsRefreshing(false);   // 어떤 실패든 스피너 해제 (영구 로딩 금지)
-      setLoadingStatus('');
+      if (inFlightPromiseRef.current === p) inFlightPromiseRef.current = null;
+      await releaseSpinner();   // 어떤 실패든 스피너 해제 (영구 로딩 금지)
     }
   }, [fetchClassifyAndEnrich]);
 
