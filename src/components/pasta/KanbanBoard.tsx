@@ -159,7 +159,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
         )}
         {collectError && (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-semibold text-red-600">
-            ⚠ 수집 일부 실패: {collectError}{/401|인증|key|키/i.test(collectError) ? ' — 캠페인 설정 ①에서 검색 API 키 확인' : ''}
+            ⚠ 수집 일부 실패: {collectError}{collectError.includes('(키 확인)') ? ' — 캠페인 설정 ①에서 검색 API 키 확인' : ''}
           </span>
         )}
 

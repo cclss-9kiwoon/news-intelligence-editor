@@ -4,6 +4,7 @@ import { useArticles } from '../../state/ArticlesContext';
 import { useSettings } from '../../state/SettingsContext';
 import { useCampaigns } from '../../state/CampaignContext';
 import { generateStory } from '../../lib/promptChain';
+import { sanitizeHtml } from '../../lib/sanitizeHtml';
 import { TagInput } from './TagInput';
 import { TaskSourcePanel } from './TaskSourcePanel';
 import type { DiscardReason, Category, StoryOutput, ChannelType } from '../../types';
@@ -210,45 +211,39 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
 
         {/* 우: 채널 프리뷰 — 그룹 채널 유형별 분기 */}
         <div className="flex min-h-0 flex-col gap-3 overflow-y-auto border-l border-white/60 bg-white/45 backdrop-blur-md p-4">
-          <h3 className="text-xs font-mono font-semibold uppercase tracking-wide text-slate-500">📱 채널 프리뷰</h3>
+          <h3 className="text-xs font-mono font-semibold uppercase tracking-wide text-slate-500">📰 기사 미리보기</h3>
           {(() => {
             const channelName = group?.name?.trim() || '채널';
-            const handle = '@' + channelName.toLowerCase().replace(/[^a-z0-9]+/g, '');
-            const ct: ChannelType = profile?.channelType ?? 'vertical_curation';
-            const UI: Record<ChannelType, { badge: string; badgeBg: string; isSocial: boolean }> = {
-              news_media: { badge: '기사', badgeBg: 'bg-slate-700', isSocial: false },
-              vertical_curation: { badge: 'X', badgeBg: 'bg-black', isSocial: true },
-              brand_corporate: { badge: '공식', badgeBg: 'bg-indigo-600', isSocial: true },
-              creator_newsletter: { badge: '뉴스레터', badgeBg: 'bg-amber-600', isSocial: false },
+            const ct: ChannelType = profile?.channelType ?? 'news_media';
+            const BADGE: Record<ChannelType, { label: string; bg: string }> = {
+              news_media: { label: '기사', bg: 'bg-slate-700' },
+              vertical_curation: { label: '큐레이션', bg: 'bg-indigo-600' },
+              brand_corporate: { label: '공식', bg: 'bg-indigo-600' },
+              creator_newsletter: { label: '뉴스레터', bg: 'bg-amber-600' },
             };
-            const u = UI[ct];
-            const initial = channelName.charAt(0) || '·';
+            const badge = BADGE[ct] ?? BADGE.news_media;
+            // 히어로 이미지: 본문 인라인 <img>는 sanitizeHtml이 살림. 별도 히어로는 원문 이미지 폴백.
+            const hero = srcArticles[0]?.images?.[0]?.url ?? srcArticles[0]?.thumbnail;
             return (
-              <div className="rounded-2xl border border-white/70 bg-white/90 p-4 shadow-sm backdrop-blur-md">
-                <div className="mb-2.5 flex items-center gap-2.5">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-xs text-white">{initial}</div>
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-1 text-sm font-bold text-slate-900">
-                      {channelName}
-                      <svg className="h-3.5 w-3.5 text-green-500" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm3.54 6.54l-4 4a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 1 1 1.06-1.06L7 8.94l3.47-3.47a.75.75 0 1 1 1.07 1.07z" />
-                      </svg>
-                    </p>
-                    <p className="truncate text-xs text-slate-400">{u.isSocial ? handle : (profile?.character || channelName)}</p>
+              // 뉴스 기사형 레이아웃 (X/소셜 카드 폐기) — 헤드라인 + 히어로 + 렌더된 본문
+              <article className="overflow-hidden rounded-2xl border border-white/70 bg-white shadow-sm">
+                {hero && <img src={hero} alt="" className="h-40 w-full object-cover" />}
+                <div className="p-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="truncate text-[11px] font-semibold text-slate-500">{channelName}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-mono font-bold text-white ${badge.bg}`}>{badge.label}</span>
                   </div>
-                  <span className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-mono font-bold text-white ${u.badgeBg}`}>{u.badge}</span>
+                  <h2 className="text-base font-bold leading-snug text-slate-900">{stripHtml(headline) || '헤드라인'}</h2>
+                  {/* 본문 HTML 렌더 — 반드시 sanitizeHtml(DOMPurify) 경유. raw 금지. 자르기는 max-h+overflow. */}
+                  {body.trim()
+                    ? <div
+                        className="mt-2 max-h-80 max-w-none overflow-y-auto text-sm leading-relaxed text-slate-700 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-200 [&_blockquote]:pl-3 [&_blockquote]:text-slate-500 [&_figcaption]:text-xs [&_figcaption]:text-slate-400 [&_h2]:mt-3 [&_h2]:font-bold [&_h3]:mt-2 [&_h3]:font-semibold [&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-lg [&_li]:ml-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-5"
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(body) }}
+                      />
+                    : <p className="mt-2 text-xs text-slate-300">본문 미리보기</p>}
+                  {tags.length > 0 && <p className="mt-3 text-xs text-slate-400">{tags.map(t => `#${t}`).join(' ')}</p>}
                 </div>
-                <p className="text-sm font-semibold leading-snug text-slate-900">{stripHtml(headline) || '헤드라인'}</p>
-                <p className={`mt-1.5 text-xs leading-relaxed text-slate-600 ${u.isSocial ? 'line-clamp-6' : ''}`}>
-                  {stripHtml(body).slice(0, u.isSocial ? 240 : 600) || '본문 미리보기'}
-                </p>
-                <p className="mt-2.5 text-xs text-indigo-500">{tags.map(t => `#${t}`).join(' ')}</p>
-                {u.isSocial && (
-                  <div className="mt-3 flex items-center gap-5 border-t border-slate-100 pt-2.5 text-[11px] font-mono text-slate-400">
-                    <span>💬 0</span><span>🔁 0</span><span>♥ 0</span><span>📊 0</span>
-                  </div>
-                )}
-              </div>
+              </article>
             );
           })()}
           <p className="text-xs text-slate-400">발행하면 연결된 배포 채널로 전송됩니다.</p>

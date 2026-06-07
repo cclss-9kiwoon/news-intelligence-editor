@@ -29,7 +29,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   const { clusters } = useClusters();
   const { articles } = useArticles();
   const { settings } = useSettings();
-  const { tasks, addTasks, updateTask, deleteTask } = useTasks();
+  const { tasks, addTasks, updateTask } = useTasks();
   const { groups } = useCampaigns();
   const group = groups.find(g => g.id === campaign.groupId);
   // 단계 LLM 해석: 단계 오버라이드 → 그룹 → 전역. settings 클론으로 chatJson 호출부에 주입.
@@ -103,16 +103,11 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusters, articles, taskSig, campaign.id, campaign.autoCollect?.enabled]);
 
-  // ── 1b. ① 만료: 기준기사가 articleWindow 벗어난 대기 후보 자동 폐기(완전 삭제). 보류는 면제 ──
-  useEffect(() => {
-    const now = Date.now();
-    for (const t of myTasks) {
-      if (t.status !== 'searching' || t.error || t.paused) continue;
-      // 생성 직후 즉시폐기(만료↔재생성 루프) 방지: 최소 30초 grace 후에만 만료
-      if (now > expiresAtOf(t) && now - t.createdAt > 30_000) deleteTask(t.id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSig, articles, windowMs]);
+  // ── 1b. (제거됨) 골든타임 만료로 ① 삭제하던 로직 폐기 ──
+  // 버그: 살짝 오래된/pubDate 빈 뉴스가 ① 진입 즉시 만료 삭제(77→59 증발),
+  //       속보 30분은 pubDate+30분이라 생성 즉시 만료. 골든타임은 정렬/우선용일 뿐 삭제 사유 아님.
+  // ① 삭제는 명시 경로만: 발행 / 폐기 / 사용자 "단계별 정리"(staleTaskIds, createdAt 기준).
+  // 골든타임 임박은 아래 승급 effect의 priority 플래그 + 정렬로만 반영.
 
   // ── 2. ①→② 승급: maxPerHour 절대 초과 금지. 속보는 바이패스 아니라 '우선순위'로 처리. ──
   // (이전 버그: 속보 즉시승급이 maxPerHour 무시 → BREAKING_KEYWORDS가 컴백/결혼 등 광범위라
