@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import type { Group, Campaign, CampaignSettings } from '../types';
 import { loadJson, saveJson } from '../lib/storage';
-import { makeGroup, makeCampaign, migrateCampaignSettings, migrateGroup } from '../lib/defaultCampaign';
+import { makeGroup, makeCampaign, migrateCampaign, migrateGroup } from '../lib/defaultCampaign';
 
 const GROUPS_KEY = 'pasta:groups';
 const CAMPAIGNS_KEY = 'pasta:campaigns';
@@ -27,6 +27,7 @@ type Ctx = {
   deleteCampaign: (id: string) => void;
   markCampaignConfigured: (id: string) => void;
   setCampaignAutoCollect: (id: string, patch: Partial<import('../types').AutoCollectConfig>) => void;
+  setCampaignAutoProcess: (id: string, patch: Partial<import('../types').AutoProcessConfig>) => void;
   updateCampaignSettings: (id: string, patch: Partial<CampaignSettings>) => void;
 
   setActiveCampaign: (id: string | null) => void;
@@ -39,11 +40,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
   // 로드 시 마이그레이션: 구버전 group(profile 없음)/평면 CampaignSettings → 최신 구조.
   const [{ initGroups, initCampaigns }] = useState(() => ({
     initGroups: loadJson<any[]>(GROUPS_KEY, []).map(migrateGroup),
-    initCampaigns: loadJson<any[]>(CAMPAIGNS_KEY, []).map((c: any) => ({
-      ...c,
-      settings: migrateCampaignSettings(c.settings),
-      autoCollect: c.autoCollect ?? { enabled: true, intervalMin: 30 },
-    })),
+    initCampaigns: loadJson<any[]>(CAMPAIGNS_KEY, []).map(migrateCampaign),
   }));
   const [groups, setGroups] = useState<Group[]>(initGroups);
   const [campaigns, setCampaigns] = useState<Campaign[]>(initCampaigns);
@@ -129,6 +126,14 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const setCampaignAutoProcess = useCallback((id: string, patch: Partial<import('../types').AutoProcessConfig>) => {
+    setCampaigns(prev => prev.map(c => {
+      if (c.id !== id) return c;
+      const cur = c.autoProcess ?? { enabled: true };
+      return { ...c, autoProcess: { ...cur, ...patch }, updatedAt: Date.now() };
+    }));
+  }, []);
+
   const updateCampaignSettings = useCallback((id: string, patch: Partial<CampaignSettings>) => {
     setCampaigns(prev => prev.map(c =>
       c.id === id
@@ -143,7 +148,7 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
     <CampaignCtx.Provider value={{
       groups, campaigns, activeCampaignId, activeCampaign,
       addGroup, duplicateGroup, updateGroupProfile, renameGroup, deleteGroup,
-      addCampaign, duplicateCampaign, renameCampaign, deleteCampaign, markCampaignConfigured, setCampaignAutoCollect, updateCampaignSettings,
+      addCampaign, duplicateCampaign, renameCampaign, deleteCampaign, markCampaignConfigured, setCampaignAutoCollect, setCampaignAutoProcess, updateCampaignSettings,
       setActiveCampaign,
     }}>
       {children}

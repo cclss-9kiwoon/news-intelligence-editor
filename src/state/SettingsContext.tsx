@@ -11,6 +11,7 @@ type Ctx = {
   setProvider: (p: ProviderId) => void;
   setApiBaseUrl: (u: string) => void;
   setModel: (m: ModelId) => void;
+  setFastModel: (m: string) => void;
   setActiveCategoryId: (id: string) => void;
   addCategory: () => void;
   updateCategory: (id: string, patch: Partial<Category>) => void;
@@ -109,6 +110,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   }), []);
   const setApiBaseUrl = useCallback((u: string) => setSettings(s => ({ ...s, apiBaseUrl: u })), []);
   const setModel = useCallback((m: ModelId) => setSettings(s => ({ ...s, model: m })), []);
+  const setFastModel = useCallback((m: string) => setSettings(s => ({ ...s, fastModel: m })), []);
   const setActiveCategoryId = useCallback((id: string) => setSettings(s => ({ ...s, activeCategoryId: id })), []);
   const addCategory = useCallback(() => setSettings(s => {
     const id = `cat-${Date.now()}`;
@@ -259,7 +261,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const value: Ctx = {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
-    setModel, setActiveCategoryId, addCategory, updateCategory, removeCategory, setArticleWindow,
+    setModel, setFastModel, setActiveCategoryId, addCategory, updateCategory, removeCategory, setArticleWindow,
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold, setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled,
     setNaverClientId, setNaverClientSecret, setNaverQueries, setDaumRestApiKey, setDaumQueries,

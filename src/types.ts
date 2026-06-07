@@ -339,15 +339,24 @@ export type Campaign = {
   name: string;              // 아티클 종류 ("tier 3 아티클", "K-pop 컴백 속보")
   settings: CampaignSettings;
   configured?: boolean;      // 설정 1회 완료 여부 — true면 진입 시 칸반 직행
-  autoCollect?: AutoCollectConfig;  // 자동 수집 on/off + 주기
+  autoCollect?: AutoCollectConfig;  // 자동 수집(주기 fetch→① 큐) on/off + 주기
+  autoProcess?: AutoProcessConfig;  // 자동 진행(①→④ LLM 승급/판단/작성/검수) on/off
   createdAt: number;
   updatedAt: number;
 };
 
-/** 자동 수집 설정 — off면 SearchingPipeline 신규 태스크 생성만 멈춤(RSS 폴링과 분리) */
+/** 자동 수집 설정 — off면 주기 fetch 멈춤(① 큐 채우기). RSS 폴링과 분리 */
 export type AutoCollectConfig = {
   enabled: boolean;
   intervalMin: 15 | 30 | 60;
+};
+
+/**
+ * 자동 진행 설정 — off면 ①→② 승급 및 ②③④ LLM 처리 멈춤(① 큐엔 후보 계속 쌓임).
+ * autoCollect와 독립. ① 큐 채우기(shouldClaimCluster)는 두 토글 무관 항상 동작(LLM 비용 0).
+ */
+export type AutoProcessConfig = {
+  enabled: boolean;
 };
 
 // ─── Pasta Phase 2: 칸반 태스크 ─────────────────────────────────────
@@ -364,7 +373,7 @@ export type TaskSource = {
   hasFullText: boolean;
 };
 
-export type DiscardReason = 'low_quality' | 'off_topic' | 'duplicate' | 'other';
+export type DiscardReason = 'low_quality' | 'off_topic' | 'duplicate' | 'extract_failed' | 'other';
 
 export type Task = {
   id: string;
@@ -378,8 +387,10 @@ export type Task = {
   review?: ReviewResult;     // 검수 결과
   error?: string;
   produceAttempts?: number;  // 제작 시도 횟수 (자동 재시도용)
+  extractAttempts?: number;  // 전문 수집(추출) 실패 누적 — N회 0건이면 자동 폐기(extract_failed)
   topicChecked?: boolean;    // 제외 주제 AI 판단 통과 (주제 검수 단계)
   intentChecked?: boolean;   // 주제 정의(intent) 적합성 AI 판단 통과
+  producibleChecked?: boolean; // ②-B 제작가능성(이미지) gate 통과 — LLM 판단 전 컷용 영속 플래그
   published?: boolean;       // 발행 완료 (Hydra 배포 훅)
   publishedAt?: number;      // 발행 시각 (발행함 뷰 정렬/표시)
   discardReason?: DiscardReason;  // 폐기 사유
@@ -400,6 +411,8 @@ export type Settings = {
   apiBaseUrl: string;
   rss2jsonApiKey: string;
   model: ModelId;
+  fastModel?: string;          // ②판단·④검수용 경량 모델(throughput·비용). 비면 model로 폴백
+
   categories: Category[];
   activeCategoryId: string;
   articleWindow: ArticleWindow;

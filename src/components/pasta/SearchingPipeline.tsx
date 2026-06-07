@@ -8,6 +8,8 @@ import { judgeTopicAdequacy } from '../../lib/topicJudge';
 import { assessProducibility } from '../../lib/producibility';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
+import { loadDiscarded, buildDiscardIndex } from '../../lib/discardLedger';
+import { shouldDiscardAfterExtractFail } from '../../lib/extractRetry';
 import { promotionBudget } from '../../lib/promotion';
 import { judgeBreaking } from '../../lib/breakingDetector';
 import { resolveStageLLM } from '../../lib/stageLLM';
@@ -29,12 +31,13 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   const { clusters } = useClusters();
   const { articles } = useArticles();
   const { settings } = useSettings();
-  const { tasks, addTasks, updateTask, deleteTask } = useTasks();
+  const { tasks, addTasks, updateTask, discardTask } = useTasks();
   const { groups } = useCampaigns();
   const group = groups.find(g => g.id === campaign.groupId);
   // 단계 LLM 해석: 단계 오버라이드 → 그룹 → 전역. settings 클론으로 chatJson 호출부에 주입.
-  const stageSettings = (cfg?: StageLLMConfig) => {
-    const r = resolveStageLLM(settings, group?.profile, cfg);
+  // tier 'fast' = ②판단·④검수(경량 fastModel 폴백), 'main' = ③작성(상위 model). stage/group 명시값은 최우선.
+  const stageSettings = (cfg?: StageLLMConfig, tier: 'fast' | 'main' = 'main') => {
+    const r = resolveStageLLM(settings, group?.profile, cfg, tier);
     return { ...settings, provider: r.provider, apiKey: r.apiKey, model: r.model, apiBaseUrl: r.baseUrl };
   };
   const producingRef = useRef<Set<string>>(new Set());
@@ -76,12 +79,14 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     const now = Date.now();
     const working: Task[] = tasks.filter(t => t.campaignId === campaign.id);
 
+    // 폐기/거부 원장 인덱스 — 이미 폐기·거부된 사건(title/url/articleId) ① 재유입 차단
+    const discardIdx = buildDiscardIndex(loadDiscarded(now));
     // 점진화: 한 사이클에 클러스터 전부 생성 금지(흰화면/프리즈 방지). 상한만큼 모아 1회 벌크 setState.
     const MAX_NEW_PER_CYCLE = 8;  // 점진적 — 사이클당 소량씩 자연스럽게 쌓이게(와르르 방지)
     const batch: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>[] = [];
     for (const cluster of clusters) {
       if (batch.length >= MAX_NEW_PER_CYCLE) break;
-      const decision = shouldClaimCluster(cluster, articles, searchingCfg, working, now);
+      const decision = shouldClaimCluster(cluster, articles, searchingCfg, working, now, discardIdx);
       if (!decision.ok) continue;
       // 골든타임: 대표 기사 pubDate 기준 유효창. 속보면 짧은 창(breakingGoldenMinutes).
       const repArt = articles.find(a => a.id === decision.sources[0]?.articleId);
@@ -103,23 +108,18 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusters, articles, taskSig, campaign.id, campaign.autoCollect?.enabled]);
 
-  // ── 1b. ① 만료: 기준기사가 articleWindow 벗어난 대기 후보 자동 폐기(완전 삭제). 보류는 면제 ──
-  useEffect(() => {
-    const now = Date.now();
-    for (const t of myTasks) {
-      if (t.status !== 'searching' || t.error || t.paused) continue;
-      // 생성 직후 즉시폐기(만료↔재생성 루프) 방지: 최소 30초 grace 후에만 만료
-      if (now > expiresAtOf(t) && now - t.createdAt > 30_000) deleteTask(t.id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSig, articles, windowMs]);
+  // ── 1b. (제거됨) 골든타임 만료로 ① 삭제하던 로직 폐기 ──
+  // 버그: 살짝 오래된/pubDate 빈 뉴스가 ① 진입 즉시 만료 삭제(77→59 증발),
+  //       속보 30분은 pubDate+30분이라 생성 즉시 만료. 골든타임은 정렬/우선용일 뿐 삭제 사유 아님.
+  // ① 삭제는 명시 경로만: 발행 / 폐기 / 사용자 "단계별 정리"(staleTaskIds, createdAt 기준).
+  // 골든타임 임박은 아래 승급 effect의 priority 플래그 + 정렬로만 반영.
 
   // ── 2. ①→② 승급: maxPerHour 절대 초과 금지. 속보는 바이패스 아니라 '우선순위'로 처리. ──
   // (이전 버그: 속보 즉시승급이 maxPerHour 무시 → BREAKING_KEYWORDS가 컴백/결혼 등 광범위라
   //  대부분 태스크가 isBreaking으로 상한 우회 → 9>3 폭주. 이제 속보도 예산 내 우선 승급.)
   useEffect(() => {
-    // 자동 수집(주기) OFF = AI 승급 정지(②③ 작업 안 함). ①엔 후보 쌓이되 ②로 자동 안 올라감.
-    if (campaign.autoCollect && campaign.autoCollect.enabled === false) return;
+    // 자동 진행 OFF = ①→② 승급·②③④ LLM 정지. ①엔 후보 쌓이되 자동 안 올라감(수집과 분리).
+    if (campaign.autoProcess?.enabled === false) return;
     const now = Date.now();
     const queue = myTasks.filter(t => t.status === 'searching' && !t.error && !t.paused);
     if (queue.length === 0) return;
@@ -146,10 +146,11 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       budget--; // 동일 사이클 즉시 차감 → 레이스 차단
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSig, articles, maxPerHour, windowMs, campaign.autoCollect?.enabled]);
+  }, [taskSig, articles, maxPerHour, windowMs, campaign.autoProcess?.enabled]);
 
   // ── 3. ② 검수: 전문 수집 대기 + 제외 주제 AI 판단 → 제작 전환 / 탈락 ──
   useEffect(() => {
+    if (campaign.autoProcess?.enabled === false) return;  // 자동 진행 OFF = ②③④ LLM 정지
     const excludeTopics = (searchingCfg.excludeTopics ?? []).filter(x => x.trim());
 
     for (const t of myTasks) {
@@ -168,11 +169,40 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
       if (fullTextCount === 0) {
         if (Date.now() - (t.promotedAt ?? t.createdAt) > SOURCE_REVIEW_TIMEOUT_MS) {
-          updateTask(t.id, { sources: refreshed, error: '전문 수집 실패 (출처 0건)' });
+          // 전 source 전문수집 실패 — N회 누적 시 자동 폐기(extract_failed), 아니면 재시도 대기.
+          // error는 설정 안 함: ② 루프 가드(t.error continue)에 걸려 재진입 못 하면 attempts가
+          // 1에서 정체해 자동폐기 안 됨. status=topic_review 유지로 다음 사이클 재평가→증가→임계 시 폐기.
+          const attempts = (t.extractAttempts ?? 0) + 1;
+          if (shouldDiscardAfterExtractFail(attempts)) {
+            discardTask(t.id, 'extract_failed');  // 폐기함 + recordDiscard + 예산 회복(promotionBudget 제외)
+          } else {
+            updateTask(t.id, { sources: refreshed, extractAttempts: attempts });
+          }
         } else if (changed) {
           updateTask(t.id, { sources: refreshed, imageCount });
         }
         continue;
+      }
+
+      // ②-B 제작 가능성 게이트 — intent/제외 LLM '앞'에 배치(fail-fast): 제작불가(이미지 없음) 건에
+      // LLM 낭비 안 하도록 먼저 컷. 통과=producibleChecked 영속, 미통과=보류(자동삭제 없음, 수동 정리).
+      if (!t.producibleChecked) {
+        if (!producibilityRef.current.has(t.id)) {
+          producibilityRef.current.add(t.id);
+          const imgs = articles
+            .filter(a => t.sources.some(s => s.articleId === a.id))
+            .flatMap(a => (a.images ?? []).map(im => ({ url: im.url })));
+          const cluster = clusters.find(c => c.id === t.clusterId);
+          assessProducibility({ images: imgs, entities: cluster?.entities, groupId: campaign.groupId })
+            .then(prod => {
+              if (!mountedRef.current) return;
+              if (prod.producible) updateTask(t.id, { producibleChecked: true });
+              // 미통과: 보류 — producibleChecked 안 함 → 다음 사이클 재평가(이미지 생기면 통과).
+            })
+            .catch(() => { if (mountedRef.current) updateTask(t.id, { producibleChecked: true }); }) // 실패 시 통과(막힘 방지)
+            .finally(() => { producibilityRef.current.delete(t.id); });
+        }
+        continue; // 제작 가능성 판정 대기 (LLM 전)
       }
 
       // 주제 정의(intent) 적합성 게이트 — 캠페인 주제정의에 맞는 기사만 통과.
@@ -183,12 +213,14 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
           const snippets = articles
             .filter(a => t.sources.some(s => s.articleId === a.id))
             .map(a => a.description || a.fullText?.slice(0, 300) || '');
-          judgeTopicAdequacy({ title: t.title, snippets }, intent, stageSettings(campaign.settings.topicReview.llm))
+          judgeTopicAdequacy({ title: t.title, snippets }, intent, stageSettings(campaign.settings.topicReview.llm, 'fast'))
             .then(r => {
               if (!mountedRef.current) return;
               // fail-CLOSED 3-state: 미결정(429/서킷/실패)→보류(재판단), 부적합→컷, 적합→통과
               if (!r.decided) return; // 보류 — intentChecked 안 함 → 다음 사이클 재판단(키/서킷 풀리면 결정)
-              if (!r.adequate) updateTask(t.id, { error: `주제 부적합: ${r.reason || '캠페인 주제와 불일치'}` });
+              // decided-부적합 = 확정 거부 → 폐기함 이동(②서 제거). 원장 기록은 discardTask 내부 처리.
+              // 미결정(!r.decided)은 위에서 return(보류) — 폐기 안 함(429/서킷 재시도 대상).
+              if (!r.adequate) discardTask(t.id, 'off_topic');
               else updateTask(t.id, { intentChecked: true });
             })
             .catch(() => { /* 예외=미결정=보류. intentChecked 세팅 X → 재시도 */ })
@@ -204,10 +236,11 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
           const snippets = articles
             .filter(a => t.sources.some(s => s.articleId === a.id))
             .map(a => a.description || a.fullText?.slice(0, 300) || '');
-          judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, stageSettings(campaign.settings.topicReview.llm))
+          judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, stageSettings(campaign.settings.topicReview.llm, 'fast'))
             .then(r => {
               if (!mountedRef.current) return;
-              if (r.excluded) updateTask(t.id, { error: `제외 주제 해당: ${r.matched || '동일 주제'}` });
+              // 제외주제 해당 = 확정 거부 → 폐기함 이동(원장 기록 내부 처리).
+              if (r.excluded) discardTask(t.id, 'off_topic');
               else updateTask(t.id, { topicChecked: true });
             })
             .catch(() => { if (mountedRef.current) updateTask(t.id, { topicChecked: true }); }) // fail-open. PM ② 견고화에서 보류로 교체 예정
@@ -216,29 +249,15 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         continue; // 판단 결과 대기
       }
 
-      // ②-B 제작 가능성 — 쓸 이미지(수집 or 라이브러리) 있어야 제작. 없으면 보류(골든 만료 시 컷).
-      if (!producibilityRef.current.has(t.id)) {
-        producibilityRef.current.add(t.id);
-        const imgs = articles
-          .filter(a => t.sources.some(s => s.articleId === a.id))
-          .flatMap(a => (a.images ?? []).map(im => ({ url: im.url })));
-        const cluster = clusters.find(c => c.id === t.clusterId);
-        assessProducibility({ images: imgs, entities: cluster?.entities, groupId: campaign.groupId })
-          .then(prod => {
-            if (!mountedRef.current) return;
-            if (prod.producible) updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
-            // 아니면 보류: topic_review 유지 → 다음 사이클 재평가, 골든 만료(1b) 시 자연 컷
-          })
-          .catch(() => { if (mountedRef.current) updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' }); }) // 실패 시 통과(막힘 방지)
-          .finally(() => { producibilityRef.current.delete(t.id); });
-      }
-      continue; // 제작 가능성 판정 대기
+      // 모든 게이트 통과(extract→producibility→intent→제외주제) → ③ 제작 승급
+      updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSig, articles, settings, searchingCfg.excludeTopics, campaign.settings.topicReview.intent]);
+  }, [taskSig, articles, settings, searchingCfg.excludeTopics, campaign.settings.topicReview.intent, campaign.autoProcess?.enabled]);
 
   // ── 4. ③ 제작: LLM 생성 → 결과물 검수 전환 ──
   useEffect(() => {
+    if (campaign.autoProcess?.enabled === false) return;  // 자동 진행 OFF = ②③④ LLM 정지
     for (const t of myTasks) {
       if (t.status !== 'producing' || t.draft || t.error || t.paused) continue;
       if (producingRef.current.has(t.id)) continue;
@@ -261,7 +280,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
             sources: t.sources.map(s => ({ source: s.source })),
             images: srcArticles.flatMap(a => (a.images ?? []).map(im => ({ url: im.url }))),
           };
-          try { review = await reviewDraft(draft, stageSettings(campaign.settings.finalReview.llm), reviewCtx); } catch { review = undefined; }
+          try { review = await reviewDraft(draft, stageSettings(campaign.settings.finalReview.llm, 'fast'), reviewCtx); } catch { review = undefined; }
           if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review', produceAttempts: attempt });
         })
         .catch((err: unknown) => {
@@ -286,7 +305,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         .finally(() => { producingRef.current.delete(t.id); });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSig, articles, settings]);
+  }, [taskSig, articles, settings, campaign.autoProcess?.enabled]);
 
   // ── 5. ④ 자동 발행: autoPublish on + 통과 + 안전(사람 불요·비속보)일 때만 자동.
   //        미통과·needsHuman(불확실/민감)·속보는 사람 큐(④ 잔류). ──

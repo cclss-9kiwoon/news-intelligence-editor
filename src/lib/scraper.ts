@@ -24,6 +24,28 @@ const MAX_RETRIES = 2;
 const failedUrls = new Map<string, number>();
 
 /**
+ * Jina가 특정 도메인에 451(Unavailable For Legal Reasons)/403/410 반환 시 그 도메인 기록.
+ * 이후 해당 도메인은 Jina 건너뛰고 프록시 우선 → 반복 451 낭비/지연 제거.
+ * (topstarnews.net 등 일부 매체가 r.jina.ai에서 상시 451)
+ */
+const jinaBlockedDomains = new Set<string>();
+const JINA_HARD_BLOCK_STATUS = new Set([451, 403, 410]);
+
+function domainOf(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
+}
+
+/** export: 관측/테스트용 — 현재 Jina 차단된 도메인 수 */
+export function getJinaBlockedDomainCount(): number {
+  return jinaBlockedDomains.size;
+}
+
+/** 테스트용 — 차단 도메인 초기화 */
+export function _resetJinaBlocked(): void {
+  jinaBlockedDomains.clear();
+}
+
+/**
  * Domains known to block extraction (hard paywalls / JS-only walls / aggregators
  * that never yield article body). Skipped immediately — no wasted fetch/timeout.
  * Universal list only; project-specific blocks belong in the preset/source filter.
@@ -66,6 +88,7 @@ export type ExtractResult = {
   images?: ArticleImage[];
   method?: 'jina' | 'proxy' | 'naver';
   error?: string;
+  status?: number;   // HTTP status (Jina/proxy 실패 진단용 — 451 등)
 };
 
 // ─── Jina Reader API response shape ─────────────────────────────────
@@ -121,7 +144,7 @@ async function extractViaJina(url: string): Promise<ExtractResult> {
     clearTimeout(timer);
 
     if (!res.ok) {
-      return { ok: false, error: `Jina HTTP ${res.status}`, method: 'jina' };
+      return { ok: false, error: `Jina HTTP ${res.status}`, method: 'jina', status: res.status };
     }
 
     const json = (await res.json()) as JinaResponse;
@@ -335,15 +358,36 @@ export async function extractArticleText(url: string): Promise<ExtractResult> {
     return { ok: false, error: 'skipped (max retries)' };
   }
 
-  // Korean sites: proxy first (better parsing, no rate limit), Jina fallback
-  // Other sites: Jina first (universal), proxy fallback
-  if (isKoreanSite(url)) {
+  const host = domainOf(url);
+  // Jina가 상시 차단(451 등)하는 도메인은 한국사이트와 동일하게 프록시 우선 → Jina 낭비 제거
+  const jinaBlocked = jinaBlockedDomains.has(host);
+
+  // 헬퍼: Jina 실패 status가 hard-block(451/403/410)이면 도메인 기록(다음부터 skip)
+  const noteJinaBlock = (r: ExtractResult) => {
+    if (host && r.status != null && JINA_HARD_BLOCK_STATUS.has(r.status)) {
+      if (!jinaBlockedDomains.has(host)) {
+        console.warn(`[scraper] Jina hard-block ${r.status} for ${host} — 이후 프록시 우선`);
+      }
+      jinaBlockedDomains.add(host);
+    }
+  };
+
+  // proxy-first 경로: 한국사이트 or Jina 차단 도메인
+  if (isKoreanSite(url) || jinaBlocked) {
     const proxyResult = await extractViaProxy(url);
     if (proxyResult.ok) return proxyResult;
+
+    // Jina 차단 도메인이면 Jina 재시도 무의미 → 프록시 결과로 종료
+    if (jinaBlocked) {
+      console.warn(`[scraper] All extraction failed for ${url} (jina-blocked domain, proxy도 실패)`);
+      failedUrls.set(url, prevFailures + 1);
+      return proxyResult;
+    }
 
     // Proxy failed — try Jina
     const jinaResult = await extractViaJina(url);
     if (jinaResult.ok) return jinaResult;
+    noteJinaBlock(jinaResult);
 
     console.warn(`[scraper] All extraction failed for ${url}`);
     failedUrls.set(url, prevFailures + 1);
@@ -353,6 +397,7 @@ export async function extractArticleText(url: string): Promise<ExtractResult> {
   // Non-Korean: Jina first
   const jinaResult = await extractViaJina(url);
   if (jinaResult.ok) return jinaResult;
+  noteJinaBlock(jinaResult);
 
   // Fallback to proxy
   console.log(`[scraper] Jina failed for ${url} (${jinaResult.error}), trying proxy`);

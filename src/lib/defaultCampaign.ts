@@ -64,6 +64,7 @@ export function makeDefaultCampaignSettings(): CampaignSettings {
       selectionCriteria: '최신성 우선, 인지도 높은 주제, 다양성 확보.',
       dedupeRules: '같은 내용 중복 금지. 이미 다룬 주제는 다른 관점일 때만 허용.',
       priority: '속보 > 발표 > 차트/마일스톤 > 일반.',
+      // ②④ 경량화는 settings.fastModel + resolveStageLLM(tier='fast')로 처리(stage pin 대신).
     },
     generation: {
       promptConfig: { ...DEFAULT_PROMPT_CONFIG },
@@ -100,8 +101,24 @@ export function makeCampaign(groupId: string, name: string): Campaign {
     name: name || '새 캠페인',
     settings: makeDefaultCampaignSettings(),
     autoCollect: { enabled: true, intervalMin: 30 },
+    autoProcess: { enabled: true },
     createdAt: now,
     updatedAt: now,
+  };
+}
+
+/**
+ * 캠페인 객체 마이그레이션 — 로드 시 신규 필드 보강(미지 필드 보존).
+ * autoProcess 신규: 없으면 기존 autoCollect.enabled로 초기화(이전 동작 보존 — 자동수집
+ * 켜졌던 캠페인은 자동진행도 ON). settings는 migrateCampaignSettings 경유.
+ */
+export function migrateCampaign(raw: any): Campaign {
+  if (!raw) return makeCampaign('', '');
+  return {
+    ...raw,  // 미지/신규 필드 보존 (fb37ddb 재발방지)
+    settings: migrateCampaignSettings(raw.settings),
+    autoCollect: raw.autoCollect ?? { enabled: true, intervalMin: 30 },
+    autoProcess: raw.autoProcess ?? { enabled: raw.autoCollect?.enabled ?? true },
   };
 }
 

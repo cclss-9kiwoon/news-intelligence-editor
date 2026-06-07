@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { staleTaskIds, hoursToMs } from './taskCleanup';
+import { staleTaskIds, staleCountByStatus, hoursToMs } from './taskCleanup';
 import type { Task } from '../types';
 
 const NOW = 1_700_000_000_000;
@@ -39,6 +39,18 @@ describe('staleTaskIds', () => {
     const tasks = [task({ id: 'pub', published: true, createdAt: NOW - 9 * H })];
     expect(staleTaskIds(tasks, 'c1', hoursToMs(6), NOW)).toEqual([]);
     expect(staleTaskIds(tasks, 'c1', hoursToMs(6), NOW, { includePublished: true })).toEqual(['pub']);
+  });
+
+  it('staleCountByStatus — 단계별 건수 map', () => {
+    const tasks = [
+      task({ status: 'topic_review', createdAt: NOW - 9 * H }),
+      task({ status: 'topic_review', createdAt: NOW - 1 * H }),  // fresh, 제외
+      task({ status: 'producing', createdAt: NOW - 9 * H }),
+      task({ status: 'final_review', createdAt: NOW - 9 * H }),
+    ];
+    const map = staleCountByStatus(tasks, 'c1', hoursToMs(6), NOW,
+      ['topic_review', 'producing', 'final_review']);
+    expect(map).toEqual({ topic_review: 1, producing: 1, final_review: 1 });
   });
 
   it('hoursToMs', () => {

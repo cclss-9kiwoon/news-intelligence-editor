@@ -74,6 +74,8 @@ export const DEFAULT_SETTINGS: Settings = {
   apiBaseUrl: PROVIDERS[DEFAULT_PROVIDER].baseUrl,
   rss2jsonApiKey: '',
   model: 'gpt-4o-mini',
+  fastModel: 'gemini-2.5-flash',   // ②④ 경량 기본(gemini 프로젝트). 사용자 변경 가능, 비면 model 폴백
+
   categories: DEFAULT_CATEGORIES,
   activeCategoryId: 'music',
   articleWindow: '24h',
