@@ -11,7 +11,7 @@ type Props = { open: boolean; onClose: () => void };
 export function SettingsModal({ open, onClose }: Props) {
   const {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
-    setModel,
+    setModel, setFastModel,
     addCategory, updateCategory, removeCategory, setArticleWindow,
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold,
     setSimulatorEnabled, setSimulatorIntervalSec,
@@ -174,6 +174,17 @@ export function SettingsModal({ open, onClose }: Props) {
                   placeholder="모델 ID 직접 입력"
                   value={providerModels.some(m => m.id === settings.model) ? '' : settings.model}
                   onChange={e => setModel(e.target.value)}
+                  className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs font-mono"
+                />
+              </label>
+              {/* 경량 모델 — ②주제판단·④검수에 사용(비용·throughput). 비면 위 모델로 폴백. */}
+              <label className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-2">
+                <span className="text-xs text-slate-500 whitespace-nowrap">경량 모델 (②판단·④검수):</span>
+                <input
+                  type="text"
+                  placeholder="비우면 기본 모델 사용 (예: gemini-2.5-flash)"
+                  value={settings.fastModel ?? ''}
+                  onChange={e => setFastModel(e.target.value)}
                   className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs font-mono"
                 />
               </label>
