@@ -32,6 +32,14 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
   const [regenerating, setRegenerating] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [checkedFacts, setCheckedFacts] = useState<Set<number>>(new Set());
+  // 본문 패널: 미리보기(렌더) / 소스(HTML 편집). 기본 미리보기. localStorage 기억.
+  const [bodyView, setBodyView] = useState<'preview' | 'source'>(
+    () => (localStorage.getItem('pasta:bodyView') === 'source' ? 'source' : 'preview'),
+  );
+  const switchBodyView = (v: 'preview' | 'source') => {
+    setBodyView(v);
+    try { localStorage.setItem('pasta:bodyView', v); } catch { /* ignore */ }
+  };
 
   // (1) draft state 누수 방지 — taskId 바뀌면 에디터 state를 새 태스크 draft로 동기화
   useEffect(() => {
@@ -196,12 +204,29 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
             />
           </div>
           <div className="flex min-h-0 flex-1 flex-col">
-            <label className="mb-1 block text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400">본문 ({body.length}자)</label>
-            <textarea
-              className="min-h-0 flex-1 w-full resize-none rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm leading-relaxed focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-colors"
-              value={body}
-              onChange={e => setBody(e.target.value)}
-            />
+            <div className="mb-1 flex items-center justify-between">
+              <label className="block text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400">본문 ({body.length}자)</label>
+              <div className="flex gap-0.5 rounded-lg border border-slate-200 bg-white/60 p-0.5 text-[11px] font-semibold">
+                {(['preview', 'source'] as const).map(v => (
+                  <button key={v} onClick={() => switchBodyView(v)}
+                    className={`rounded-md px-2 py-0.5 transition-colors ${bodyView === v ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+                  >{v === 'preview' ? '미리보기' : '소스'}</button>
+                ))}
+              </div>
+            </div>
+            {bodyView === 'source'
+              ? <textarea
+                  className="min-h-0 flex-1 w-full resize-none rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm leading-relaxed focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-colors font-mono"
+                  value={body}
+                  onChange={e => setBody(e.target.value)}
+                />
+              : body.trim()
+                /* 미리보기 — 반드시 sanitizeHtml(DOMPurify) 경유. raw 금지. */
+                ? <div
+                    className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-200 bg-white/80 px-4 py-3 text-sm leading-relaxed text-slate-700 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-200 [&_blockquote]:pl-3 [&_blockquote]:text-slate-500 [&_figcaption]:text-xs [&_figcaption]:text-slate-400 [&_h2]:mt-3 [&_h2]:font-bold [&_h3]:mt-2 [&_h3]:font-semibold [&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-lg [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-5"
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(body) }}
+                  />
+                : <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg border border-dashed border-slate-200 text-xs text-slate-300">본문 없음 — 소스 탭에서 편집하거나 재생성</div>}
           </div>
           <div>
             <label className="mb-1 block text-[10px] font-mono font-semibold uppercase tracking-widest text-slate-400">태그</label>

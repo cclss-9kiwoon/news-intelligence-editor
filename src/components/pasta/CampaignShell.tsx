@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { Campaign } from '../../types';
 import { useCampaigns } from '../../state/CampaignContext';
 import { useArticles } from '../../state/ArticlesContext';
+import { useTasks } from '../../state/TaskContext';
 import { KanbanBoard } from './KanbanBoard';
 import { StatusView } from './views/StatusView';
 import { PublishedView } from './views/PublishedView';
@@ -36,10 +37,14 @@ export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTa
   onOpenGroup: (groupId: string) => void;
 }) {
   const [view, setView] = useState<ShellView>('board');
-  const { setCampaignAutoCollect, groups } = useCampaigns();
+  const { setCampaignAutoCollect, setCampaignAutoProcess, groups } = useCampaigns();
+  const { tasks } = useTasks();
   const group = groups.find(g => g.id === campaign.groupId);
   const { isRefreshing, refreshNow } = useArticles();
   const auto = campaign.autoCollect ?? { enabled: true, intervalMin: 30 as const };
+  const autoProc = campaign.autoProcess ?? { enabled: true };
+  // ① 대기(searching) 건수 — 자동 진행 OFF면 여기 쌓임
+  const queueCount = tasks.filter(t => t.campaignId === campaign.id && t.status === 'searching' && !t.error && !t.paused).length;
 
   // 자동 수집(주기): enabled면 intervalMin마다 refreshNow. 글로벌 RSS 폴링과 별개로 캠페인 주기 구동.
   const refreshRef = useRef(refreshNow);
@@ -99,6 +104,21 @@ export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTa
               >{m}분</button>
             ))}
           </div>
+          {/* 자동 진행(①→④ LLM) — 수집과 분리. OFF면 ①에 후보만 쌓임 */}
+          <label className="mt-2 flex items-center justify-between rounded-lg px-1 py-1 text-sm text-slate-600">
+            <span className="flex items-center gap-1.5"><IconBolt className="h-3.5 w-3.5 text-slate-400" /> 자동 진행</span>
+            <input type="checkbox" className="accent-slate-900" checked={autoProc.enabled}
+              onChange={e => setCampaignAutoProcess(campaign.id, { enabled: e.target.checked })} />
+          </label>
+          {!autoProc.enabled && queueCount > 0 && (
+            <div className="mt-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-700">
+              ①에 {queueCount}건 대기 — 자동 진행을 켜면 ②검수부터 자동 작성됩니다.
+              <button
+                onClick={() => setCampaignAutoProcess(campaign.id, { enabled: true })}
+                className="mt-1 block w-full rounded-md bg-amber-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-amber-700"
+              >지금 진행 시작</button>
+            </div>
+          )}
         </div>
 
         {/* 보기 */}

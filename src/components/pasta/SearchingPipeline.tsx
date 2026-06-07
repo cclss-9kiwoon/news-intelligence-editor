@@ -113,8 +113,8 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   // (이전 버그: 속보 즉시승급이 maxPerHour 무시 → BREAKING_KEYWORDS가 컴백/결혼 등 광범위라
   //  대부분 태스크가 isBreaking으로 상한 우회 → 9>3 폭주. 이제 속보도 예산 내 우선 승급.)
   useEffect(() => {
-    // 자동 수집(주기) OFF = AI 승급 정지(②③ 작업 안 함). ①엔 후보 쌓이되 ②로 자동 안 올라감.
-    if (campaign.autoCollect && campaign.autoCollect.enabled === false) return;
+    // 자동 진행 OFF = ①→② 승급·②③④ LLM 정지. ①엔 후보 쌓이되 자동 안 올라감(수집과 분리).
+    if (campaign.autoProcess?.enabled === false) return;
     const now = Date.now();
     const queue = myTasks.filter(t => t.status === 'searching' && !t.error && !t.paused);
     if (queue.length === 0) return;
@@ -145,6 +145,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
   // ── 3. ② 검수: 전문 수집 대기 + 제외 주제 AI 판단 → 제작 전환 / 탈락 ──
   useEffect(() => {
+    if (campaign.autoProcess?.enabled === false) return;  // 자동 진행 OFF = ②③④ LLM 정지
     const excludeTopics = (searchingCfg.excludeTopics ?? []).filter(x => x.trim());
 
     for (const t of myTasks) {
@@ -230,10 +231,11 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       continue; // 제작 가능성 판정 대기
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSig, articles, settings, searchingCfg.excludeTopics, campaign.settings.topicReview.intent]);
+  }, [taskSig, articles, settings, searchingCfg.excludeTopics, campaign.settings.topicReview.intent, campaign.autoProcess?.enabled]);
 
   // ── 4. ③ 제작: LLM 생성 → 결과물 검수 전환 ──
   useEffect(() => {
+    if (campaign.autoProcess?.enabled === false) return;  // 자동 진행 OFF = ②③④ LLM 정지
     for (const t of myTasks) {
       if (t.status !== 'producing' || t.draft || t.error || t.paused) continue;
       if (producingRef.current.has(t.id)) continue;
@@ -281,7 +283,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         .finally(() => { producingRef.current.delete(t.id); });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSig, articles, settings]);
+  }, [taskSig, articles, settings, campaign.autoProcess?.enabled]);
 
   // ── 5. ④ 자동 발행: autoPublish on + 통과 + 안전(사람 불요·비속보)일 때만 자동.
   //        미통과·needsHuman(불확실/민감)·속보는 사람 큐(④ 잔류). ──
