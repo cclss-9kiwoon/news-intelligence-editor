@@ -77,29 +77,38 @@ export function shouldClaimCluster(
   }
 
   // 소스 필터
-  const clusterArticles = articles
+  const sourceFiltered = articles
     .filter(a => cluster.articleIds.includes(a.id))
     .filter(a => allowedSources.length === 0 || sourceMatches(a.source, allowedSources))
     .filter(a => !sourceMatches(a.source, bannedSources));
-  if (clusterArticles.length === 0) return { ok: false, reason: 'no_articles' };
+  if (sourceFiltered.length === 0) return { ok: false, reason: 'no_articles' };
 
-  // 매체 수 하한 (매체 수와 원문 수 중 작은 값 기준)
+  // 키워드 필터 — 클러스터 합본 OR가 아니라 *기사별*로 적용.
+  // (이전: 합친 haystack에 .some() → 무관 기사가 매칭 기사와 한 클러스터에 묶이면 동반 통과)
+  // topicKeywords: 매칭 기사만 남김 / excludeKeywords: 매칭 기사 제거. 남는 기사 0이면 클러스터 폐기.
+  const artHay = (a: Article) => `${a.title} ${a.description}`.toLowerCase();
+  let clusterArticles = sourceFiltered;
+  if (topicKeywords.length > 0) {
+    const kws = topicKeywords.map(k => k.toLowerCase());
+    clusterArticles = clusterArticles.filter(a => { const h = artHay(a); return kws.some(k => h.includes(k)); });
+    if (clusterArticles.length === 0) return { ok: false, reason: 'no_topic_keyword' };
+  }
+  if (excludeKeywords.length > 0) {
+    const kws = excludeKeywords.map(k => k.toLowerCase());
+    clusterArticles = clusterArticles.filter(a => { const h = artHay(a); return !kws.some(k => h.includes(k)); });
+    if (clusterArticles.length === 0) return { ok: false, reason: 'excluded_keyword' };
+  }
+  // excludeTopics는 의미 판단(AI)이라 동기 필터에서 처리하지 않음.
+  // 주제 검수 단계(SearchingPipeline)에서 judgeExcludedTopic으로 게이트.
+
+  // 매체 수 하한 (키워드 필터 후 남은 기사 기준 — 무관 기사는 매체 다양성에 안 셈)
   const distinctOriginalCount = new Set(clusterArticles.map(a => originalKey(a.link))).size;
   const mediaCount = new Set(clusterArticles.map(a => a.source)).size;
   if (Math.min(mediaCount, distinctOriginalCount) < minMediaCount) {
     return { ok: false, reason: 'below_min_media' };
   }
 
-  // 키워드 필터
   const haystack = clusterArticles.map(a => `${a.title} ${a.description}`).join(' ').toLowerCase();
-  if (topicKeywords.length > 0 && !topicKeywords.some(k => haystack.includes(k.toLowerCase()))) {
-    return { ok: false, reason: 'no_topic_keyword' };
-  }
-  if (excludeKeywords.length > 0 && excludeKeywords.some(k => haystack.includes(k.toLowerCase()))) {
-    return { ok: false, reason: 'excluded_keyword' };
-  }
-  // excludeTopics는 의미 판단(AI)이라 동기 필터에서 처리하지 않음.
-  // 주제 검수 단계(SearchingPipeline)에서 judgeExcludedTopic으로 게이트.
 
   // entityAllowlist: 허용 엔티티 미등장 제외
   const matchedEntity = entityAllowlist.length > 0 ? matchEntity(haystack, entityAllowlist) : null;

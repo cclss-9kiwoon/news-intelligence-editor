@@ -5,6 +5,7 @@ import { useClusters } from '../../state/ClustersContext';
 import { useCampaigns } from '../../state/CampaignContext';
 import { useSettings } from '../../state/SettingsContext';
 import { shouldClaimCluster } from '../../lib/searchFilter';
+import { staleTaskIds, hoursToMs } from '../../lib/taskCleanup';
 import { IconTrash, IconRefresh } from './icons';
 import { GoldenTimeBar, GaugeChip, InfoChip, formatRemaining } from './kanbanPrimitives';
 import type { Task, TaskStatus } from '../../types';
@@ -53,6 +54,23 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   );
   const retryTask = (id: string) => updateTask(id, { error: undefined, produceAttempts: 0, status: 'producing' });
   const publishTask = (id: string) => updateTask(id, { published: true, publishedAt: Date.now() });
+
+  // 오래된(stuck) 태스크 정리 — ②③④에 N시간+ 머문 건 일괄 삭제.
+  // ①searching은 골든타임 만료(effect#1b)로 자동 정리되므로 제외. tasks는 이미 발행·폐기 제외분.
+  const [staleHours, setStaleHours] = useState(24);
+  const STALE_STATUSES: TaskStatus[] = ['topic_review', 'producing', 'final_review'];
+  const staleCount = useMemo(
+    () => STALE_STATUSES.reduce(
+      (n, s) => n + staleTaskIds(tasks, campaignId, hoursToMs(staleHours), Date.now(), { status: s }).length, 0),
+    [tasks, campaignId, staleHours],
+  );
+  const cleanupStale = () => {
+    const ids = STALE_STATUSES.flatMap(
+      s => staleTaskIds(tasks, campaignId, hoursToMs(staleHours), Date.now(), { status: s }));
+    if (ids.length === 0) return;
+    if (!confirm(`②③④ 단계에 ${staleHours}시간 이상 머문 ${ids.length}건을 삭제할까요?\n되돌릴 수 없습니다. (①·발행·폐기 제외)`)) return;
+    ids.forEach(deleteTask);
+  };
 
   // 컬럼 접기/펼치기 — 캠페인별 localStorage 영속
   const collapseKey = `pasta:kanbanCollapsed:${campaignId}`;
@@ -160,6 +178,28 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
           {rhythm.atCap && rhythm.nextPromotionMs > 0 && (
             <InfoChip tone="amber">다음 처리 {formatRemaining(rhythm.nextPromotionMs)} 뒤 (멈춤 아님)</InfoChip>
           )}
+        </span>
+
+        {/* 오래된 태스크 정리 — ②③④ stuck 건 경과시간 기준 일괄 삭제 */}
+        <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-white/60 bg-white/55 px-2 py-0.5 text-xs text-slate-500 backdrop-blur-md">
+          <select
+            value={staleHours}
+            onChange={e => setStaleHours(Number(e.target.value))}
+            aria-label="경과 기준 시간"
+            className="rounded-md bg-transparent py-0.5 pr-1 font-mono font-semibold text-slate-600 outline-none"
+          >
+            <option value={6}>6시간</option>
+            <option value={12}>12시간</option>
+            <option value={24}>24시간</option>
+          </select>
+          <button
+            onClick={cleanupStale}
+            disabled={staleCount === 0}
+            title="②③④ 단계에 오래 머문 태스크를 삭제합니다 (①·발행·폐기 제외)"
+            className="inline-flex items-center gap-1 font-semibold text-slate-500 transition-colors hover:text-red-600 disabled:cursor-not-allowed disabled:text-slate-300"
+          >
+            <IconTrash className="h-3.5 w-3.5" /> 지난 건 정리{staleCount > 0 ? ` (${staleCount})` : ''}
+          </button>
         </span>
       </div>
       <div className="flex min-h-0 flex-1 gap-5 overflow-x-auto px-4 pb-6 pt-3 sm:px-8">
