@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { judgeTopicAdequacy } from './topicJudge';
-import { resetLlmCircuit } from './openai';
+import { resetLlmCircuit, _setSleepFn } from './openai';
 import { DEFAULT_SETTINGS } from './defaultSettings';
 import type { Settings } from '../types';
 
@@ -14,6 +14,7 @@ function stubLlm(resp: unknown) {
   } as unknown as Response)));
 }
 
+beforeEach(() => { _setSleepFn(async () => {}); });   // 429 백오프 즉시 통과(테스트 가속)
 afterEach(() => { vi.unstubAllGlobals(); resetLlmCircuit(); });
 
 describe('judgeTopicAdequacy (fail-closed)', () => {
