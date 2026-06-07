@@ -13,6 +13,53 @@ import { extractArticleText } from './scraper';
 const SEARCH_TIMEOUT_MS = 8_000;
 const MAX_CONCURRENT_EXTRACT = 3;
 
+/**
+ * 뉴스 도메인 화이트리스트.
+ * 카카오 검색 API엔 뉴스 전용 엔드포인트가 없음(web/blog/cafe/image뿐) → /v2/search/web
+ * 결과 중 *뉴스 매체 도메인만* 통과시키는 게 유일한 "뉴스 전용" 구현.
+ * allowlist 미포함(커뮤니티/블로그/티스토리 등)은 fetchDaumArticles에서 drop.
+ * 유지보수: 매체 추가는 이 배열에만. extractSourceName domainMap과 함께 본다.
+ */
+export const NEWS_DOMAINS: string[] = [
+  // 포털 뉴스
+  'news.daum.net', 'v.daum.net', 'entertain.daum.net', 'sports.daum.net',
+  'news.naver.com', 'n.news.naver.com', 'entertain.naver.com', 'sports.naver.com',
+  // 통신/종합
+  'yna.co.kr', 'yonhapnews.co.kr', 'newsis.com', 'news1.kr', 'ytn.co.kr', 'nocutnews.co.kr',
+  'chosun.com', 'joongang.co.kr', 'joins.com', 'donga.com', 'hani.co.kr', 'khan.co.kr',
+  'hankyung.com', 'mk.co.kr', 'seoul.co.kr', 'kmib.co.kr', 'segye.com', 'munhwa.com',
+  'hankookilbo.com', 'kyunghyang.com', 'edaily.co.kr', 'asiae.co.kr', 'heraldcorp.com',
+  'mt.co.kr', 'fnnews.com', 'sedaily.com', 'pressian.com', 'ohmynews.com', 'imaeil.com',
+  // 방송
+  'kbs.co.kr', 'imbc.com', 'sbs.co.kr', 'jtbc.co.kr', 'ytn.co.kr', 'mbn.co.kr', 'tvchosun.com',
+  // 연예/스포츠 매체
+  'starnewskorea.com', 'newsen.com', 'osen.mt.co.kr', 'sportschosun.com', 'sports.chosun.com',
+  'xportsnews.com', 'tenasia.hankyung.com', 'mydaily.co.kr', 'tvreport.co.kr', 'sportsseoul.com',
+  'sportsworldi.com', 'isplus.com', 'joynews24.com', 'wikitree.co.kr', 'dispatch.co.kr',
+  'spotvnews.co.kr', 'star.mt.co.kr', 'sportskhan.news', 'sports.donga.com', 'sportsq.co.kr',
+  'mhns.co.kr', 'wowtv.co.kr', 'newsculture.press', 'entermedia.co.kr', 'topstarnews.net',
+];
+
+/** 명시적 커뮤니티/블로그 차단(allowlist 우선이지만 안전망). 부분일치. */
+const COMMUNITY_BLOCK: string[] = [
+  'instiz.net', 'theqoo.net', 'dcinside.com', 'pann.nate.com', 'nate.com',
+  'fmkorea.com', 'ruliweb.com', 'clien.net', 'mlbpark', 'bobaedream.co.kr',
+  'ppomppu.co.kr', 'inven.co.kr', 'arca.live', 'todayhumor', 'humoruniv',
+  '82cook.com', 'tistory.com', 'blog.naver.com', 'blog.daum.net', 'brunch.co.kr',
+  'velog.io', 'wordpress', 'medium.com', 'youtube.com', 'youtu.be',
+];
+
+/** 뉴스 매체 URL인가 — 커뮤니티/블로그면 false, NEWS_DOMAINS 호스트면 true. (네이버 isNaverUrl 미러) */
+export function isNewsUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+    if (COMMUNITY_BLOCK.some(b => host === b || host.endsWith(`.${b}`) || host.includes(b))) return false;
+    return NEWS_DOMAINS.some(d => host === d || host.endsWith(`.${d}`));
+  } catch {
+    return false;
+  }
+}
+
 type DaumSearchDocument = {
   title: string;
   contents: string;
@@ -123,12 +170,18 @@ export async function fetchDaumArticles(
 
   const seen = new Set<string>();
   const items: DaumSearchDocument[] = [];
+  let droppedNonNews = 0;
   for (const results of allResults) {
     for (const item of results) {
       if (!item.url || seen.has(item.url)) continue;
       seen.add(item.url);
+      // 뉴스 전용: allowlist 미포함(커뮤니티/블로그/티스토리 등) drop
+      if (!isNewsUrl(item.url)) { droppedNonNews++; continue; }
       items.push(item);
     }
+  }
+  if (droppedNonNews > 0) {
+    console.log(`[daum] dropped ${droppedNonNews} non-news results (커뮤니티/블로그 — NEWS_DOMAINS allowlist 외)`);
   }
 
   const now = Date.now();
