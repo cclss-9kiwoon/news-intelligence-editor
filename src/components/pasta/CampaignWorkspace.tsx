@@ -64,11 +64,11 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
   const sourceFacts = draft?.sourceFacts ?? [];
   const srcArticles = articles.filter(a => task.sources.some(s => s.articleId === a.id));
 
-  // 히어로 이미지 + 본문 — 인라인 첫 <img> 우선, 없으면 원문 이미지/썸네일 폴백.
-  // 히어로로 끌어올린 인라인 이미지는 본문에서 제거(중복 방지). 미리보기 2곳(중앙·우측) 공통.
+  // 히어로 이미지 + 본문 — 인라인 첫 유효 <img> 우선, 없으면 srcArticles 전체 순회(유효 url).
+  // 히어로로 끌어올린 인라인 이미지는 본문서 제거 + 빈 src img도 제거(깨진 이미지 방지). 미리보기 2곳 공통.
   const inlineHero = firstImgSrc(body);
-  const heroSrc = inlineHero ?? srcArticles[0]?.images?.[0]?.url ?? srcArticles[0]?.thumbnail;
-  const bodyRender = inlineHero ? stripFirstImg(body) : body;
+  const heroSrc = pickHero(body, srcArticles);
+  const bodyRender = stripEmptyImg(inlineHero ? stripFirstImg(body) : body);
 
   // (2) 미저장 이탈 가드
   const dirty =
@@ -229,7 +229,7 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
               : body.trim()
                 /* 미리보기 — 기사형(상단 히어로 + prose 본문). 반드시 sanitizeHtml 경유, raw 금지. */
                 ? <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-200 bg-white/80">
-                    {heroSrc && <img src={heroSrc} alt="" className="h-48 w-full rounded-t-lg object-cover" />}
+                    {heroSrc && <img src={heroSrc} alt="" onError={e => { e.currentTarget.style.display = 'none'; }} className="max-h-[360px] w-full rounded-t-lg bg-slate-50 object-contain" />}
                     <div
                       className={`px-4 py-3 text-sm text-slate-700 ${PROSE_CLS}`}
                       dangerouslySetInnerHTML={{ __html: sanitizeHtml(bodyRender) }}
@@ -259,7 +259,7 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
             return (
               // 뉴스 기사형 레이아웃 (X/소셜 카드 폐기) — 헤드라인 + 히어로 + 렌더된 본문(prose)
               <article className="overflow-hidden rounded-2xl border border-white/70 bg-white shadow-sm">
-                {heroSrc && <img src={heroSrc} alt="" className="h-40 w-full object-cover" />}
+                {heroSrc && <img src={heroSrc} alt="" onError={e => { e.currentTarget.style.display = 'none'; }} className="max-h-[360px] w-full bg-slate-50 object-contain" />}
                 <div className="p-4">
                   <div className="mb-2 flex items-center gap-2">
                     <span className="truncate text-[11px] font-semibold text-slate-500">{channelName}</span>
@@ -307,15 +307,38 @@ function stripHtml(s: string): string {
 // 기사 prose 타이포 — 단락 여백/줄간격/이미지 블록/리스트/인용. 미리보기 2곳 공통(@tailwindcss/typography 없이 동작).
 const PROSE_CLS =
   '[&_p]:mb-3 [&_p]:leading-7 [&_h2]:mt-4 [&_h2]:mb-1 [&_h2]:text-base [&_h2]:font-bold [&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:font-semibold ' +
-  '[&_img]:my-3 [&_img]:mx-auto [&_img]:block [&_img]:max-w-full [&_img]:rounded-lg [&_figure]:my-3 [&_figcaption]:mt-1 [&_figcaption]:text-center [&_figcaption]:text-xs [&_figcaption]:text-slate-400 ' +
+  '[&_img]:my-3 [&_img]:mx-auto [&_img]:block [&_img]:max-w-full [&_img]:max-h-96 [&_img]:object-contain [&_img]:rounded-lg [&_figure]:my-3 [&_figcaption]:mt-1 [&_figcaption]:text-center [&_figcaption]:text-xs [&_figcaption]:text-slate-400 ' +
   '[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-1 ' +
   '[&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-200 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-slate-500 [&_strong]:font-semibold';
 
-/** 본문 HTML 첫 인라인 <img> src (히어로 후보). 없으면 undefined. */
+/** 유효 이미지 URL인가 — http(s) 절대경로만(빈문자/상대/data 스킵). */
+function isValidImg(u?: string | null): u is string {
+  return !!u && /^https?:\/\//i.test(u);
+}
+/** 핫링크 차단 잦은 도메인(조선 resizer 등) → 히어로 후순위. */
+function isFlakyImg(u: string): boolean {
+  return /chosun.*(resize|resizer)|img\.(chosun|donga)/i.test(u);
+}
+/** 본문 HTML 첫 인라인 <img>의 유효 src (히어로 후보). 빈 src는 무시. */
 function firstImgSrc(html: string): string | undefined {
-  return html.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1];
+  const src = html.match(/<img[^>]+src=["']([^"']*)["']/i)?.[1];
+  return isValidImg(src) ? src : undefined;
 }
 /** 첫 <img> 태그 1개 제거 (히어로로 끌어올린 이미지 본문 중복 방지). */
 function stripFirstImg(html: string): string {
   return html.replace(/<img[^>]*>/i, '');
+}
+/** src 없는/빈 <img> 제거 (깨진 이미지 노출 방지 — 미리보기단 이중안전, 근본은 sanitizeHtml). */
+function stripEmptyImg(html: string): string {
+  return html.replace(/<img(?![^>]*\bsrc=["'][^"']+["'])[^>]*>/gi, '');
+}
+/** 히어로 선택 — 인라인 첫 유효 img → 전체 원문 이미지 → 썸네일. 핫링크 잦은 도메인 후순위. */
+function pickHero(body: string, srcArticles: { images?: { url: string }[]; thumbnail?: string }[]): string | undefined {
+  const inline = firstImgSrc(body);
+  if (inline) return inline;
+  const candidates = [
+    ...srcArticles.flatMap(a => (a.images ?? []).map(i => i.url)),
+    ...srcArticles.map(a => a.thumbnail),
+  ].filter(isValidImg);
+  return candidates.find(u => !isFlakyImg(u)) ?? candidates[0];
 }

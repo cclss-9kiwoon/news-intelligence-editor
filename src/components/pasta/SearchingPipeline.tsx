@@ -8,7 +8,7 @@ import { judgeTopicAdequacy } from '../../lib/topicJudge';
 import { assessProducibility } from '../../lib/producibility';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
-import { loadDiscarded, buildDiscardIndex, recordDiscard, makeDiscardEntry } from '../../lib/discardLedger';
+import { loadDiscarded, buildDiscardIndex } from '../../lib/discardLedger';
 import { promotionBudget } from '../../lib/promotion';
 import { judgeBreaking } from '../../lib/breakingDetector';
 import { resolveStageLLM } from '../../lib/stageLLM';
@@ -30,7 +30,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   const { clusters } = useClusters();
   const { articles } = useArticles();
   const { settings } = useSettings();
-  const { tasks, addTasks, updateTask } = useTasks();
+  const { tasks, addTasks, updateTask, discardTask } = useTasks();
   const { groups } = useCampaigns();
   const group = groups.find(g => g.id === campaign.groupId);
   // 단계 LLM 해석: 단계 오버라이드 → 그룹 → 전역. settings 클론으로 chatJson 호출부에 주입.
@@ -187,10 +187,10 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
               if (!mountedRef.current) return;
               // fail-CLOSED 3-state: 미결정(429/서킷/실패)→보류(재판단), 부적합→컷, 적합→통과
               if (!r.decided) return; // 보류 — intentChecked 안 함 → 다음 사이클 재판단(키/서킷 풀리면 결정)
-              if (!r.adequate) {
-                recordDiscard(makeDiscardEntry({ title: t.title, articleIds: t.sources.map(s => s.articleId) }));  // 부적합 거부 → 원장 기록(재유입 차단)
-                updateTask(t.id, { error: `주제 부적합: ${r.reason || '캠페인 주제와 불일치'}` });
-              } else updateTask(t.id, { intentChecked: true });
+              // decided-부적합 = 확정 거부 → 폐기함 이동(②서 제거). 원장 기록은 discardTask 내부 처리.
+              // 미결정(!r.decided)은 위에서 return(보류) — 폐기 안 함(429/서킷 재시도 대상).
+              if (!r.adequate) discardTask(t.id, 'off_topic');
+              else updateTask(t.id, { intentChecked: true });
             })
             .catch(() => { /* 예외=미결정=보류. intentChecked 세팅 X → 재시도 */ })
             .finally(() => { intentJudgeRef.current.delete(t.id); });
@@ -208,10 +208,9 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
           judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, stageSettings(campaign.settings.topicReview.llm))
             .then(r => {
               if (!mountedRef.current) return;
-              if (r.excluded) {
-                recordDiscard(makeDiscardEntry({ title: t.title, articleIds: t.sources.map(s => s.articleId) }));  // 제외 주제 거부 → 원장 기록(재유입 차단)
-                updateTask(t.id, { error: `제외 주제 해당: ${r.matched || '동일 주제'}` });
-              } else updateTask(t.id, { topicChecked: true });
+              // 제외주제 해당 = 확정 거부 → 폐기함 이동(원장 기록 내부 처리).
+              if (r.excluded) discardTask(t.id, 'off_topic');
+              else updateTask(t.id, { topicChecked: true });
             })
             .catch(() => { if (mountedRef.current) updateTask(t.id, { topicChecked: true }); }) // fail-open. PM ② 견고화에서 보류로 교체 예정
             .finally(() => { topicJudgeRef.current.delete(t.id); });
