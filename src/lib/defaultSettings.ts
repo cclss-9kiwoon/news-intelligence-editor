@@ -1,4 +1,4 @@
-import type { Settings, RssSource, PromptConfig } from '../types';
+import type { Settings, RssSource, PromptConfig, ProjectProfile } from '../types';
 import { DEFAULT_PROVIDER, PROVIDERS } from '../types';
 import { DEFAULT_CATEGORIES } from './defaultCategories';
 
@@ -33,6 +33,41 @@ export const DEFAULT_PROMPT_CONFIG: PromptConfig = {
   bannedExpressions: 'delve, in conclusion, furthermore, testament, moreover, "it is important to note", "not only ... but also", "as an AI", "I think/believe/feel"',
 };
 
+export const DEFAULT_PROJECT_PROFILE: ProjectProfile = {
+  publicationName: '',
+  outputLanguage: 'ko',
+  allowedMedia: [],
+  bannedMedia: [],
+  formatRules: {
+    quoteSong: 'double',
+    quoteWork: 'single',
+    quoteQuotation: 'double',
+    headlineCasing: 'none',
+    artistMarkup: 'strong',
+    imageMarkup: 'img-direct',
+    noEditorialClosing: true,
+    bodyMinChars: 0,
+    bodyMaxChars: 0,
+  },
+  styleGuide: '',
+  reviewRules: [
+    {
+      id: 'fact-consistency',
+      label: '사실 일치',
+      instruction: '본문의 모든 사실(인물·날짜·수치·소속사)이 원문 sourceFacts와 일치하는지 확인. 원문에 없는 추측·창작이 있으면 지적.',
+      severity: 'block',
+      enabled: true,
+    },
+    {
+      id: 'entity-complete',
+      label: '핵심 이름 누락',
+      instruction: '핵심 인물/그룹/작품명이 본문에 빠짐없이 포함됐는지 확인.',
+      severity: 'warn',
+      enabled: true,
+    },
+  ],
+};
+
 export const DEFAULT_SETTINGS: Settings = {
   provider: DEFAULT_PROVIDER,
   apiKey: '',
@@ -52,6 +87,10 @@ export const DEFAULT_SETTINGS: Settings = {
   naverClientId: '',
   naverClientSecret: '',
   naverQueries: ['연예', 'K-pop 아이돌', '한국 드라마 영화'],
+  daumRestApiKey: '',
+  daumQueries: ['연예', 'K-pop 아이돌', '한국 드라마 영화'],
   promptConfig: DEFAULT_PROMPT_CONFIG,
   referenceArticles: [],
+  projectProfile: DEFAULT_PROJECT_PROFILE,
+  queryPresets: [],
 };

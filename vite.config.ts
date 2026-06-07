@@ -181,6 +181,19 @@ export default defineConfig({
           return `/v1/search/news.json?${params.toString()}`;
         },
       },
+      // Dev proxy: Kakao/Daum Search API — client sends Authorization: KakaoAK ...
+      '/api/daum-search': {
+        target: 'https://dapi.kakao.com',
+        changeOrigin: true,
+        rewrite: (path) => {
+          const url = new URL(path, 'http://localhost');
+          const params = new URLSearchParams();
+          params.set('query', url.searchParams.get('query') || '');
+          params.set('size', url.searchParams.get('size') || '10');
+          params.set('sort', url.searchParams.get('sort') || 'recency');
+          return `/v2/search/web?${params.toString()}`;
+        },
+      },
     },
   },
   test: {

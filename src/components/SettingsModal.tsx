@@ -4,6 +4,7 @@ import { useSettings } from '../state/SettingsContext';
 import { useHistory } from '../state/HistoryContext';
 import { PROVIDERS, type ProviderId, type ArticleWindow, type PromptConfig } from '../types';
 import { extractArticleText } from '../lib/scraper';
+import { ProjectProfileTab } from './ProjectProfileTab';
 
 type Props = { open: boolean; onClose: () => void };
 
@@ -17,7 +18,7 @@ export function SettingsModal({ open, onClose }: Props) {
     setAlertSoundEnabled, setBrowserNotificationsEnabled,
     updatePromptConfig, resetPromptConfigField,
     addReferenceArticle, removeReferenceArticle,
-    setNaverClientId, setNaverClientSecret, setNaverQueries,
+    setNaverClientId, setNaverClientSecret, setNaverQueries, setDaumRestApiKey, setDaumQueries,
   } = useSettings();
   const providerCfg = PROVIDERS[settings.provider];
   const providerModels = providerCfg.models;
@@ -25,9 +26,10 @@ export function SettingsModal({ open, onClose }: Props) {
   const [showKey, setShowKey] = useState(false);
   const [showRssKey, setShowRssKey] = useState(false);
   const [showNaverKey, setShowNaverKey] = useState(false);
+  const [showDaumKey, setShowDaumKey] = useState(false);
   const [newRssName, setNewRssName] = useState('');
   const [newRssUrl, setNewRssUrl] = useState('');
-  const [tab, setTab] = useState<'ai' | 'rss' | 'alerts' | 'category' | 'prompt'>('ai');
+  const [tab, setTab] = useState<'ai' | 'rss' | 'alerts' | 'category' | 'prompt' | 'project'>('ai');
   const [categoryOpen, setCategoryOpen] = useState<Record<string, boolean>>({});
   const [refUrl, setRefUrl] = useState('');
   const [refFetching, setRefFetching] = useState(false);
@@ -81,6 +83,10 @@ export function SettingsModal({ open, onClose }: Props) {
             className={'px-3 py-2 text-sm font-medium border-b-2 ' + (tab === 'alerts' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700')}
           >🔔 알림</button>
           <button
+            onClick={() => setTab('project')}
+            className={'px-3 py-2 text-sm font-medium border-b-2 ' + (tab === 'project' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700')}
+          >📋 프로젝트</button>
+          <button
             onClick={() => setTab('prompt')}
             className={'px-3 py-2 text-sm font-medium border-b-2 ' + (tab === 'prompt' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-700')}
           >✏️ 프롬프트</button>
@@ -118,7 +124,12 @@ export function SettingsModal({ open, onClose }: Props) {
           </section>
 
           <section>
-            <h3 className="mb-2 font-semibold">{providerCfg.keyLabel}</h3>
+            <h3 className="mb-2 flex items-center gap-2 font-semibold">
+              {providerCfg.keyLabel}
+              {settings.apiKey.trim()
+                ? <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">✓ 연결됨 · {providerCfg.name}</span>
+                : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">키 미설정</span>}
+            </h3>
             <div className="flex gap-2">
               <input
                 type={showKey ? 'text' : 'password'}
@@ -383,7 +394,7 @@ export function SettingsModal({ open, onClose }: Props) {
             </p>
             {settings.naverClientId && settings.naverClientSecret && (
               <>
-                <p className="mt-1 text-xs text-green-600">✓ 네이버 전문 수집 활성 (메인 소스)</p>
+                <p className="mt-1 text-xs text-green-600">✓ 네이버 전문 수집 활성 (주 출처)</p>
                 <div className="mt-3">
                   <label className="mb-1 block text-xs font-semibold text-slate-500">검색어 (쉼표로 구분)</label>
                   <input
@@ -400,6 +411,45 @@ export function SettingsModal({ open, onClose }: Props) {
           </section>
 
           <section>
+            <h3 className="mb-2 font-semibold">다음/Kakao 검색 API (보조 출처)</h3>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-500">REST API Key</label>
+              <div className="flex gap-2">
+                <input
+                  type={showDaumKey ? 'text' : 'password'}
+                  value={settings.daumRestApiKey}
+                  onChange={e => setDaumRestApiKey(e.target.value)}
+                  placeholder="Kakao Developers REST API 키"
+                  className="flex-1 rounded border border-slate-300 px-3 py-2 text-sm font-mono"
+                />
+                <button
+                  onClick={() => setShowDaumKey(v => !v)}
+                  className="rounded border border-slate-300 px-2 hover:bg-slate-50"
+                  aria-label="토글"
+                >
+                  {showDaumKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              <a href="https://developers.kakao.com/" target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">developers.kakao.com</a>에서 앱 REST API 키 발급. 미입력 시 다음 검색 트랙은 건너뜁니다.
+            </p>
+            {settings.daumRestApiKey && (
+              <div className="mt-3">
+                <label className="mb-1 block text-xs font-semibold text-slate-500">검색어 (쉼표로 구분)</label>
+                <input
+                  type="text"
+                  value={settings.daumQueries.join(', ')}
+                  onChange={e => setDaumQueries(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+                  placeholder="연예, K-pop 아이돌, 한국 드라마 영화"
+                  className="w-full rounded border border-slate-300 px-3 py-2 text-sm"
+                />
+                <p className="mt-0.5 text-xs text-green-600">✓ 다음 검색 보조 수집 활성</p>
+              </div>
+            )}
+          </section>
+
+          <section>
             <h3 className="mb-2 font-semibold">이력 관리</h3>
             <button
               onClick={() => { if (confirm('변환 이력을 모두 삭제하시겠습니까?')) clear(); }}
@@ -408,6 +458,10 @@ export function SettingsModal({ open, onClose }: Props) {
               변환 이력 전체 삭제
             </button>
           </section>
+        </div>
+
+        <div className={tab === 'project' ? '' : 'hidden'}>
+          <ProjectProfileTab />
         </div>
 
         <div className={'space-y-6 p-5 ' + (tab === 'prompt' ? '' : 'hidden')}>
@@ -459,7 +513,7 @@ export function SettingsModal({ open, onClose }: Props) {
           ))}
 
           <section>
-            <h3 className="mb-2 font-semibold text-sm">레퍼런스 기사 (최대 5개)</h3>
+            <h3 className="mb-2 font-semibold text-sm">참고 기사 (최대 5개)</h3>
             <p className="mb-2 text-xs text-slate-500">
               우리 매체가 실제로 발행한 기사 URL을 등록하면 LLM이 문체·구조를 참고합니다.
             </p>

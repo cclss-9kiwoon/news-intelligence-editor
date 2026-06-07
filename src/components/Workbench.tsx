@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Sparkles, AlertOctagon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Copy, Check, Languages } from 'lucide-react';
+import { Loader2, Sparkles, AlertOctagon, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Copy, Check, Languages, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react';
 import { useClusters } from '../state/ClustersContext';
 import { useConversion } from '../state/ConversionContext';
 import { useSettings } from '../state/SettingsContext';
 import { copyToClipboard } from '../lib/clipboard';
+import { reviewDraft, runRuleChecks } from '../lib/review';
 import { PROVIDERS } from '../types';
-import type { ArticleImage } from '../types';
+import type { ArticleImage, ReviewResult } from '../types';
 
 type Props = {
   onMissingKey: () => void;
@@ -30,8 +31,35 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
   const [sourceIdx, setSourceIdx] = useState(0);
   const [copiedField, setCopiedField] = useState<FieldKey | null>(null);
   const [summaryOpen, setSummaryOpen] = useState(true);
+  const [reviewResult, setReviewResult] = useState<ReviewResult | null>(null);
+  const [reviewing, setReviewing] = useState(false);
 
   useEffect(() => { setSourceIdx(0); }, [selectedCluster?.id]);
+  // 드래프트 바뀌면 이전 검수 결과 무효화
+  useEffect(() => { setReviewResult(null); }, [currentResult?.id]);
+
+  const runReview = async () => {
+    if (!currentResult) return;
+    const draft = {
+      summary: currentResult.summary,
+      headline: currentResult.headline,
+      body: currentResult.body,
+      tags: currentResult.tags,
+      sourceFacts: currentResult.sourceFacts,
+    };
+    // API 키 없으면 규칙기반만 즉시 실행
+    if (!settings.apiKey) {
+      const findings = runRuleChecks(draft, settings.projectProfile);
+      setReviewResult({ passed: !findings.some(f => f.severity === 'block'), findings, checkedAt: Date.now() });
+      return;
+    }
+    setReviewing(true);
+    try {
+      setReviewResult(await reviewDraft(draft, settings));
+    } finally {
+      setReviewing(false);
+    }
+  };
 
   const triggerAnalyze = () => {
     if (selectedArticles.length === 0) return;
@@ -79,7 +107,7 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
 
   return (
     <section className="flex h-full min-h-0 flex-col">
-      <div data-tutorial="workbench-header" className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-2">
+      <div data-tutorial="workbench-header" className="flex items-center justify-between gap-2 border-b border-slate-200/60 bg-white/60 backdrop-blur-sm px-4 py-2">
         <div className="flex min-w-0 items-center gap-1">
           {onToggleCollapsed && (
             <button
@@ -101,19 +129,19 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
           <select
             value={settings.activeCategoryId}
             onChange={e => setActiveCategoryId(e.target.value)}
-            className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs"
+            className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-colors"
             title="카테고리(렌즈) 선택"
           >
             {settings.categories.map(c => (
               <option key={c.id} value={c.id}>{c.label}</option>
             ))}
           </select>
-          <label className="flex items-center gap-1 text-xs text-slate-500">
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold">{PROVIDERS[settings.provider].name}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="rounded-md bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700">{PROVIDERS[settings.provider].name}</span>
             <select
               value={settings.model}
               onChange={e => setModel(e.target.value)}
-              className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs"
+              className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 transition-colors"
               title="모델 선택"
             >
               {PROVIDERS[settings.provider].models.map(m => (
@@ -123,14 +151,14 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
                 <option value={settings.model}>{settings.model} (custom)</option>
               )}
             </select>
-          </label>
+          </div>
           <button
             disabled={!selectedCluster || isBusy}
             onClick={triggerAnalyze}
-            className="flex items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-700 disabled:opacity-40 transition-colors"
           >
-            {isBusy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            {isBusy ? '평가 & 종합 중…' : '✨ 가치 평가 & 종합'}
+            {isBusy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
+            {isBusy ? '평가 & 종합 중…' : '가치 평가 & 종합'}
           </button>
         </div>
       </div>
@@ -149,8 +177,8 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
         </div>
       )}
 
-      <div className={(collapsed ? 'hidden ' : '') + 'grid flex-1 min-h-0 grid-cols-2 gap-2 overflow-hidden p-3'}>
-        <div className="flex min-h-0 flex-col rounded-lg border border-slate-200 bg-white">
+      <div className={(collapsed ? 'hidden ' : '') + 'grid flex-1 min-h-0 grid-cols-2 gap-3 overflow-hidden p-3'}>
+        <div className="flex min-h-0 flex-col rounded-xl border border-white/60 bg-white/55 backdrop-blur-md shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-1.5">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
               원문 (한국어) {totalSources > 0 && `${sourceIdx + 1}/${totalSources}`}
@@ -209,11 +237,15 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
           </div>
         </div>
 
-        <div data-tutorial="draft-panel" className="flex min-h-0 flex-col gap-2 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3">
+        <div data-tutorial="draft-panel" className="flex min-h-0 flex-col gap-2.5 overflow-y-auto rounded-xl border border-white/60 bg-white/55 backdrop-blur-md p-3 shadow-sm">
           {!currentResult && !isBusy && (
-            <p className="text-sm text-slate-400">
-              이슈를 선택하고 카테고리를 고른 뒤 [✨ 가치 평가 & 종합]을 누르면 아래 필드가 채워집니다.
-            </p>
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50">
+                <Sparkles size={18} className="text-indigo-400" />
+              </div>
+              <p className="text-sm font-medium text-slate-600">이슈를 선택하고 카테고리를 고른 뒤</p>
+              <p className="text-xs text-slate-400 mt-1">[가치 평가 & 종합]을 누르면 채워집니다.</p>
+            </div>
           )}
           {currentResult && (
             <div className="flex items-center justify-between">
@@ -235,7 +267,49 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
                   </button>
                 ))}
               </div>
-              {status === 'translating' && <span className="text-xs text-indigo-600">번역 중…</span>}
+              <div className="flex items-center gap-2">
+                {status === 'translating' && <span className="text-xs text-indigo-600">번역 중…</span>}
+                <button
+                  onClick={runReview}
+                  disabled={reviewing}
+                  className="flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  title="프로젝트 규칙으로 검수"
+                >
+                  {reviewing ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />}
+                  검수
+                </button>
+              </div>
+            </div>
+          )}
+          {reviewResult && (
+            <div className={'rounded-md border p-2 ' + (reviewResult.passed ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50')}>
+              <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold">
+                {reviewResult.passed
+                  ? <><ShieldCheck size={13} className="text-green-600" /><span className="text-green-700">검수 통과 — 발행 차단 항목 없음</span></>
+                  : <><ShieldAlert size={13} className="text-red-600" /><span className="text-red-700">검수 실패 — {reviewResult.findings.filter(f => f.severity === 'block').length}건 차단</span></>}
+                <span className="ml-auto font-normal text-slate-400">{reviewResult.findings.length}건 지적</span>
+              </div>
+              {reviewResult.findings.length === 0 ? (
+                <p className="text-xs text-green-700">지적 사항 없음. 모든 규칙 충족.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {reviewResult.findings.map((f, i) => (
+                    <li key={i} className="flex items-start gap-1.5 text-xs">
+                      {f.severity === 'block'
+                        ? <ShieldAlert size={12} className="mt-0.5 flex-none text-red-500" />
+                        : <AlertTriangle size={12} className="mt-0.5 flex-none text-amber-500" />}
+                      <span className="flex-1">
+                        <span className={'mr-1 rounded px-1 text-[10px] font-semibold ' + (f.severity === 'block' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700')}>
+                          {f.label}
+                        </span>
+                        {f.field && <span className="mr-1 text-[10px] text-slate-400">[{f.field}]</span>}
+                        <span className="text-slate-700">{f.message}</span>
+                        <span className="ml-1 text-[10px] text-slate-300">{f.source === 'rule' ? '규칙' : 'AI'}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
           {view?.summary && (
@@ -256,16 +330,16 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
             </div>
           )}
           {FIELD_META.map(({ key, label, placeholder, rows }) => (
-            <div key={key} className="flex flex-col">
-              <div className="mb-0.5 flex items-center justify-between">
-                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</span>
+            <div key={key} className="flex flex-col rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</span>
                 <button
                   onClick={() => doCopy(key)}
                   disabled={!currentResult}
-                  className="flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+                  className="flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-medium text-slate-400 hover:bg-white hover:text-slate-700 hover:shadow-sm disabled:opacity-30 transition-all"
                   title={`${label} 복사`}
                 >
-                  {copiedField === key ? <Check size={12} /> : <Copy size={12} />}
+                  {copiedField === key ? <Check size={11} /> : <Copy size={11} />}
                   {copiedField === key ? '복사됨' : '복사'}
                 </button>
               </div>
@@ -274,7 +348,7 @@ export function Workbench({ onMissingKey, collapsed = false, onToggleCollapsed }
                 onChange={e => onFieldChange(key, e.target.value)}
                 rows={rows}
                 placeholder={placeholder}
-                className="resize-y rounded border border-slate-200 p-2 text-sm text-slate-800 outline-none focus:border-indigo-400"
+                className="resize-y rounded-md border border-slate-200 bg-white p-2 text-sm text-slate-800 placeholder-slate-300 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-colors"
               />
             </div>
           ))}

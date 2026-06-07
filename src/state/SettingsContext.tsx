@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import type { Settings, ModelId, RssSource, ProviderId, Category, ArticleWindow, PromptConfig, ReferenceArticle } from '../types';
+import type { Settings, ModelId, RssSource, ProviderId, Category, ArticleWindow, PromptConfig, ReferenceArticle, ProjectProfile, FormatRules, ReviewRule, CampaignSettings, GroupProfile, QueryPreset, SearchProviderConfig } from '../types';
 import { PROVIDERS } from '../types';
-import { DEFAULT_SETTINGS, DEFAULT_PROMPT_CONFIG } from '../lib/defaultSettings';
+import { DEFAULT_SETTINGS, DEFAULT_PROMPT_CONFIG, DEFAULT_PROJECT_PROFILE } from '../lib/defaultSettings';
 import { loadJson, saveJson, STORAGE_KEYS, backupSettingsToFile, restoreSettingsFromFile } from '../lib/storage';
 
 type Ctx = {
@@ -27,11 +27,21 @@ type Ctx = {
   setNaverClientId: (k: string) => void;
   setNaverClientSecret: (k: string) => void;
   setNaverQueries: (q: string[]) => void;
+  setDaumRestApiKey: (k: string) => void;
+  setDaumQueries: (q: string[]) => void;
   updatePromptConfig: (field: keyof PromptConfig, value: string) => void;
   resetPromptConfigField: (field: keyof PromptConfig) => void;
   addReferenceArticle: (article: ReferenceArticle) => void;
   removeReferenceArticle: (id: string) => void;
+  addQueryPreset: (name: string, providers: SearchProviderConfig[]) => void;
+  removeQueryPreset: (id: string) => void;
+  updateProjectProfile: (patch: Partial<ProjectProfile>) => void;
+  updateFormatRules: (patch: Partial<FormatRules>) => void;
+  addReviewRule: () => void;
+  updateReviewRule: (id: string, patch: Partial<ReviewRule>) => void;
+  removeReviewRule: (id: string) => void;
   resetSettings: () => void;
+  applyCampaignSettings: (cs: CampaignSettings, groupProfile?: GroupProfile) => void;
 };
 
 const SettingsCtx = createContext<Ctx | null>(null);
@@ -45,12 +55,19 @@ function mergeWithDefaults(stored: Partial<Settings>): Settings {
     activeCategoryId: stored.activeCategoryId || DEFAULT_SETTINGS.activeCategoryId,
     promptConfig: { ...DEFAULT_PROMPT_CONFIG, ...(stored.promptConfig || {}) },
     referenceArticles: stored.referenceArticles || [],
+    projectProfile: {
+      ...DEFAULT_PROJECT_PROFILE,
+      ...(stored.projectProfile || {}),
+      formatRules: { ...DEFAULT_PROJECT_PROFILE.formatRules, ...(stored.projectProfile?.formatRules || {}) },
+      reviewRules: stored.projectProfile?.reviewRules || DEFAULT_PROJECT_PROFILE.reviewRules,
+    },
+    queryPresets: stored.queryPresets || [],
   };
 }
 
 /** Check if stored settings have any real user config (API keys, etc.) */
 function hasUserConfig(s: Partial<Settings>): boolean {
-  return !!(s.apiKey || s.naverClientId || s.naverClientSecret || s.rss2jsonApiKey);
+  return !!(s.apiKey || s.naverClientId || s.naverClientSecret || s.daumRestApiKey || s.rss2jsonApiKey);
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
@@ -120,6 +137,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const setNaverClientId = useCallback((k: string) => setSettings(s => ({ ...s, naverClientId: k })), []);
   const setNaverClientSecret = useCallback((k: string) => setSettings(s => ({ ...s, naverClientSecret: k })), []);
   const setNaverQueries = useCallback((q: string[]) => setSettings(s => ({ ...s, naverQueries: q })), []);
+  const setDaumRestApiKey = useCallback((k: string) => setSettings(s => ({ ...s, daumRestApiKey: k })), []);
+  const setDaumQueries = useCallback((q: string[]) => setSettings(s => ({ ...s, daumQueries: q })), []);
   const updatePromptConfig = useCallback((field: keyof PromptConfig, value: string) =>
     setSettings(s => ({ ...s, promptConfig: { ...s.promptConfig, [field]: value } })), []);
   const resetPromptConfigField = useCallback((field: keyof PromptConfig) =>
@@ -132,16 +151,122 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }), []);
   const removeReferenceArticle = useCallback((id: string) =>
     setSettings(s => ({ ...s, referenceArticles: s.referenceArticles.filter(r => r.id !== id) })), []);
+  const updateProjectProfile = useCallback((patch: Partial<ProjectProfile>) =>
+    setSettings(s => ({ ...s, projectProfile: { ...s.projectProfile, ...patch } })), []);
+  const updateFormatRules = useCallback((patch: Partial<FormatRules>) =>
+    setSettings(s => ({ ...s, projectProfile: { ...s.projectProfile, formatRules: { ...s.projectProfile.formatRules, ...patch } } })), []);
+  const addReviewRule = useCallback(() =>
+    setSettings(s => {
+      const rule: ReviewRule = { id: `rule-${Date.now()}`, label: '새 검수 항목', instruction: '', severity: 'warn', enabled: true };
+      return { ...s, projectProfile: { ...s.projectProfile, reviewRules: [...s.projectProfile.reviewRules, rule] } };
+    }), []);
+  const updateReviewRule = useCallback((id: string, patch: Partial<ReviewRule>) =>
+    setSettings(s => ({ ...s, projectProfile: { ...s.projectProfile, reviewRules: s.projectProfile.reviewRules.map(r => r.id === id ? { ...r, ...patch } : r) } })), []);
+  const removeReviewRule = useCallback((id: string) =>
+    setSettings(s => ({ ...s, projectProfile: { ...s.projectProfile, reviewRules: s.projectProfile.reviewRules.filter(r => r.id !== id) } })), []);
+  const addQueryPreset = useCallback((name: string, providers: SearchProviderConfig[]) =>
+    setSettings(s => {
+      const preset: QueryPreset = {
+        id: crypto.randomUUID(),
+        name: name.trim() || '이름 없는 프리셋',
+        providers: providers.map(p => ({ ...p })), // deep clone (얕은 객체라 충분)
+        createdAt: Date.now(),
+      };
+      return { ...s, queryPresets: [...s.queryPresets, preset] };
+    }), []);
+  const removeQueryPreset = useCallback((id: string) =>
+    setSettings(s => ({ ...s, queryPresets: s.queryPresets.filter(p => p.id !== id) })), []);
   const resetSettings = useCallback(() => setSettings(DEFAULT_SETTINGS), []);
+  // Pasta: 캠페인 스코프 설정을 현재 Settings에 주입 (계정 전역 필드는 유지)
+  // 4단계 CampaignSettings → 평면 Settings 브리지. 그룹 배포맥락(profile)도 주입.
+  const applyCampaignSettings = useCallback((cs: CampaignSettings, groupProfile?: GroupProfile) => setSettings(s => {
+    const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
+    // 격식 수준 → 검수 엄격도 연동: strict면 warn 규칙을 block으로 상향, casual은 완화
+    let reviewRules = clone(cs.finalReview.reviewRules);
+    if (groupProfile?.formalityLevel === 'strict') {
+      reviewRules = reviewRules.map(r => ({ ...r, severity: 'block' as const, enabled: true }));
+    } else if (groupProfile?.formalityLevel === 'casual') {
+      reviewRules = reviewRules.map(r => ({ ...r, severity: 'warn' as const }));
+    }
+    // ── 상속 매트릭스: 그룹 노브 → ②③④ 자동 전파 (styleGuide 텍스트로 구조화) ──
+    const matrix: string[] = [];
+    if (groupProfile) {
+      // formalityLevel → ④검수 + ③에디토리얼 + ②우선
+      if (groupProfile.formalityLevel === 'strict') {
+        matrix.push('[격식: 엄격] ③에디토리얼·1인칭·주관 금지. ②고인지도·팩트 우선. ④표기·팩트·출처 규칙 위반 시 발행 차단.');
+      } else if (groupProfile.formalityLevel === 'casual') {
+        matrix.push('[격식: 캐주얼] ③주관·1인칭·취향 표현 허용, 롱폼 OK. ④핵심 규칙만 검수.');
+      } else {
+        matrix.push('[격식: 표준] 균형. 팩트 중심이되 과한 제약 없음.');
+      }
+      // sourceStrictness → ①서칭 소스 교차검증 강도
+      if (groupProfile.sourceStrictness === 'cross_verified') {
+        matrix.push('[출처: 교차검증] 서로 다른 원문 2곳+ 교차검증된 팩트만 사용. 2차매체·SNS 인용 불가.');
+      } else if (groupProfile.sourceStrictness === 'loose') {
+        matrix.push('[출처: 느슨] 2차매체·SNS 인용 허용. 단일 출처 가능.');
+      }
+      // language → ②인지도 기준 언어권 + ③출력
+      matrix.push(`[언어: ${groupProfile.language}] 주제 인지도는 ${groupProfile.language} 언어권 기준. 출력 언어 ${groupProfile.language}.`);
+    }
+    // language가 출력 언어 결정 (그룹 우선, 없으면 캠페인 생성 설정)
+    const outputLanguage = (groupProfile?.language === 'en' ? 'en' : groupProfile?.language === 'ko' ? 'ko' : cs.generation.outputLanguage);
+    // searchProviders(SOT)에서 provider별 활성 검색어 도출. 없으면 레거시 queries 폴백.
+    const providers = cs.searching.searchProviders ?? [];
+    const naverQueries = providers.length
+      ? providers.filter(p => p.provider === 'naver' && p.enabled).map(p => p.query)
+      : [...cs.searching.naverQueries];
+    const daumQueries = providers.length
+      ? providers.filter(p => p.provider === 'daum' && p.enabled).map(p => p.query)
+      : [...(cs.searching.daumQueries ?? [])];
+    const apiEnabled = cs.searching.apiEnabled ?? true;
+    const rssEnabled = cs.searching.rssEnabled ?? true;
+    // 그룹 LLM → 글로벌 Settings 오버라이드(키 진입점). 단계별 오버라이드는 resolveStageLLM(추후)에서.
+    const gl = groupProfile?.llm;
+    const llmOverride = gl && gl.enabled !== false ? {
+      ...(gl.provider ? { provider: gl.provider } : {}),
+      ...(gl.apiKey ? { apiKey: gl.apiKey } : {}),
+      ...(gl.model ? { model: gl.model } : {}),
+      ...(gl.baseUrl ? { apiBaseUrl: gl.baseUrl } : {}),
+    } : {};
+    return {
+      ...s,
+      ...llmOverride,
+      rssSources: rssEnabled ? clone(cs.searching.rssSources) : clone(cs.searching.rssSources).map(r => ({ ...r, enabled: false })),
+      naverQueries: apiEnabled ? (naverQueries.length ? naverQueries : [...cs.searching.naverQueries]) : [],
+      daumQueries: apiEnabled ? (daumQueries.length ? daumQueries : [...(cs.searching.daumQueries ?? [])]) : [],
+      articleWindow: cs.searching.articleWindow,
+      clusterThreshold: cs.searching.clusterThreshold,
+      promptConfig: clone(cs.generation.promptConfig),
+      referenceArticles: clone(cs.generation.referenceArticles),
+      categories: clone(cs.categories),
+      activeCategoryId: cs.activeCategoryId,
+      projectProfile: {
+        publicationName: groupProfile?.character || s.projectProfile.publicationName,
+        outputLanguage,
+        allowedMedia: clone(cs.finalReview.allowedMedia),
+        bannedMedia: clone(cs.finalReview.bannedMedia),
+        formatRules: clone(cs.generation.formatRules),
+        styleGuide: [
+          groupProfile ? `[배포 맥락] ${groupProfile.character} · 타겟: ${groupProfile.audience} · 톤: ${groupProfile.toneBase}` : '',
+          ...matrix,
+          cs.searching.imageSourcePolicy ? `[이미지 출처] ${cs.searching.imageSourcePolicy}` : '',
+          cs.generation.styleGuide,
+        ].filter(Boolean).join('\n'),
+        reviewRules,
+      },
+    };
+  }), []);
 
   const value: Ctx = {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
     setModel, setActiveCategoryId, addCategory, updateCategory, removeCategory, setArticleWindow,
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold, setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled,
-    setNaverClientId, setNaverClientSecret, setNaverQueries,
+    setNaverClientId, setNaverClientSecret, setNaverQueries, setDaumRestApiKey, setDaumQueries,
     updatePromptConfig, resetPromptConfigField, addReferenceArticle, removeReferenceArticle,
-    resetSettings,
+    updateProjectProfile, updateFormatRules, addReviewRule, updateReviewRule, removeReviewRule,
+    addQueryPreset, removeQueryPreset,
+    resetSettings, applyCampaignSettings,
   };
   return <SettingsCtx.Provider value={value}>{children}</SettingsCtx.Provider>;
 }

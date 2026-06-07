@@ -39,7 +39,7 @@ export function StoryPreview() {
   };
 
   return (
-    <div data-tutorial="output-tabs" className="flex h-full min-h-0 flex-col border-t border-slate-200 bg-white">
+    <div data-tutorial="output-tabs" className="flex h-full min-h-0 flex-col border-t border-slate-200/40 bg-white/50 backdrop-blur-md">
       <div className="flex flex-wrap items-center border-b border-slate-200 px-4 py-1">
         <span className="text-sm font-medium text-slate-700">📄 발행용 미리보기 (헤드라인 + 본문)</span>
         <div className="ml-auto flex flex-wrap items-center gap-3 text-xs text-slate-500">

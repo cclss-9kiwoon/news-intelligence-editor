@@ -115,6 +115,25 @@ function setBackoff(sourceId: string) {
   try { localStorage.setItem(BACKOFF_PREFIX + sourceId, String(Date.now())); } catch { /* ignore */ }
 }
 
+/** 백오프 정책 상수 (UI 표시용 노출) */
+export const RSS_BACKOFF_MS = BACKOFF_MS;
+export const RSS_CACHE_TTL_MS = CACHE_TTL_MS;
+
+/**
+ * 소스의 백오프 해제 시각(timestamp ms)을 반환. 백오프 중 아니면 null.
+ * (429 등으로 setBackoff된 뒤 BACKOFF_MS 동안 호출 스킵 상태)
+ */
+export function getRssBackoffUntil(sourceId: string): number | null {
+  try {
+    const raw = localStorage.getItem(BACKOFF_PREFIX + sourceId);
+    if (!raw) return null;
+    const ts = parseInt(raw, 10);
+    if (!ts) return null;
+    const until = ts + BACKOFF_MS;
+    return until > Date.now() ? until : null;
+  } catch { return null; }
+}
+
 export function clearAllRssCache() {
   const toRemove: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { dedupeAndMerge, normalizeLink, makeArticleId } from './rss';
+import { dedupeAndMerge, normalizeLink, makeArticleId, getRssBackoffUntil, RSS_BACKOFF_MS } from './rss';
 import type { Article } from '../types';
+
+const BACKOFF_PREFIX = 'nie:rss-backoff:';
 
 function fakeArticle(over: Partial<Article>): Article {
   return {
@@ -70,5 +72,28 @@ describe('rss.dedupeAndMerge', () => {
       10
     );
     expect(merged.map(a => a.id)).toEqual(['2', '3', '1']);
+  });
+});
+
+describe('rss.getRssBackoffUntil', () => {
+  it('returns null when no backoff set', () => {
+    localStorage.removeItem(BACKOFF_PREFIX + 'src1');
+    expect(getRssBackoffUntil('src1')).toBeNull();
+  });
+
+  it('returns expiry timestamp when within backoff window', () => {
+    const now = Date.now();
+    localStorage.setItem(BACKOFF_PREFIX + 'src2', String(now));
+    const until = getRssBackoffUntil('src2');
+    expect(until).not.toBeNull();
+    expect(until! - now).toBeGreaterThan(RSS_BACKOFF_MS - 5_000);
+    expect(until! - now).toBeLessThanOrEqual(RSS_BACKOFF_MS);
+    localStorage.removeItem(BACKOFF_PREFIX + 'src2');
+  });
+
+  it('returns null when backoff window already elapsed', () => {
+    localStorage.setItem(BACKOFF_PREFIX + 'src3', String(Date.now() - RSS_BACKOFF_MS - 1000));
+    expect(getRssBackoffUntil('src3')).toBeNull();
+    localStorage.removeItem(BACKOFF_PREFIX + 'src3');
   });
 });

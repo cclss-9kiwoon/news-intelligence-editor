@@ -23,6 +23,38 @@ const MAX_RETRIES = 2;
 /** Track URLs that have failed extraction, to avoid retrying indefinitely. */
 const failedUrls = new Map<string, number>();
 
+/**
+ * Domains known to block extraction (hard paywalls / JS-only walls / aggregators
+ * that never yield article body). Skipped immediately — no wasted fetch/timeout.
+ * Universal list only; project-specific blocks belong in the preset/source filter.
+ */
+const DOMAIN_BLACKLIST: readonly string[] = [
+  'facebook.com', 'instagram.com', 'twitter.com', 'x.com', 't.co',
+  'youtube.com', 'youtu.be', 'tiktok.com',
+  'play.google.com', 'apps.apple.com',
+];
+
+function isBlacklistedDomain(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '');
+    return DOMAIN_BLACKLIST.some(d => host === d || host.endsWith(`.${d}`));
+  } catch {
+    return true; // unparseable URL → treat as unusable
+  }
+}
+
+/**
+ * Reject non-article images by URL pattern: tracking pixels, sprites, icons,
+ * logos, watermark/badge overlays, avatars, emoji, data URIs.
+ * Visual watermark detection (pixel analysis) is out of scope — URL heuristics only.
+ */
+const JUNK_IMAGE_RE = /blank\.gif|transparent|spacer|1x1|pixel|sprite|watermark|wm[-_]|logo|icon|favicon|avatar|profile|emoji|badge|btn[-_]|button/i;
+
+function isJunkImage(url: string): boolean {
+  if (!url || !url.startsWith('http')) return true;
+  return JUNK_IMAGE_RE.test(url);
+}
+
 // ─── Types ──────────────────────────────────────────────────────────
 
 export type ExtractResult = {
@@ -106,8 +138,7 @@ async function extractViaJina(url: string): Promise<ExtractResult> {
         : Object.values(data.images);
       for (const img of imgList) {
         const imgUrl = img.src || img.url || '';
-        if (imgUrl && !imgUrl.includes('blank.gif') && !imgUrl.includes('transparent') &&
-            !imgUrl.includes('icon') && !imgUrl.includes('logo') && imgUrl.startsWith('http')) {
+        if (!isJunkImage(imgUrl)) {
           images.push({
             url: imgUrl,
             alt: img.alt || undefined,
@@ -223,8 +254,7 @@ async function extractViaProxy(url: string): Promise<ExtractResult> {
     const imgElements = articleEl.querySelectorAll('img');
     for (const img of Array.from(imgElements)) {
       const src = img.getAttribute('data-src') || img.getAttribute('src') || '';
-      if (src && !src.includes('blank.gif') && !src.includes('transparent') &&
-          !src.includes('icon') && !src.includes('logo') && src.startsWith('http')) {
+      if (!isJunkImage(src)) {
         const figCaption = img.closest('figure')?.querySelector('figcaption, em, .img_desc');
         images.push({
           url: src,
@@ -294,6 +324,11 @@ function isKoreanSite(url: string): boolean {
 }
 
 export async function extractArticleText(url: string): Promise<ExtractResult> {
+  // Skip blacklisted domains immediately — never extract usable article body
+  if (isBlacklistedDomain(url)) {
+    return { ok: false, error: 'skipped (blacklisted domain)' };
+  }
+
   // Skip URLs that have already failed MAX_RETRIES times
   const prevFailures = failedUrls.get(url) || 0;
   if (prevFailures >= MAX_RETRIES) {
@@ -369,7 +404,8 @@ export async function enrichArticlesWithFullText(
       a.link &&
       a.link.startsWith('http') &&
       !a.link.startsWith('manual://') &&
-      !a.link.startsWith('simulator://'),
+      !a.link.startsWith('simulator://') &&
+      !isBlacklistedDomain(a.link),
   );
   const blocked = eligible.filter(a => (failedUrls.get(a.link) || 0) >= MAX_RETRIES).length;
   const candidates = eligible.filter(a => (failedUrls.get(a.link) || 0) < MAX_RETRIES);
