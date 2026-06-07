@@ -81,6 +81,7 @@ function buildStorySystem(category: Category, settings: Settings): string {
   sections.push('- summary: 무엇에 관한 기사인지 중립적으로 1~2줄(누가/무엇/핵심). 가치 평가나 발행 권고 금지.');
   sections.push('- headline: 기사 제목.');
   sections.push('- body: 머리표·섹션 라벨(#, "## 2." 등) 없이 깨끗한 발행용 본문. 매체 간 충돌 시 가장 일관된 값 채택, 충돌 사실은 summary에 명시.');
+  sections.push('- body 포맷(HTML): 각 문단을 별도 <p>…</p>로 분리(여러 문단을 한 <p>에 몰지 말 것). 가사·직접 인용은 <blockquote>…</blockquote>. 강조는 <strong>. 빈 <p></p>나 src 없는 <img> 금지. 한 문단은 2~4문장 권장.');
   sections.push('- 원문에 없는 사실 추측·창작 금지. 핵심 이름(인물/장소/소속사) 누락 금지.');
   sections.push('- tags: 해시태그 문자열 배열(# 없이 키워드만). imagePrompt: 순수 영문(Midjourney 호환, 한국어 금지).');
   sections.push('- sourceFacts: 원문에서 추출한 핵심 사실 5~10개를 불릿 리스트 배열로. 각 항목은 한 줄 이내, "누가 무엇을 했다" 형식. 드래프트에 반영했는지 에디터가 대조할 용도.');
