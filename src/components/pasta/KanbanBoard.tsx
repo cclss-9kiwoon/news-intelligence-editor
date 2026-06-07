@@ -139,7 +139,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
           disabled={isRefreshing}
           className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-500 px-3 py-1 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <IconRefresh className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin motion-reduce:animate-none' : ''}`} /> 지금 수집
+          <IconRefresh className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin motion-reduce:animate-none' : ''}`} /> {isRefreshing ? (loadingStatus || '수집 중…') : '지금 수집'}
         </button>
 
         {noLlmKey && (
