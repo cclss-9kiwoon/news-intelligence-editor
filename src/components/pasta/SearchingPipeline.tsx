@@ -9,6 +9,7 @@ import { assessProducibility } from '../../lib/producibility';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
 import { loadDiscarded, buildDiscardIndex } from '../../lib/discardLedger';
+import { shouldDiscardAfterExtractFail } from '../../lib/extractRetry';
 import { promotionBudget } from '../../lib/promotion';
 import { judgeBreaking } from '../../lib/breakingDetector';
 import { resolveStageLLM } from '../../lib/stageLLM';
@@ -167,7 +168,15 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
       if (fullTextCount === 0) {
         if (Date.now() - (t.promotedAt ?? t.createdAt) > SOURCE_REVIEW_TIMEOUT_MS) {
-          updateTask(t.id, { sources: refreshed, error: '전문 수집 실패 (출처 0건)' });
+          // 전 source 전문수집 실패 — N회 누적 시 자동 폐기(extract_failed), 아니면 재시도 대기.
+          // error는 설정 안 함: ② 루프 가드(t.error continue)에 걸려 재진입 못 하면 attempts가
+          // 1에서 정체해 자동폐기 안 됨. status=topic_review 유지로 다음 사이클 재평가→증가→임계 시 폐기.
+          const attempts = (t.extractAttempts ?? 0) + 1;
+          if (shouldDiscardAfterExtractFail(attempts)) {
+            discardTask(t.id, 'extract_failed');  // 폐기함 + recordDiscard + 예산 회복(promotionBudget 제외)
+          } else {
+            updateTask(t.id, { sources: refreshed, extractAttempts: attempts });
+          }
         } else if (changed) {
           updateTask(t.id, { sources: refreshed, imageCount });
         }

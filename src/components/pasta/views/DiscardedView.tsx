@@ -6,9 +6,10 @@ const REASON_LABEL: Record<DiscardReason, string> = {
   low_quality: '품질 부족',
   off_topic: '주제 부적합',
   duplicate: '중복',
+  extract_failed: '수집 실패',
   other: '기타',
 };
-const REASON_ORDER: DiscardReason[] = ['low_quality', 'off_topic', 'duplicate', 'other'];
+const REASON_ORDER: DiscardReason[] = ['low_quality', 'off_topic', 'duplicate', 'extract_failed', 'other'];
 
 /**
  * 폐기함 — discardReason 있는 태스크, 사유별 그룹.
