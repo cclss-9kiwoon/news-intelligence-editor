@@ -59,4 +59,20 @@ describe('promotionBudget', () => {
     const old = Array.from({ length: 5 }, () => task({ promotedAt: NOW - HOUR - 1000, error: 'x' }));
     expect(promotionBudget(old, 'c1', 2, NOW)).toBe(2); // 전부 1h 지남 → 예산 회복
   });
+
+  it('폐기(discardReason)건은 예산 카운트 제외 — 큐레이션이 슬롯 잠식 안 함', () => {
+    // maxPerHour=5, 최근 승급 5건 전부 사용자 폐기(off_topic) → 예산 0이 아니라 5 회복
+    const discarded = Array.from({ length: 5 }, () =>
+      task({ promotedAt: NOW - 1000, discardReason: 'off_topic' as Task['discardReason'] }));
+    expect(promotionBudget(discarded, 'c1', 5, NOW)).toBe(5);
+  });
+
+  it('폐기건과 보류건 혼재 — 보류만 카운트', () => {
+    const tasks = [
+      task({ promotedAt: NOW - 1000, discardReason: 'off_topic' as Task['discardReason'] }), // 제외
+      task({ promotedAt: NOW - 1000, discardReason: 'off_topic' as Task['discardReason'] }), // 제외
+      task({ promotedAt: NOW - 1000 }),  // 보류(미결정) — 카운트
+    ];
+    expect(promotionBudget(tasks, 'c1', 5, NOW)).toBe(4); // 5 - 1(보류만)
+  });
 });
