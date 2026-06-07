@@ -64,9 +64,7 @@ export function makeDefaultCampaignSettings(): CampaignSettings {
       selectionCriteria: '최신성 우선, 인지도 높은 주제, 다양성 확보.',
       dedupeRules: '같은 내용 중복 금지. 이미 다룬 주제는 다른 관점일 때만 허용.',
       priority: '속보 > 발표 > 차트/마일스톤 > 일반.',
-      // ② 판단은 경량 모델(flash)로 — throughput·비용. provider/키는 글로벌 상속(model만 오버라이드).
-      // ③ 작성은 글로벌 모델(상위) 상속, ②④만 flash 핀.
-      llm: { model: 'gemini-2.5-flash' },
+      // ②④ 경량화는 settings.fastModel + resolveStageLLM(tier='fast')로 처리(stage pin 대신).
     },
     generation: {
       promptConfig: { ...DEFAULT_PROMPT_CONFIG },
@@ -80,8 +78,6 @@ export function makeDefaultCampaignSettings(): CampaignSettings {
       allowedMedia: [],
       bannedMedia: [],
       autoPublish: false,
-      // ④ 검수도 경량 모델(flash) — 룰 합본 단일 호출이라 flash로 충분. provider/키 글로벌 상속.
-      llm: { model: 'gemini-2.5-flash' },
     },
     categories: DEFAULT_CATEGORIES.map(c => ({ ...c })),
     activeCategoryId: DEFAULT_CATEGORIES[0]?.id ?? 'music',

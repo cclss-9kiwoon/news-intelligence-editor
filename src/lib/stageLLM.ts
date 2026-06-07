@@ -20,17 +20,25 @@ function active(cfg?: StageLLMConfig): StageLLMConfig | undefined {
   return cfg && cfg.enabled !== false ? cfg : undefined;
 }
 
+/**
+ * tier 'fast' = ②판단·④검수 — model 폴백에 settings.fastModel 삽입(stage→group→fastModel→model).
+ * tier 'main'(기본) = ③작성 등 — 기존대로 stage→group→model. fastModel 비면 둘 다 settings.model.
+ */
+export type StageTier = 'fast' | 'main';
+
 export function resolveStageLLM(
   settings: Settings,
   group?: GroupProfile,
   stageConfig?: StageLLMConfig,
+  tier: StageTier = 'main',
 ): ResolvedLLM {
   const stage = active(stageConfig);
   const grp = active(group?.llm);
+  const fastFallback = tier === 'fast' && settings.fastModel ? settings.fastModel : undefined;
   return {
     provider: stage?.provider ?? grp?.provider ?? settings.provider,
     apiKey: stage?.apiKey ?? grp?.apiKey ?? settings.apiKey,
-    model: stage?.model ?? grp?.model ?? settings.model,
+    model: stage?.model ?? grp?.model ?? fastFallback ?? settings.model,
     baseUrl: stage?.baseUrl ?? grp?.baseUrl ?? settings.apiBaseUrl,
   };
 }

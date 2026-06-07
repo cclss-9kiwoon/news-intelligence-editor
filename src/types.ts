@@ -411,6 +411,8 @@ export type Settings = {
   apiBaseUrl: string;
   rss2jsonApiKey: string;
   model: ModelId;
+  fastModel?: string;          // ②판단·④검수용 경량 모델(throughput·비용). 비면 model로 폴백
+
   categories: Category[];
   activeCategoryId: string;
   articleWindow: ArticleWindow;
