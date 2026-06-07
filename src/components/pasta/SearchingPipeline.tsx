@@ -178,10 +178,12 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
           judgeTopicAdequacy({ title: t.title, snippets }, intent, cheapStageSettings(settings))
             .then(r => {
               if (!mountedRef.current) return;
+              // fail-CLOSED 3-state: 미결정(429/서킷/실패)→보류(재판단), 부적합→컷, 적합→통과
+              if (!r.decided) return; // 보류 — intentChecked 안 함 → 다음 사이클 재판단(키/서킷 풀리면 결정)
               if (!r.adequate) updateTask(t.id, { error: `주제 부적합: ${r.reason || '캠페인 주제와 불일치'}` });
               else updateTask(t.id, { intentChecked: true });
             })
-            .catch(() => { if (mountedRef.current) updateTask(t.id, { intentChecked: true }); }) // fail-open
+            .catch(() => { /* 예외=미결정=보류. intentChecked 세팅 X → 재시도 */ })
             .finally(() => { intentJudgeRef.current.delete(t.id); });
         }
         continue; // 판단 결과 대기
