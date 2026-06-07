@@ -35,8 +35,9 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   const { groups } = useCampaigns();
   const group = groups.find(g => g.id === campaign.groupId);
   // 단계 LLM 해석: 단계 오버라이드 → 그룹 → 전역. settings 클론으로 chatJson 호출부에 주입.
-  const stageSettings = (cfg?: StageLLMConfig) => {
-    const r = resolveStageLLM(settings, group?.profile, cfg);
+  // tier 'fast' = ②판단·④검수(경량 fastModel 폴백), 'main' = ③작성(상위 model). stage/group 명시값은 최우선.
+  const stageSettings = (cfg?: StageLLMConfig, tier: 'fast' | 'main' = 'main') => {
+    const r = resolveStageLLM(settings, group?.profile, cfg, tier);
     return { ...settings, provider: r.provider, apiKey: r.apiKey, model: r.model, apiBaseUrl: r.baseUrl };
   };
   const producingRef = useRef<Set<string>>(new Set());
@@ -212,7 +213,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
           const snippets = articles
             .filter(a => t.sources.some(s => s.articleId === a.id))
             .map(a => a.description || a.fullText?.slice(0, 300) || '');
-          judgeTopicAdequacy({ title: t.title, snippets }, intent, stageSettings(campaign.settings.topicReview.llm))
+          judgeTopicAdequacy({ title: t.title, snippets }, intent, stageSettings(campaign.settings.topicReview.llm, 'fast'))
             .then(r => {
               if (!mountedRef.current) return;
               // fail-CLOSED 3-state: 미결정(429/서킷/실패)→보류(재판단), 부적합→컷, 적합→통과
@@ -235,7 +236,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
           const snippets = articles
             .filter(a => t.sources.some(s => s.articleId === a.id))
             .map(a => a.description || a.fullText?.slice(0, 300) || '');
-          judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, stageSettings(campaign.settings.topicReview.llm))
+          judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, stageSettings(campaign.settings.topicReview.llm, 'fast'))
             .then(r => {
               if (!mountedRef.current) return;
               // 제외주제 해당 = 확정 거부 → 폐기함 이동(원장 기록 내부 처리).
@@ -279,7 +280,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
             sources: t.sources.map(s => ({ source: s.source })),
             images: srcArticles.flatMap(a => (a.images ?? []).map(im => ({ url: im.url }))),
           };
-          try { review = await reviewDraft(draft, stageSettings(campaign.settings.finalReview.llm), reviewCtx); } catch { review = undefined; }
+          try { review = await reviewDraft(draft, stageSettings(campaign.settings.finalReview.llm, 'fast'), reviewCtx); } catch { review = undefined; }
           if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review', produceAttempts: attempt });
         })
         .catch((err: unknown) => {
