@@ -10,6 +10,7 @@ import { testNaverConnection } from '../../lib/naver';
 import { testDaumConnection } from '../../lib/daum';
 import { HelpTip } from './HelpTip';
 import { TagInput } from './TagInput';
+import { StageLLMEditor } from './StageLLMEditor';
 import { IconTrash } from './icons';
 import type { ReferenceArticle } from '../../types';
 import { PROVIDERS } from '../../types';
@@ -547,6 +548,8 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
             onChange={v => setTopic({ dedupeRules: v })} onReset={() => setTopic({ dedupeRules: '' })} rows={3} />
           <PromptField label="우선순위" help="후보가 많을 때 무엇을 먼저 쓸지 순서를 정합니다. 예: 속보 > 발표 > 차트 > 일반." value={s.topicReview.priority}
             onChange={v => setTopic({ priority: v })} onReset={() => setTopic({ priority: '' })} rows={2} />
+          <StageLLMEditor stageLabel="② 주제 판단" llm={s.topicReview.llm} group={group?.profile}
+            onChange={patch => setTopic({ llm: { ...s.topicReview.llm, ...patch } })} />
         </Section>
       )}
 
@@ -615,6 +618,8 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
               </div>
             )}
           </Field>
+          <StageLLMEditor stageLabel="③ 작성" llm={s.generation.llm} group={group?.profile}
+            onChange={patch => setGen({ llm: { ...s.generation.llm, ...patch } })} />
         </Section>
       )}
 
@@ -651,6 +656,8 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
               ))}
             </div>
           </Field>
+          <StageLLMEditor stageLabel="④ 검수" llm={s.finalReview.llm} group={group?.profile}
+            onChange={patch => setReview({ llm: { ...s.finalReview.llm, ...patch } })} />
         </Section>
       )}
     </div>
