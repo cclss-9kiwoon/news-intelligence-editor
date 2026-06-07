@@ -108,6 +108,7 @@ function PastaRouter() {
   });
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [forceSettingsId, setForceSettingsId] = useState<string | null>(null);
+  const [forceGroupId, setForceGroupId] = useState<string | null>(null);
   const { applyCampaignSettings } = useSettings();
   const { campaigns, groups, setActiveCampaign, activeCampaign, markCampaignConfigured } = useCampaigns();
 
@@ -144,6 +145,8 @@ function PastaRouter() {
         onOpenCampaign={openCampaign}
         forceSettingsId={forceSettingsId}
         onConsumeForceSettings={() => setForceSettingsId(null)}
+        forceGroupId={forceGroupId}
+        onConsumeForceGroup={() => setForceGroupId(null)}
       />
     );
   }
@@ -164,6 +167,7 @@ function PastaRouter() {
                   onOpenSettings={() => { setForceSettingsId(activeCampaign.id); setMode('pasta'); }}
                   onOpenTask={(taskId) => { setOpenTaskId(taskId); setMode('workspace'); }}
                   onOpenWorkbench={() => setMode('workbench')}
+                  onOpenGroup={(gid) => { setForceGroupId(gid); setMode('pasta'); }}
                 />
               ) : (
                 <AppShell

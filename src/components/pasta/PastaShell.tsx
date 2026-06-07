@@ -9,10 +9,12 @@ type View = 'campaign' | 'group' | 'new-group' | 'template' | 'empty';
 
 const GRADIENT = 'radial-gradient(ellipse 80% 80% at top left, #C5E3F6 0%, transparent 55%), radial-gradient(ellipse at bottom center, #FBE2BC 0%, transparent 55%), radial-gradient(ellipse at right, #F0D5F7 0%, transparent 55%), #FCF4E8';
 
-export function PastaShell({ onOpenCampaign, forceSettingsId, onConsumeForceSettings }: {
+export function PastaShell({ onOpenCampaign, forceSettingsId, onConsumeForceSettings, forceGroupId, onConsumeForceGroup }: {
   onOpenCampaign: (campaignId: string) => void;
   forceSettingsId?: string | null;
   onConsumeForceSettings?: () => void;
+  forceGroupId?: string | null;
+  onConsumeForceGroup?: () => void;
 }) {
   const { groups, campaigns } = useCampaigns();
   const [view, setView] = useState<View>(groups.length === 0 ? 'empty' : 'campaign');
@@ -32,6 +34,15 @@ export function PastaShell({ onOpenCampaign, forceSettingsId, onConsumeForceSett
       onConsumeForceSettings?.();
     }
   }, [forceSettingsId, onConsumeForceSettings]);
+
+  // 칸반 레일 🎯그룹명 클릭 → 그룹 메인(대시보드) 진입
+  useEffect(() => {
+    if (forceGroupId) {
+      setSelGroup(forceGroupId);
+      setView('group');
+      onConsumeForceGroup?.();
+    }
+  }, [forceGroupId, onConsumeForceGroup]);
 
   // 설정 완료(configured) 캠페인 선택 시 칸반 직행, 아니면 설정 화면
   const selectCampaign = (id: string) => {

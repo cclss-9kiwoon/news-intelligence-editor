@@ -24,15 +24,17 @@ const NAV: { id: ShellView; Icon: (p: { className?: string }) => ReactElement; l
  * 캠페인 메인 셸 — 좌측 운영 레일 + 우측 뷰(보드/현황/발행함/폐기함).
  * 설정 끝난 캠페인 진입 시 메인 화면. 보드가 기본.
  */
-export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTask, onOpenWorkbench }: {
+export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTask, onOpenWorkbench, onOpenGroup }: {
   campaign: Campaign;
   onBackToList: () => void;
   onOpenSettings: () => void;
   onOpenTask: (taskId: string) => void;
   onOpenWorkbench: () => void;
+  onOpenGroup: (groupId: string) => void;
 }) {
   const [view, setView] = useState<ShellView>('board');
-  const { setCampaignAutoCollect } = useCampaigns();
+  const { setCampaignAutoCollect, groups } = useCampaigns();
+  const group = groups.find(g => g.id === campaign.groupId);
   const { isRefreshing, refreshNow } = useArticles();
   const auto = campaign.autoCollect ?? { enabled: true, intervalMin: 30 as const };
 
@@ -56,6 +58,12 @@ export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTa
             <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900 text-xs">🍝</span>
             <span className="truncate font-bold text-slate-900">{campaign.name}</span>
           </div>
+          {group && (
+            <button onClick={() => onOpenGroup(group.id)} title="그룹 메인으로"
+              className="mt-1 flex items-center gap-1 text-[11px] text-slate-400 hover:text-indigo-600 transition-colors">
+              🎯 {group.name} ↗
+            </button>
+          )}
           <p className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium">
             <span className={`h-1.5 w-1.5 rounded-full ${auto.enabled ? 'animate-pulse bg-green-500' : 'bg-slate-300'}`} />
             <span className={auto.enabled ? 'text-green-600' : 'text-slate-400'}>{auto.enabled ? '활성' : '일시정지'}</span>
