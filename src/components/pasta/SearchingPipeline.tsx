@@ -10,8 +10,9 @@ import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
 import { promotionBudget } from '../../lib/promotion';
 import { judgeBreaking } from '../../lib/breakingDetector';
-import { cheapStageSettings, writingStageSettings } from '../../lib/stageModel';
-import type { Campaign, Category, Task } from '../../types';
+import { resolveStageLLM } from '../../lib/stageLLM';
+import { useCampaigns } from '../../state/CampaignContext';
+import type { Campaign, Category, Task, StageLLMConfig } from '../../types';
 
 const SOURCE_REVIEW_TIMEOUT_MS = 90_000; // 전문 수집 대기 상한
 const HOUR_MS = 3600_000;
@@ -29,6 +30,13 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   const { articles } = useArticles();
   const { settings } = useSettings();
   const { tasks, addTasks, updateTask, deleteTask } = useTasks();
+  const { groups } = useCampaigns();
+  const group = groups.find(g => g.id === campaign.groupId);
+  // 단계 LLM 해석: 단계 오버라이드 → 그룹 → 전역. settings 클론으로 chatJson 호출부에 주입.
+  const stageSettings = (cfg?: StageLLMConfig) => {
+    const r = resolveStageLLM(settings, group?.profile, cfg);
+    return { ...settings, provider: r.provider, apiKey: r.apiKey, model: r.model, apiBaseUrl: r.baseUrl };
+  };
   const producingRef = useRef<Set<string>>(new Set());
   const topicJudgeRef = useRef<Set<string>>(new Set()); // 제외 주제 AI 판단 진행 중 가드
   const intentJudgeRef = useRef<Set<string>>(new Set()); // 주제 적합성 AI 판단 진행 중 가드
@@ -175,7 +183,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
           const snippets = articles
             .filter(a => t.sources.some(s => s.articleId === a.id))
             .map(a => a.description || a.fullText?.slice(0, 300) || '');
-          judgeTopicAdequacy({ title: t.title, snippets }, intent, cheapStageSettings(settings))
+          judgeTopicAdequacy({ title: t.title, snippets }, intent, stageSettings(campaign.settings.topicReview.llm))
             .then(r => {
               if (!mountedRef.current) return;
               // fail-CLOSED 3-state: 미결정(429/서킷/실패)→보류(재판단), 부적합→컷, 적합→통과
@@ -196,7 +204,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
           const snippets = articles
             .filter(a => t.sources.some(s => s.articleId === a.id))
             .map(a => a.description || a.fullText?.slice(0, 300) || '');
-          judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, cheapStageSettings(settings))
+          judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, stageSettings(campaign.settings.topicReview.llm))
             .then(r => {
               if (!mountedRef.current) return;
               if (r.excluded) updateTask(t.id, { error: `제외 주제 해당: ${r.matched || '동일 주제'}` });
@@ -245,7 +253,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       const attempt = (t.produceAttempts ?? 0) + 1;
       const MAX_ATTEMPTS = 3;
 
-      generateStory(srcArticles, writingStageSettings(settings, campaign.settings.generation.writingModel), category)
+      generateStory(srcArticles, stageSettings(campaign.settings.generation.llm), category)
         .then(async draft => {
           let review;
           // 검수 ctx: 소스 N≥2/금지매체/워터마크 게이트 활성화 (NIE 24f36a5)
@@ -253,7 +261,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
             sources: t.sources.map(s => ({ source: s.source })),
             images: srcArticles.flatMap(a => (a.images ?? []).map(im => ({ url: im.url }))),
           };
-          try { review = await reviewDraft(draft, cheapStageSettings(settings), reviewCtx); } catch { review = undefined; }
+          try { review = await reviewDraft(draft, stageSettings(campaign.settings.finalReview.llm), reviewCtx); } catch { review = undefined; }
           if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review', produceAttempts: attempt });
         })
         .catch((err: unknown) => {
