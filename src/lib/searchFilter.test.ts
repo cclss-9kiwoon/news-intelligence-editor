@@ -120,4 +120,44 @@ describe('shouldClaimCluster', () => {
     const d = shouldClaimCluster(cluster('cl1', ['a1', 'a2'], '뉴스'), arts, { ...baseCfg, bannedSources: ['soompi'], minMediaCount: 2 }, [], NOW);
     expect(d).toEqual({ ok: false, reason: 'below_min_media' });
   });
+
+  // ── 기사별 키워드 필터 (클러스터 OR 동반통과 버그 회귀) ──
+  it('topicKeywords: 무관 단일 기사(OPEC)는 ①에서 컷', () => {
+    const arts = [art('a1', 'yna', 'OPEC 원유 증산 합의')];
+    const d = shouldClaimCluster(cluster('cl1', ['a1'], 'OPEC 원유 증산'), arts, { ...baseCfg, topicKeywords: ['컴백', '앨범', '타이틀곡'] }, [], NOW);
+    expect(d).toEqual({ ok: false, reason: 'no_topic_keyword' });
+  });
+
+  it('topicKeywords: 혼합 클러스터 — 매칭 기사만 source로, 무관 기사 동반통과 안 함', () => {
+    const arts = [
+      art('a1', 'osen', 'aespa 정규앨범 컴백 확정'),   // 매칭(컴백)
+      art('a2', 'yna', 'OPEC 원유 증산 합의'),         // 무관
+      art('a3', 'hani', '농민소설 작가 별세'),          // 무관
+    ];
+    const d = shouldClaimCluster(cluster('cl1', ['a1', 'a2', 'a3'], 'aespa 컴백'), arts, { ...baseCfg, topicKeywords: ['컴백', '앨범'] }, [], NOW);
+    expect(d.ok).toBe(true);
+    if (d.ok) {
+      expect(d.sources).toHaveLength(1);
+      expect(d.sources[0].articleId).toBe('a1');
+    }
+  });
+
+  it('excludeKeywords: 제외어 포함 기사만 제거, 깨끗한 기사 잔존 시 통과', () => {
+    const arts = [
+      art('a1', 'osen', 'aespa 컴백 인터뷰'),
+      art('a2', 'star', 'aespa 컴백 광고 협찬 [홍보]'),  // 제외어 홍보
+    ];
+    const d = shouldClaimCluster(cluster('cl1', ['a1', 'a2'], 'aespa 컴백'), arts, { ...baseCfg, topicKeywords: ['컴백'], excludeKeywords: ['홍보'] }, [], NOW);
+    expect(d.ok).toBe(true);
+    if (d.ok) {
+      expect(d.sources).toHaveLength(1);
+      expect(d.sources[0].articleId).toBe('a1');
+    }
+  });
+
+  it('excludeKeywords: 전부 제외어면 클러스터 폐기', () => {
+    const arts = [art('a1', 'osen', 'aespa 컴백 [홍보] 광고')];
+    const d = shouldClaimCluster(cluster('cl1', ['a1'], 'aespa 컴백'), arts, { ...baseCfg, topicKeywords: ['컴백'], excludeKeywords: ['홍보'] }, [], NOW);
+    expect(d).toEqual({ ok: false, reason: 'excluded_keyword' });
+  });
 });
