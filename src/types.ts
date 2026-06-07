@@ -390,6 +390,7 @@ export type Task = {
   extractAttempts?: number;  // 전문 수집(추출) 실패 누적 — N회 0건이면 자동 폐기(extract_failed)
   topicChecked?: boolean;    // 제외 주제 AI 판단 통과 (주제 검수 단계)
   intentChecked?: boolean;   // 주제 정의(intent) 적합성 AI 판단 통과
+  producibleChecked?: boolean; // ②-B 제작가능성(이미지) gate 통과 — LLM 판단 전 컷용 영속 플래그
   published?: boolean;       // 발행 완료 (Hydra 배포 훅)
   publishedAt?: number;      // 발행 시각 (발행함 뷰 정렬/표시)
   discardReason?: DiscardReason;  // 폐기 사유
