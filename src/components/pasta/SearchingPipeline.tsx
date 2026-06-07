@@ -144,7 +144,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       budget--; // 동일 사이클 즉시 차감 → 레이스 차단
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [taskSig, articles, maxPerHour, windowMs, campaign.autoCollect?.enabled]);
+  }, [taskSig, articles, maxPerHour, windowMs, campaign.autoProcess?.enabled]);
 
   // ── 3. ② 검수: 전문 수집 대기 + 제외 주제 AI 판단 → 제작 전환 / 탈락 ──
   useEffect(() => {
