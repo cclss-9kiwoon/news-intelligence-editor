@@ -339,15 +339,24 @@ export type Campaign = {
   name: string;              // 아티클 종류 ("tier 3 아티클", "K-pop 컴백 속보")
   settings: CampaignSettings;
   configured?: boolean;      // 설정 1회 완료 여부 — true면 진입 시 칸반 직행
-  autoCollect?: AutoCollectConfig;  // 자동 수집 on/off + 주기
+  autoCollect?: AutoCollectConfig;  // 자동 수집(주기 fetch→① 큐) on/off + 주기
+  autoProcess?: AutoProcessConfig;  // 자동 진행(①→④ LLM 승급/판단/작성/검수) on/off
   createdAt: number;
   updatedAt: number;
 };
 
-/** 자동 수집 설정 — off면 SearchingPipeline 신규 태스크 생성만 멈춤(RSS 폴링과 분리) */
+/** 자동 수집 설정 — off면 주기 fetch 멈춤(① 큐 채우기). RSS 폴링과 분리 */
 export type AutoCollectConfig = {
   enabled: boolean;
   intervalMin: 15 | 30 | 60;
+};
+
+/**
+ * 자동 진행 설정 — off면 ①→② 승급 및 ②③④ LLM 처리 멈춤(① 큐엔 후보 계속 쌓임).
+ * autoCollect와 독립. ① 큐 채우기(shouldClaimCluster)는 두 토글 무관 항상 동작(LLM 비용 0).
+ */
+export type AutoProcessConfig = {
+  enabled: boolean;
 };
 
 // ─── Pasta Phase 2: 칸반 태스크 ─────────────────────────────────────
