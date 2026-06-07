@@ -25,7 +25,7 @@ export const NEWS_DOMAINS: string[] = [
   'news.daum.net', 'v.daum.net', 'entertain.daum.net', 'sports.daum.net',
   'news.naver.com', 'n.news.naver.com', 'entertain.naver.com', 'sports.naver.com',
   // 통신/종합
-  'yna.co.kr', 'yonhapnews.co.kr', 'newsis.com', 'news1.kr', 'ytn.co.kr', 'nocutnews.co.kr',
+  'yna.co.kr', 'yonhapnews.co.kr', 'newsis.com', 'news1.kr', 'nocutnews.co.kr',
   'chosun.com', 'joongang.co.kr', 'joins.com', 'donga.com', 'hani.co.kr', 'khan.co.kr',
   'hankyung.com', 'mk.co.kr', 'seoul.co.kr', 'kmib.co.kr', 'segye.com', 'munhwa.com',
   'hankookilbo.com', 'kyunghyang.com', 'edaily.co.kr', 'asiae.co.kr', 'heraldcorp.com',
@@ -40,7 +40,13 @@ export const NEWS_DOMAINS: string[] = [
   'mhns.co.kr', 'wowtv.co.kr', 'newsculture.press', 'entermedia.co.kr', 'topstarnews.net',
 ];
 
-/** 명시적 커뮤니티/블로그 차단(allowlist 우선이지만 안전망). 부분일치. */
+/**
+ * 명시적 커뮤니티/블로그 차단(allowlist 우선이지만 안전망).
+ * ⚠️ isNewsUrl에서 host.includes(b) 부분일치로 검사 — 'mlbpark'/'wordpress'처럼
+ * 의도적으로 짧은 substring 항목 있음. NEWS_DOMAINS에 'nate'/'mt' 같은 짧은 토큰을
+ * 추가하면 여기 항목과 겹쳐 정상 매체가 차단될 수 있으니, 매체 추가 시 충돌 확인 필수.
+ * (단, 구조상 block은 차감만 하므로 잘못 admit은 불가 — 과차단 위험만 있음.)
+ */
 const COMMUNITY_BLOCK: string[] = [
   'instiz.net', 'theqoo.net', 'dcinside.com', 'pann.nate.com', 'nate.com',
   'fmkorea.com', 'ruliweb.com', 'clien.net', 'mlbpark', 'bobaedream.co.kr',
