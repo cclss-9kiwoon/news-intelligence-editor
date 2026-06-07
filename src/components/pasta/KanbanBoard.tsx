@@ -5,7 +5,7 @@ import { useClusters } from '../../state/ClustersContext';
 import { useCampaigns } from '../../state/CampaignContext';
 import { useSettings } from '../../state/SettingsContext';
 import { shouldClaimCluster } from '../../lib/searchFilter';
-import { staleTaskIds, hoursToMs } from '../../lib/taskCleanup';
+import { staleTaskIds, staleCountByStatus, hoursToMs } from '../../lib/taskCleanup';
 import { IconTrash, IconRefresh } from './icons';
 import { GoldenTimeBar, GaugeChip, InfoChip, formatRemaining } from './kanbanPrimitives';
 import type { Task, TaskStatus } from '../../types';
@@ -59,6 +59,11 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   // staleHours select는 전역 공유, 삭제는 컬럼별 status 한정. tasks는 이미 발행·폐기 제외분.
   // ①searching은 골든타임 만료(effect#1b)로 자동 정리되지만 수동 정리도 노출(즉시 비우기 용).
   const [staleHours, setStaleHours] = useState(24);
+  // 컬럼 뱃지 건수 — staleCountByStatus로 단일 패스(렌더당 status별 재계산 방지)
+  const staleCounts = useMemo(
+    () => staleCountByStatus(tasks, campaignId, hoursToMs(staleHours), Date.now(), COLUMNS.map(c => c.status)),
+    [tasks, campaignId, staleHours],
+  );
   const staleIdsFor = (status: TaskStatus) =>
     staleTaskIds(tasks, campaignId, hoursToMs(staleHours), Date.now(), { status });
   const cleanupStatus = (status: TaskStatus, label: string) => {
@@ -203,7 +208,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
               (a.goldenTime?.expiresAt ?? Infinity) - (b.goldenTime?.expiresAt ?? Infinity));
           }
           const activeCount = colTasks.filter(taskActive).length;
-          const colStale = staleIdsFor(col.status).length;  // 이 단계 N시간+ 경과 건수
+          const colStale = staleCounts[col.status] ?? 0;  // 이 단계 N시간+ 경과 건수
           const isCollapsed = collapsed.has(col.status);
           if (isCollapsed) {
             return (
