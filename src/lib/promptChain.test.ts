@@ -63,6 +63,15 @@ describe('sanitizeBody', () => {
     expect(clean).not.toContain('## 2.');
     expect(clean).not.toContain('# 1.');
   });
+
+  it('빈 <p> 단락 제거', () => {
+    expect(sanitizeBody('<p>내용</p><p></p><p>  </p><p>&nbsp;</p>')).toBe('<p>내용</p>');
+  });
+
+  it('src 없는/빈 <img> 제거, 실제 src는 유지', () => {
+    expect(sanitizeBody('<img alt="x"><img src=""><p>본문</p><img src="https://a/i.jpg" alt="t">'))
+      .toBe('<p>본문</p><img src="https://a/i.jpg" alt="t">');
+  });
 });
 
 describe('generateStory', () => {

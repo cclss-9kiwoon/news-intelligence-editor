@@ -40,6 +40,7 @@ export function matchEntity(haystack: string, allowlist: string[]): string | nul
 /** 점유 판정 사유 (테스트·디버깅용 식별자) */
 export type ClaimReason =
   | 'already_claimed'        // 클러스터 기사 중 이미 점유된 것 존재
+  | 'discarded_dup'          // 폐기/거부 원장과 중복(title/url/articleId)
   | 'no_articles'            // 소스 필터(allowed/banned) 후 기사 0건
   | 'below_min_media'        // 매체 수 < minMediaCount
   | 'no_topic_keyword'       // 포함 키워드 미등장
@@ -57,12 +58,20 @@ export type ClaimDecision =
  * 클러스터를 태스크로 점유할지 판정.
  * existingTasks로부터 점유/기보도/엔티티 카운트를 산출하므로 자체완결(순수).
  */
+/** 폐기/거부 원장 조회 인덱스 (discardLedger.buildDiscardIndex 결과). 순수성 위해 주입받음. */
+export type DiscardLookup = {
+  titleSigs: Set<string>;
+  urls: Set<string>;       // originalKey 정규화 URL
+  articleIds: Set<string>;
+};
+
 export function shouldClaimCluster(
   cluster: Cluster,
   articles: Article[],
   searching: SourceConfig,
   existingTasks: Task[],
   now: number,
+  discarded?: DiscardLookup,
 ): ClaimDecision {
   const {
     minMediaCount, topicKeywords, excludeKeywords, allowedSources = [], bannedSources = [],
@@ -74,6 +83,23 @@ export function shouldClaimCluster(
   existingTasks.forEach(t => t.sources.forEach(s => claimedArticleIds.add(s.articleId)));
   if (cluster.articleIds.some(id => claimedArticleIds.has(id))) {
     return { ok: false, reason: 'already_claimed' };
+  }
+
+  // 폐기/거부 원장 대조 — title 시그니처 / URL / articleId 중 하나라도 일치 시 재유입 차단.
+  // (영구삭제로 task가 사라져도 원장은 잔존 → 재claim 방지. title로 다른 URL 같은 사건도 차단.)
+  if (discarded) {
+    if (cluster.representativeTitle && discarded.titleSigs.has(normalizeTitle(cluster.representativeTitle))) {
+      return { ok: false, reason: 'discarded_dup' };
+    }
+    if (cluster.articleIds.some(id => discarded.articleIds.has(id))) {
+      return { ok: false, reason: 'discarded_dup' };
+    }
+    const clusterUrls = articles
+      .filter(a => cluster.articleIds.includes(a.id))
+      .map(a => originalKey(a.link));
+    if (clusterUrls.some(u => discarded.urls.has(u))) {
+      return { ok: false, reason: 'discarded_dup' };
+    }
   }
 
   // 소스 필터

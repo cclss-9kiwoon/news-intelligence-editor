@@ -20,6 +20,8 @@ export const STORAGE_KEYS = {
   settings: 'nie:settings',
   // v2: 단일 드래프트 스키마. 구버전 'nie:history'(3채널/이중언어)는 로드하지 않고 폐기.
   history: 'nie:history.v2',
+  // 폐기/거부 원장 — 재유입 차단(영속). 삭제된 task와 무관하게 잔존.
+  discarded: 'nie:discarded.v1',
 } as const;
 
 // ─── File-based settings backup ─────────────────────────────────────

@@ -4,12 +4,21 @@ import { chatJson } from './openai';
 import { extractArticleText } from './scraper';
 import { buildProjectRulesText } from './projectRules';
 
-// body에 남은 내부 섹션 라벨 줄("# 1. ...", "## 2. ...")을 제거하는 안전망
+// body에 남은 내부 섹션 라벨 줄("# 1. ...", "## 2. ...") 제거 + 빈 HTML 노드 정리.
+// 빈 <p></p>(렌더 시 빈 단락) / src 없는 <img>(깨진 이미지)가 생성물에 들어오므로 후처리.
 export function sanitizeBody(body: string): string {
   return body
     .split('\n')
     .filter(line => !/^\s*#{1,6}\s*\d+\.\s/.test(line))
     .join('\n')
+    // src가 없거나 빈 <img> 제거 (인라인 이미지는 실제 src 있을 때만 유지)
+    .replace(/<img\b[^>]*>/gi, (tag) => {
+      const m = tag.match(/\bsrc\s*=\s*["']?([^"'\s>]*)/i);
+      return m && m[1].trim() ? tag : '';
+    })
+    // 빈 단락 <p></p>, <p> </p>, <p>&nbsp;</p> 제거
+    .replace(/<p>\s*(?:&nbsp;|&#160;|\s)*<\/p>/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
