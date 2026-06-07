@@ -6,10 +6,12 @@ import { KanbanBoard } from './KanbanBoard';
 import { StatusView } from './views/StatusView';
 import { PublishedView } from './views/PublishedView';
 import { DiscardedView } from './views/DiscardedView';
+import { ImageLibrary } from './ImageLibrary';
 import { IconBoard, IconChart, IconSend, IconTrash, IconRefresh, IconBolt, IconSettings, IconWrench, IconArrowLeft } from './icons';
 import type { ReactElement } from 'react';
 
-type ShellView = 'board' | 'status' | 'published' | 'discarded';
+type ShellView = 'board' | 'status' | 'published' | 'discarded' | 'images';
+const IconImage = (p: { className?: string }) => <span className={p.className} aria-hidden>🖼</span>;
 
 const INTERVALS: (15 | 30 | 60)[] = [15, 30, 60];
 
@@ -18,6 +20,7 @@ const NAV: { id: ShellView; Icon: (p: { className?: string }) => ReactElement; l
   { id: 'status', Icon: IconChart, label: '현황' },
   { id: 'published', Icon: IconSend, label: '발행함' },
   { id: 'discarded', Icon: IconTrash, label: '폐기함' },
+  { id: 'images', Icon: IconImage, label: '이미지' },
 ];
 
 /**
@@ -125,6 +128,7 @@ export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTa
         {view === 'status' && <StatusView campaignId={campaign.id} onOpenTask={onOpenTask} />}
         {view === 'published' && <PublishedView campaignId={campaign.id} onOpenTask={onOpenTask} />}
         {view === 'discarded' && <DiscardedView campaignId={campaign.id} />}
+        {view === 'images' && <ImageLibrary groupId={campaign.groupId} />}
       </main>
     </div>
   );
