@@ -540,7 +540,8 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
       {step === 2 && (
         <Section title="📌 주제 검수" desc="어떤 주제를 고르나 + 쓸 만한 출처가 모였나" auto sequential={!isConfigured} onSave={() => saveAndNext(2)} saved={savedSteps.has(2)}>
           <PromptField label="주제 정의 (주력)" help="이 캠페인이 다룰 주제를 자연어로 적습니다. AI가 이 정의에 맞는 기사만 검수 단계로 올립니다. 포함 키워드보다 이게 주력 선별 기준입니다." value={s.topicReview.intent ?? ''}
-            onChange={v => setTopic({ intent: v })} onReset={() => setTopic({ intent: '' })} rows={2} />
+            onChange={v => setTopic({ intent: v })} onReset={() => setTopic({ intent: '' })} rows={2}
+            placeholder={'✅ 아이돌 컴백·신곡 발매, 차트 성과. 열애·논란 제외\n❌ "K-pop 기사" (너무 넓음 → 전건 통과)'} />
           <p className="-mt-2 text-[11px] text-slate-400">예: "K-pop 컴백·신보 발매 소식" / "아이돌 일상·예능·SNS" / "연예계 사건·사고·논란"{group?.profile.character ? ` · 채널 성격: ${group.profile.character}` : ''}</p>
           <PromptField label="주제 선정 기준" help="AI가 어떤 주제를 기사로 고를지 판단하는 기준입니다. 최신성·인지도·다양성 같은 우선 가치를 적습니다." value={s.topicReview.selectionCriteria}
             onChange={v => setTopic({ selectionCriteria: v })} onReset={() => setTopic({ selectionCriteria: '' })} rows={3} />
@@ -718,8 +719,8 @@ function Field({ label, children }: { label: React.ReactNode; children: React.Re
   );
 }
 
-function PromptField({ label, value, onChange, onReset, rows, help }: {
-  label: string; value: string; onChange: (v: string) => void; onReset: () => void; rows: number; help?: string;
+function PromptField({ label, value, onChange, onReset, rows, help, placeholder }: {
+  label: string; value: string; onChange: (v: string) => void; onReset: () => void; rows: number; help?: string; placeholder?: string;
 }) {
   return (
     <div>
@@ -731,6 +732,7 @@ function PromptField({ label, value, onChange, onReset, rows, help }: {
         className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm font-mono focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100 transition-colors"
         rows={rows}
         value={value}
+        placeholder={placeholder}
         onChange={e => onChange(e.target.value)}
       />
     </div>
