@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { chatJson, getLlmConcurrency, MAX_CONCURRENT_LLM, getLlmCircuitState, resetLlmCircuit, _setNowFn, _setSleepFn } from './openai';
+import { chatJson, getLlmConcurrency, MAX_CONCURRENT_LLM, getLlmCircuitState, resetLlmCircuit, _setNowFn, _setSleepFn, setMaxConcurrentLlm } from './openai';
 
 const MAX_429_RETRIES = 3;
 // 429 응답 mock 헬퍼 — retry-after 헤더 지원
@@ -102,6 +102,26 @@ describe('chatJson 글로벌 동시성 상한', () => {
       Array.from({ length: MAX_CONCURRENT_LLM + 2 }, () =>
         chatJson({ apiKey: 'k', model: 'm', system: 's', user: 'u' })));
     expect(getLlmConcurrency()).toEqual({ active: 0, queued: 0 });
+  });
+
+  it('기본 동시성 상한 8 (throughput)', () => {
+    expect(MAX_CONCURRENT_LLM).toBe(8);
+  });
+
+  it('setMaxConcurrentLlm 런타임 조정 + 1 미만 무시', async () => {
+    const orig = MAX_CONCURRENT_LLM;
+    setMaxConcurrentLlm(2);
+    let inFlight = 0, peak = 0;
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      inFlight++; peak = Math.max(peak, inFlight);
+      await new Promise(r => setTimeout(r, 10)); inFlight--;
+      return { ok: true, json: async () => ({ choices: [{ message: { content: '{"ok":1}' } }] }) } as unknown as Response;
+    }));
+    await Promise.all(Array.from({ length: 6 }, () => chatJson({ apiKey: 'k', model: 'm', system: 's', user: 'u' })));
+    expect(peak).toBeLessThanOrEqual(2);
+    setMaxConcurrentLlm(0);            // 무시
+    expect(MAX_CONCURRENT_LLM).toBe(2);
+    setMaxConcurrentLlm(orig);         // 복원
   });
 });
 

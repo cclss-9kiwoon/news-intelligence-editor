@@ -25,11 +25,28 @@ export type ChatJsonArgs = {
   baseUrl?: string;
 };
 
-// ─── 글로벌 LLM 동시 호출 상한 (429 완화) ───────────────────────────
+// ─── 글로벌 LLM 동시 호출 상한 (throughput vs 429) ──────────────────
 // 모든 LLM 호출(generateStory/reviewDraft/translate/judge…)이 chatJson을
 // 통과하므로, 여기 세마포어 하나로 전 파이프라인 동시성을 제한한다.
 // 동시 MAX_CONCURRENT_LLM개만 실행, 초과분은 FIFO 큐로 대기.
-export const MAX_CONCURRENT_LLM = 3;
+//
+// 기본 8 (유료 키 RPM 여유 → ②판단·③작성·④검수 직렬화 병목 완화). 순간 429는
+// 위 429 지수백오프가 흡수. VITE_MAX_CONCURRENT_LLM로 빌드시 조정, setMaxConcurrentLlm로 런타임 조정.
+const DEFAULT_MAX_CONCURRENT_LLM = 8;
+function envMaxConcurrent(): number {
+  try {
+    const v = Number((import.meta as any)?.env?.VITE_MAX_CONCURRENT_LLM);
+    return Number.isFinite(v) && v > 0 ? Math.floor(v) : DEFAULT_MAX_CONCURRENT_LLM;
+  } catch {
+    return DEFAULT_MAX_CONCURRENT_LLM;
+  }
+}
+export let MAX_CONCURRENT_LLM = envMaxConcurrent();
+
+/** 런타임 동시성 상한 조정(설정 UI/튜닝용). 1 미만 무시. */
+export function setMaxConcurrentLlm(n: number): void {
+  if (Number.isFinite(n) && n >= 1) MAX_CONCURRENT_LLM = Math.floor(n);
+}
 let activeLlm = 0;
 const llmQueue: Array<() => void> = [];
 
