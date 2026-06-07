@@ -373,7 +373,7 @@ export type TaskSource = {
   hasFullText: boolean;
 };
 
-export type DiscardReason = 'low_quality' | 'off_topic' | 'duplicate' | 'other';
+export type DiscardReason = 'low_quality' | 'off_topic' | 'duplicate' | 'extract_failed' | 'other';
 
 export type Task = {
   id: string;
@@ -387,6 +387,7 @@ export type Task = {
   review?: ReviewResult;     // 검수 결과
   error?: string;
   produceAttempts?: number;  // 제작 시도 횟수 (자동 재시도용)
+  extractAttempts?: number;  // 전문 수집(추출) 실패 누적 — N회 0건이면 자동 폐기(extract_failed)
   topicChecked?: boolean;    // 제외 주제 AI 판단 통과 (주제 검수 단계)
   intentChecked?: boolean;   // 주제 정의(intent) 적합성 AI 판단 통과
   published?: boolean;       // 발행 완료 (Hydra 배포 훅)
