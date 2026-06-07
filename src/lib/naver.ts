@@ -71,7 +71,9 @@ export async function searchNaver(
     clearTimeout(timer);
 
     if (!res.ok) {
-      console.warn(`[naver] search failed: HTTP ${res.status}`);
+      console.warn(res.status === 404
+        ? '[naver] search 404 — /api/naver-search 프록시는 dev 전용. 배포본은 검색 API 미지원(로컬 5180에서만).'
+        : `[naver] search failed: HTTP ${res.status}`);
       return [];
     }
 
@@ -116,6 +118,10 @@ export async function testNaverConnection(
     if (res.ok) return { ok: true, message: '연결됨' };
     if (res.status === 401 || res.status === 403) {
       return { ok: false, message: '키가 올바르지 않습니다.' };
+    }
+    if (res.status === 404) {
+      // /api/naver-search 프록시는 Vite dev 서버 전용 → 배포(정적 호스팅)엔 없음
+      return { ok: false, message: '배포본은 검색 API 미지원 — 로컬 dev(localhost:5180)에서만 동작합니다. (키 문제 아님)' };
     }
     return { ok: false, message: `검색 API 오류 (${res.status})` };
   } catch (err: any) {
