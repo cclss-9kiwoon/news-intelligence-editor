@@ -27,6 +27,25 @@ export function staleTaskIds(
     .map(t => t.id);
 }
 
+/**
+ * 단계별 정리 대상 건수 — UI 컬럼 뱃지용.
+ * statuses 각각에 staleTaskIds 적용한 count map. status 미지정 단계는 0.
+ */
+export function staleCountByStatus(
+  tasks: Task[],
+  campaignId: string,
+  olderThanMs: number,
+  now: number,
+  statuses: TaskStatus[],
+  opts: Omit<StaleOpts, 'status'> = {},
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const s of statuses) {
+    out[s] = staleTaskIds(tasks, campaignId, olderThanMs, now, { ...opts, status: s }).length;
+  }
+  return out;
+}
+
 /** 시간(시) → ms 헬퍼 (UI 선택값 변환용) */
 export function hoursToMs(hours: number): number {
   return hours * 3_600_000;
