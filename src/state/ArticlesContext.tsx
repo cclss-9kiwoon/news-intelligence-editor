@@ -6,6 +6,7 @@ import { classifyArticleCategory } from '../lib/clustering';
 import { enrichArticlesWithFullText, getLastEnrichMethod } from '../lib/scraper';
 import { fetchNaverArticles } from '../lib/naver';
 import { fetchDaumArticles } from '../lib/daum';
+import { searchFailureMessage, type SearchFetchStats } from '../lib/searchStats';
 
 const HIDDEN_MULTIPLIER = 3;
 const MIN_POLL_MS = 60_000;
@@ -101,11 +102,14 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
     setLoadingStatus(hasNaver || hasDaum ? '검색 API + RSS 수집 중...' : 'RSS 수집 중...');
     const enabled = sourcesRef.current.filter(s => s.enabled);
 
-    type Job = { label: string; kind: 'search' | 'rss'; run: () => Promise<Article[]> };
+    // search 잡은 stats(httpStatus/rawCount/droppedNonNews/finalCount) 동반 →
+    // 인증실패 / 빈응답 / allowlist 전량 drop을 구분해 정직한 메시지(거짓 키에러 방지).
+    type JobResult = { articles: Article[]; stats?: SearchFetchStats };
+    type Job = { label: string; kind: 'search' | 'rss'; run: () => Promise<JobResult> };
     const jobs: Job[] = [];
     if (hasNaver) jobs.push({ label: '네이버 검색', kind: 'search', run: () => fetchNaverArticles(naverQueriesRef.current, naverIdRef.current, naverSecretRef.current) });
     if (hasDaum) jobs.push({ label: '다음 검색', kind: 'search', run: () => fetchDaumArticles(daumQueriesRef.current, daumKeyRef.current) });
-    for (const s of enabled) jobs.push({ label: s.name, kind: 'rss', run: () => fetchRss(s, rss2jsonKeyRef.current) });
+    for (const s of enabled) jobs.push({ label: s.name, kind: 'rss', run: async () => ({ articles: await fetchRss(s, rss2jsonKeyRef.current) }) });
 
     const settled = await Promise.allSettled(jobs.map(j => j.run()));
     const failures: string[] = [];
@@ -114,13 +118,19 @@ export function ArticlesProvider({ children }: { children: ReactNode }) {
     settled.forEach((res, i) => {
       const job = jobs[i];
       if (res.status === 'fulfilled') {
-        incoming.push(...res.value);
+        const arts = res.value.articles;
+        incoming.push(...arts);
         if (job.kind === 'search') {
-          searchArticleCount += res.value.length;
-          searchEnrichedCount += res.value.filter(a => a.fullText).length;
+          searchArticleCount += arts.length;
+          searchEnrichedCount += arts.filter(a => a.fullText).length;
+          // stats 기반 정직한 분기 (401→키확인 / allowlist전량drop→정상 / 빈응답)
+          if (res.value.stats) {
+            const msg = searchFailureMessage(job.label, res.value.stats);
+            if (msg) failures.push(msg);
+          } else if (arts.length === 0) {
+            failures.push(`${job.label}: 결과 없음`);
+          }
         }
-        // 키 있는 검색 소스가 0건이면 인증/응답 실패 가능성 — 알림
-        if (job.kind === 'search' && res.value.length === 0) failures.push(`${job.label}: 결과 0 (키·인증 확인)`);
       } else {
         failures.push(`${job.label}: 실패`);
         console.warn(`[articles] source failed: ${job.label}`, res.reason);

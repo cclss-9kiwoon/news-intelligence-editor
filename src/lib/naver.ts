@@ -47,14 +47,18 @@ function stripHtml(html: string): string {
  * Search Naver News API for articles matching the query.
  * Requires clientId & clientSecret from Naver Developer Console.
  */
-export async function searchNaver(
+/** 검색 1회 결과 + HTTP 상태. httpStatus: 200 OK / 비정상 상태 / 0=네트워크·타임아웃. */
+export type NaverSearchRaw = { items: NaverSearchItem[]; httpStatus: number };
+
+/** searchNaver의 status-aware 내부 버전. 외부 호출은 searchNaver(배열) 사용. */
+export async function searchNaverRaw(
   query: string,
   clientId: string,
   clientSecret: string,
   display: number = 10,
   sort: 'sim' | 'date' = 'sim',
-): Promise<NaverSearchItem[]> {
-  if (!clientId || !clientSecret) return [];
+): Promise<NaverSearchRaw> {
+  if (!clientId || !clientSecret) return { items: [], httpStatus: 0 };
 
   try {
     const ctrl = new AbortController();
@@ -74,24 +78,36 @@ export async function searchNaver(
       console.warn(res.status === 404
         ? '[naver] search 404 — /api/naver-search 프록시는 dev 전용. 배포본은 검색 API 미지원(로컬 5180에서만).'
         : `[naver] search failed: HTTP ${res.status}`);
-      return [];
+      return { items: [], httpStatus: res.status };
     }
 
     const data = (await res.json()) as NaverSearchResponse;
     // Clean HTML entities from titles/descriptions
-    return (data.items || []).map(item => ({
+    const items = (data.items || []).map(item => ({
       ...item,
       title: stripHtml(item.title),
       description: stripHtml(item.description),
     }));
+    return { items, httpStatus: 200 };
   } catch (err: any) {
     if (err.name === 'AbortError') {
       console.warn('[naver] search timeout');
     } else {
       console.warn('[naver] search error:', err.message);
     }
-    return [];
+    return { items: [], httpStatus: 0 };
   }
+}
+
+/** 하위호환 배열 반환 래퍼 (enrichViaNaver 등에서 사용). */
+export async function searchNaver(
+  query: string,
+  clientId: string,
+  clientSecret: string,
+  display: number = 10,
+  sort: 'sim' | 'date' = 'sim',
+): Promise<NaverSearchItem[]> {
+  return (await searchNaverRaw(query, clientId, clientSecret, display, sort)).items;
 }
 
 export async function testNaverConnection(
@@ -172,6 +188,7 @@ export async function enrichViaNaver(
 // ─── Main Collection (Naver as primary source) ──────────────────────
 
 import type { Article, ArticleImage } from '../types';
+import type { SearchFetchResult } from './searchStats';
 import { makeArticleId } from './rss';
 import { extractArticleText } from './scraper';
 
@@ -192,19 +209,30 @@ export async function fetchNaverArticles(
   clientId: string,
   clientSecret: string,
   displayPerQuery: number = 15,
-): Promise<Article[]> {
-  if (!clientId || !clientSecret || queries.length === 0) return [];
+): Promise<SearchFetchResult> {
+  const empty = (httpStatus: number): SearchFetchResult =>
+    ({ articles: [], stats: { httpStatus, rawCount: 0, droppedNonNews: 0, finalCount: 0 } });
+  if (!clientId || !clientSecret || queries.length === 0) return empty(0);
 
-  // 1. Search all queries in parallel
+  // 1. Search all queries in parallel (status-aware)
   const allResults = await Promise.all(
-    queries.map(q => searchNaver(q, clientId, clientSecret, displayPerQuery, 'date')),
+    queries.map(q => searchNaverRaw(q, clientId, clientSecret, displayPerQuery, 'date')),
   );
+
+  // httpStatus 집계: 인증실패 우선
+  let httpStatus = 200;
+  for (const r of allResults) {
+    if (r.httpStatus === 401 || r.httpStatus === 403) { httpStatus = r.httpStatus; break; }
+    if (r.httpStatus !== 200 && httpStatus === 200) httpStatus = r.httpStatus;
+  }
 
   // 2. Dedupe by link — same article can appear in multiple query results
   const seen = new Set<string>();
   const naverItems: NaverSearchItem[] = [];
-  for (const results of allResults) {
-    for (const item of results) {
+  let rawCount = 0;
+  for (const r of allResults) {
+    for (const item of r.items) {
+      rawCount++;
       const key = item.originallink || item.link;
       if (key && !seen.has(key)) {
         seen.add(key);
@@ -213,7 +241,10 @@ export async function fetchNaverArticles(
     }
   }
 
-  if (naverItems.length === 0) return [];
+  // 네이버 뉴스 API는 뉴스 전용이라 allowlist drop 없음(droppedNonNews=0)
+  if (naverItems.length === 0) {
+    return { articles: [], stats: { httpStatus, rawCount, droppedNonNews: 0, finalCount: 0 } };
+  }
 
   const now = Date.now();
   const articles: Article[] = [];
@@ -279,7 +310,7 @@ export async function fetchNaverArticles(
 
   const withThumb = articles.filter(a => a.thumbnail).length;
   console.log(`[naver] collected ${articles.length} articles (${articles.filter(a => a.fullText).length} with full text, ${withThumb} with thumbnail)`);
-  return articles;
+  return { articles, stats: { httpStatus, rawCount, droppedNonNews: 0, finalCount: articles.length } };
 }
 
 /** Extract publisher name from original article URL */

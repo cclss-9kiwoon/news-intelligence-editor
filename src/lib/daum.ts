@@ -7,6 +7,7 @@
  */
 
 import type { Article, ArticleImage } from '../types';
+import type { SearchFetchResult } from './searchStats';
 import { makeArticleId } from './rss';
 import { extractArticleText } from './scraper';
 
@@ -94,12 +95,19 @@ function stripHtml(html: string): string {
     .trim();
 }
 
-export async function searchDaum(
+/** 검색 1회 결과 + HTTP 상태. httpStatus: 200 OK / 실제 비정상 상태 / 0=네트워크·타임아웃 오류. */
+export type DaumSearchRaw = { documents: DaumSearchDocument[]; httpStatus: number };
+
+/**
+ * searchDaum의 status-aware 내부 버전 — fetchDaumArticles가 인증실패/빈응답/allowlist-drop
+ * 을 구분하기 위해 httpStatus를 함께 반환. 외부 호출은 searchDaum(배열) 사용.
+ */
+export async function searchDaumRaw(
   query: string,
   restApiKey: string,
   size: number = 10,
-): Promise<DaumSearchDocument[]> {
-  if (!query || !restApiKey) return [];
+): Promise<DaumSearchRaw> {
+  if (!query || !restApiKey) return { documents: [], httpStatus: 0 };
 
   try {
     const ctrl = new AbortController();
@@ -117,19 +125,29 @@ export async function searchDaum(
       console.warn(res.status === 404
         ? '[daum] search 404 — /api/daum-search 프록시는 dev 전용. 배포본은 검색 API 미지원(로컬 5180에서만).'
         : `[daum] search failed: HTTP ${res.status}`);
-      return [];
+      return { documents: [], httpStatus: res.status };
     }
 
     const data = (await res.json()) as DaumSearchResponse;
-    return (data.documents || []).map(doc => ({
+    const documents = (data.documents || []).map(doc => ({
       ...doc,
       title: stripHtml(doc.title),
       contents: stripHtml(doc.contents),
     }));
+    return { documents, httpStatus: 200 };
   } catch (err: any) {
     console.warn('[daum] search error:', err?.message || err);
-    return [];
+    return { documents: [], httpStatus: 0 };
   }
+}
+
+/** 하위호환 배열 반환 래퍼. */
+export async function searchDaum(
+  query: string,
+  restApiKey: string,
+  size: number = 10,
+): Promise<DaumSearchDocument[]> {
+  return (await searchDaumRaw(query, restApiKey, size)).documents;
 }
 
 export async function testDaumConnection(restApiKey: string): Promise<SearchConnectionResult> {
@@ -167,18 +185,29 @@ export async function fetchDaumArticles(
   queries: string[],
   restApiKey: string,
   displayPerQuery: number = 10,
-): Promise<Article[]> {
-  if (!restApiKey || queries.length === 0) return [];
+): Promise<SearchFetchResult> {
+  const empty = (httpStatus: number): SearchFetchResult =>
+    ({ articles: [], stats: { httpStatus, rawCount: 0, droppedNonNews: 0, finalCount: 0 } });
+  if (!restApiKey || queries.length === 0) return empty(0);
 
   const allResults = await Promise.all(
-    queries.map(q => searchDaum(q, restApiKey, displayPerQuery)),
+    queries.map(q => searchDaumRaw(q, restApiKey, displayPerQuery)),
   );
+
+  // httpStatus 집계: 인증실패(401/403) 우선, 없으면 첫 비정상, 다 정상이면 200
+  let httpStatus = 200;
+  for (const r of allResults) {
+    if (r.httpStatus === 401 || r.httpStatus === 403) { httpStatus = r.httpStatus; break; }
+    if (r.httpStatus !== 200 && httpStatus === 200) httpStatus = r.httpStatus;
+  }
 
   const seen = new Set<string>();
   const items: DaumSearchDocument[] = [];
+  let rawCount = 0;
   let droppedNonNews = 0;
-  for (const results of allResults) {
-    for (const item of results) {
+  for (const r of allResults) {
+    for (const item of r.documents) {
+      rawCount++;
       if (!item.url || seen.has(item.url)) continue;
       seen.add(item.url);
       // 뉴스 전용: allowlist 미포함(커뮤니티/블로그/티스토리 등) drop
@@ -236,7 +265,7 @@ export async function fetchDaumArticles(
   }
 
   console.log(`[daum] collected ${articles.length} articles (${articles.filter(a => a.fullText).length} with full text)`);
-  return articles;
+  return { articles, stats: { httpStatus, rawCount, droppedNonNews, finalCount: articles.length } };
 }
 
 function extractSourceName(url: string): string {
