@@ -8,6 +8,7 @@ import { judgeTopicAdequacy } from '../../lib/topicJudge';
 import { assessProducibility } from '../../lib/producibility';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
+import { loadDiscarded, buildDiscardIndex, recordDiscard, makeDiscardEntry } from '../../lib/discardLedger';
 import { promotionBudget } from '../../lib/promotion';
 import { judgeBreaking } from '../../lib/breakingDetector';
 import { resolveStageLLM } from '../../lib/stageLLM';
@@ -76,12 +77,14 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     const now = Date.now();
     const working: Task[] = tasks.filter(t => t.campaignId === campaign.id);
 
+    // 폐기/거부 원장 인덱스 — 이미 폐기·거부된 사건(title/url/articleId) ① 재유입 차단
+    const discardIdx = buildDiscardIndex(loadDiscarded(now));
     // 점진화: 한 사이클에 클러스터 전부 생성 금지(흰화면/프리즈 방지). 상한만큼 모아 1회 벌크 setState.
     const MAX_NEW_PER_CYCLE = 8;  // 점진적 — 사이클당 소량씩 자연스럽게 쌓이게(와르르 방지)
     const batch: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>[] = [];
     for (const cluster of clusters) {
       if (batch.length >= MAX_NEW_PER_CYCLE) break;
-      const decision = shouldClaimCluster(cluster, articles, searchingCfg, working, now);
+      const decision = shouldClaimCluster(cluster, articles, searchingCfg, working, now, discardIdx);
       if (!decision.ok) continue;
       // 골든타임: 대표 기사 pubDate 기준 유효창. 속보면 짧은 창(breakingGoldenMinutes).
       const repArt = articles.find(a => a.id === decision.sources[0]?.articleId);
@@ -184,8 +187,10 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
               if (!mountedRef.current) return;
               // fail-CLOSED 3-state: 미결정(429/서킷/실패)→보류(재판단), 부적합→컷, 적합→통과
               if (!r.decided) return; // 보류 — intentChecked 안 함 → 다음 사이클 재판단(키/서킷 풀리면 결정)
-              if (!r.adequate) updateTask(t.id, { error: `주제 부적합: ${r.reason || '캠페인 주제와 불일치'}` });
-              else updateTask(t.id, { intentChecked: true });
+              if (!r.adequate) {
+                recordDiscard(makeDiscardEntry({ title: t.title, articleIds: t.sources.map(s => s.articleId) }));  // 부적합 거부 → 원장 기록(재유입 차단)
+                updateTask(t.id, { error: `주제 부적합: ${r.reason || '캠페인 주제와 불일치'}` });
+              } else updateTask(t.id, { intentChecked: true });
             })
             .catch(() => { /* 예외=미결정=보류. intentChecked 세팅 X → 재시도 */ })
             .finally(() => { intentJudgeRef.current.delete(t.id); });
@@ -203,8 +208,10 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
           judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, stageSettings(campaign.settings.topicReview.llm))
             .then(r => {
               if (!mountedRef.current) return;
-              if (r.excluded) updateTask(t.id, { error: `제외 주제 해당: ${r.matched || '동일 주제'}` });
-              else updateTask(t.id, { topicChecked: true });
+              if (r.excluded) {
+                recordDiscard(makeDiscardEntry({ title: t.title, articleIds: t.sources.map(s => s.articleId) }));  // 제외 주제 거부 → 원장 기록(재유입 차단)
+                updateTask(t.id, { error: `제외 주제 해당: ${r.matched || '동일 주제'}` });
+              } else updateTask(t.id, { topicChecked: true });
             })
             .catch(() => { if (mountedRef.current) updateTask(t.id, { topicChecked: true }); }) // fail-open. PM ② 견고화에서 보류로 교체 예정
             .finally(() => { topicJudgeRef.current.delete(t.id); });

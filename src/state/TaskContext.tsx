@@ -1,6 +1,7 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
 import type { Task, TaskStatus, DiscardReason } from '../types';
 import { loadJson, saveJson } from '../lib/storage';
+import { recordDiscard, makeDiscardEntry } from '../lib/discardLedger';
 
 const TASKS_KEY = 'pasta:tasks';
 
@@ -25,6 +26,14 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<Task[]>(() => loadJson<Task[]>(TASKS_KEY, []));
 
   useEffect(() => { saveJson(TASKS_KEY, tasks); }, [tasks]);
+
+  // 폐기/거부 원장 기록용 최신 tasks 참조(클로저 stale 방지). 삭제 전 task에서 엔트리 생성.
+  const tasksRef = useRef(tasks);
+  useEffect(() => { tasksRef.current = tasks; }, [tasks]);
+  const recordTaskDiscard = (id: string) => {
+    const t = tasksRef.current.find(x => x.id === id);
+    if (t) recordDiscard(makeDiscardEntry({ title: t.title, articleIds: t.sources.map(s => s.articleId) }));
+  };
 
   const tasksForCampaign = useCallback(
     (campaignId: string) => tasks.filter(t => t.campaignId === campaignId),
@@ -56,7 +65,9 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const deleteTask = useCallback((id: string) => {
+    recordTaskDiscard(id);  // 원장 기록 → 삭제돼도 같은 사건 ① 재유입 차단
     setTasks(prev => prev.filter(t => t.id !== id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const togglePriority = useCallback((id: string) => {
@@ -72,7 +83,9 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const discardTask = useCallback((id: string, reason: DiscardReason) => {
+    recordTaskDiscard(id);  // 보존 폐기도 원장 기록 → 같은 사건 ① 재유입 차단
     setTasks(prev => prev.map(t => (t.id === id ? { ...t, discardReason: reason, paused: false, updatedAt: Date.now() } : t)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
