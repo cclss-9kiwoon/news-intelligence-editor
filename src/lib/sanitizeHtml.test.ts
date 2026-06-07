@@ -59,4 +59,16 @@ describe('sanitizeHtml', () => {
     expect(sanitizeHtml('')).toBe('');
     expect(sanitizeHtml(undefined as unknown as string)).toBe('');
   });
+
+  it('기존 draft의 src 없는/빈 <img> 렌더 정화로 제거', () => {
+    const out = sanitizeHtml('<p>본문</p><img src=""><img alt="x"><img src="https://a/i.jpg">');
+    expect(out).toContain('<p>본문</p>');
+    expect(out).toContain('src="https://a/i.jpg"');
+    // src 없는/빈 img는 제거 — 남은 img는 1개(유효 src)
+    expect((out.match(/<img/g) || []).length).toBe(1);
+  });
+
+  it('빈 <p> 제거', () => {
+    expect(sanitizeHtml('<p>x</p><p></p><p>  </p>')).toBe('<p>x</p>');
+  });
 });

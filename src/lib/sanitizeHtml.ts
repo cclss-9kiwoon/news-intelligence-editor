@@ -24,7 +24,7 @@ const ALLOWED_ATTR = ['src', 'alt'];
 
 export function sanitizeHtml(html: string): string {
   if (!html) return '';
-  return DOMPurify.sanitize(html, {
+  const clean = DOMPurify.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
     // 위험 태그는 콘텐츠째 제거(script/style 내부 텍스트 노출 방지)
@@ -38,4 +38,13 @@ export function sanitizeHtml(html: string): string {
     // http(s)·data 이미지만 — javascript: 등 스킴 차단
     ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|data:image\/(?:png|jpe?g|gif|webp);|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
   }) as unknown as string;
+
+  // 렌더 정화: src 없는/빈 <img>(깨진 이미지) + 빈 <p> 제거.
+  // 신규 생성은 sanitizeBody가 막지만, *기존 draft*에 남은 <img src=""> 등은 렌더 시점에 여기서 정리.
+  return clean
+    .replace(/<img\b[^>]*>/gi, (tag) => {
+      const m = tag.match(/\bsrc\s*=\s*["']?([^"'\s>]*)/i);
+      return m && m[1].trim() ? tag : '';
+    })
+    .replace(/<p>\s*(?:&nbsp;|&#160;|\s)*<\/p>/gi, '');
 }
