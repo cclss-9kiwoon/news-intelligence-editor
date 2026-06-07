@@ -64,6 +64,12 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
   const sourceFacts = draft?.sourceFacts ?? [];
   const srcArticles = articles.filter(a => task.sources.some(s => s.articleId === a.id));
 
+  // 히어로 이미지 + 본문 — 인라인 첫 <img> 우선, 없으면 원문 이미지/썸네일 폴백.
+  // 히어로로 끌어올린 인라인 이미지는 본문에서 제거(중복 방지). 미리보기 2곳(중앙·우측) 공통.
+  const inlineHero = firstImgSrc(body);
+  const heroSrc = inlineHero ?? srcArticles[0]?.images?.[0]?.url ?? srcArticles[0]?.thumbnail;
+  const bodyRender = inlineHero ? stripFirstImg(body) : body;
+
   // (2) 미저장 이탈 가드
   const dirty =
     headline !== (draft?.headline ?? '') ||
@@ -221,11 +227,14 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
                   onChange={e => setBody(e.target.value)}
                 />
               : body.trim()
-                /* 미리보기 — 반드시 sanitizeHtml(DOMPurify) 경유. raw 금지. */
-                ? <div
-                    className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-200 bg-white/80 px-4 py-3 text-sm leading-relaxed text-slate-700 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-200 [&_blockquote]:pl-3 [&_blockquote]:text-slate-500 [&_figcaption]:text-xs [&_figcaption]:text-slate-400 [&_h2]:mt-3 [&_h2]:font-bold [&_h3]:mt-2 [&_h3]:font-semibold [&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-lg [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-5"
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(body) }}
-                  />
+                /* 미리보기 — 기사형(상단 히어로 + prose 본문). 반드시 sanitizeHtml 경유, raw 금지. */
+                ? <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-200 bg-white/80">
+                    {heroSrc && <img src={heroSrc} alt="" className="h-48 w-full rounded-t-lg object-cover" />}
+                    <div
+                      className={`px-4 py-3 text-sm text-slate-700 ${PROSE_CLS}`}
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(bodyRender) }}
+                    />
+                  </div>
                 : <div className="flex min-h-0 flex-1 items-center justify-center rounded-lg border border-dashed border-slate-200 text-xs text-slate-300">본문 없음 — 소스 탭에서 편집하거나 재생성</div>}
           </div>
           <div>
@@ -247,12 +256,10 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
               creator_newsletter: { label: '뉴스레터', bg: 'bg-amber-600' },
             };
             const badge = BADGE[ct] ?? BADGE.news_media;
-            // 히어로 이미지: 본문 인라인 <img>는 sanitizeHtml이 살림. 별도 히어로는 원문 이미지 폴백.
-            const hero = srcArticles[0]?.images?.[0]?.url ?? srcArticles[0]?.thumbnail;
             return (
-              // 뉴스 기사형 레이아웃 (X/소셜 카드 폐기) — 헤드라인 + 히어로 + 렌더된 본문
+              // 뉴스 기사형 레이아웃 (X/소셜 카드 폐기) — 헤드라인 + 히어로 + 렌더된 본문(prose)
               <article className="overflow-hidden rounded-2xl border border-white/70 bg-white shadow-sm">
-                {hero && <img src={hero} alt="" className="h-40 w-full object-cover" />}
+                {heroSrc && <img src={heroSrc} alt="" className="h-40 w-full object-cover" />}
                 <div className="p-4">
                   <div className="mb-2 flex items-center gap-2">
                     <span className="truncate text-[11px] font-semibold text-slate-500">{channelName}</span>
@@ -262,8 +269,8 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
                   {/* 본문 HTML 렌더 — 반드시 sanitizeHtml(DOMPurify) 경유. raw 금지. 자르기는 max-h+overflow. */}
                   {body.trim()
                     ? <div
-                        className="mt-2 max-h-80 max-w-none overflow-y-auto text-sm leading-relaxed text-slate-700 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-200 [&_blockquote]:pl-3 [&_blockquote]:text-slate-500 [&_figcaption]:text-xs [&_figcaption]:text-slate-400 [&_h2]:mt-3 [&_h2]:font-bold [&_h3]:mt-2 [&_h3]:font-semibold [&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-lg [&_li]:ml-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_strong]:font-semibold [&_ul]:list-disc [&_ul]:pl-5"
-                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(body) }}
+                        className={`mt-2 max-h-80 max-w-none overflow-y-auto text-sm text-slate-700 ${PROSE_CLS}`}
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(bodyRender) }}
                       />
                     : <p className="mt-2 text-xs text-slate-300">본문 미리보기</p>}
                   {tags.length > 0 && <p className="mt-3 text-xs text-slate-400">{tags.map(t => `#${t}`).join(' ')}</p>}
@@ -295,4 +302,20 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
 
 function stripHtml(s: string): string {
   return s.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
+}
+
+// 기사 prose 타이포 — 단락 여백/줄간격/이미지 블록/리스트/인용. 미리보기 2곳 공통(@tailwindcss/typography 없이 동작).
+const PROSE_CLS =
+  '[&_p]:mb-3 [&_p]:leading-7 [&_h2]:mt-4 [&_h2]:mb-1 [&_h2]:text-base [&_h2]:font-bold [&_h3]:mt-3 [&_h3]:mb-1 [&_h3]:font-semibold ' +
+  '[&_img]:my-3 [&_img]:mx-auto [&_img]:block [&_img]:max-w-full [&_img]:rounded-lg [&_figure]:my-3 [&_figcaption]:mt-1 [&_figcaption]:text-center [&_figcaption]:text-xs [&_figcaption]:text-slate-400 ' +
+  '[&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-1 ' +
+  '[&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-200 [&_blockquote]:pl-3 [&_blockquote]:italic [&_blockquote]:text-slate-500 [&_strong]:font-semibold';
+
+/** 본문 HTML 첫 인라인 <img> src (히어로 후보). 없으면 undefined. */
+function firstImgSrc(html: string): string | undefined {
+  return html.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1];
+}
+/** 첫 <img> 태그 1개 제거 (히어로로 끌어올린 이미지 본문 중복 방지). */
+function stripFirstImg(html: string): string {
+  return html.replace(/<img[^>]*>/i, '');
 }
