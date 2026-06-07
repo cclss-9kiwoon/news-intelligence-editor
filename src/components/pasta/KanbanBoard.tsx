@@ -55,20 +55,16 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   const retryTask = (id: string) => updateTask(id, { error: undefined, produceAttempts: 0, status: 'producing' });
   const publishTask = (id: string) => updateTask(id, { published: true, publishedAt: Date.now() });
 
-  // 오래된(stuck) 태스크 정리 — ②③④에 N시간+ 머문 건 일괄 삭제.
-  // ①searching은 골든타임 만료(effect#1b)로 자동 정리되므로 제외. tasks는 이미 발행·폐기 제외분.
+  // 오래된(stuck) 태스크 정리 — 단계(컬럼)별로 N시간+ 머문 건 일괄 삭제.
+  // staleHours select는 전역 공유, 삭제는 컬럼별 status 한정. tasks는 이미 발행·폐기 제외분.
+  // ①searching은 골든타임 만료(effect#1b)로 자동 정리되지만 수동 정리도 노출(즉시 비우기 용).
   const [staleHours, setStaleHours] = useState(24);
-  const STALE_STATUSES: TaskStatus[] = ['topic_review', 'producing', 'final_review'];
-  const staleCount = useMemo(
-    () => STALE_STATUSES.reduce(
-      (n, s) => n + staleTaskIds(tasks, campaignId, hoursToMs(staleHours), Date.now(), { status: s }).length, 0),
-    [tasks, campaignId, staleHours],
-  );
-  const cleanupStale = () => {
-    const ids = STALE_STATUSES.flatMap(
-      s => staleTaskIds(tasks, campaignId, hoursToMs(staleHours), Date.now(), { status: s }));
+  const staleIdsFor = (status: TaskStatus) =>
+    staleTaskIds(tasks, campaignId, hoursToMs(staleHours), Date.now(), { status });
+  const cleanupStatus = (status: TaskStatus, label: string) => {
+    const ids = staleIdsFor(status);
     if (ids.length === 0) return;
-    if (!confirm(`②③④ 단계에 ${staleHours}시간 이상 머문 ${ids.length}건을 삭제할까요?\n되돌릴 수 없습니다. (①·발행·폐기 제외)`)) return;
+    if (!confirm(`'${label}' 단계에 ${staleHours}시간 이상 머문 ${ids.length}건을 삭제할까요?\n되돌릴 수 없습니다.`)) return;
     ids.forEach(deleteTask);
   };
 
@@ -180,26 +176,20 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
           )}
         </span>
 
-        {/* 오래된 태스크 정리 — ②③④ stuck 건 경과시간 기준 일괄 삭제 */}
-        <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-white/60 bg-white/55 px-2 py-0.5 text-xs text-slate-500 backdrop-blur-md">
+        {/* 정리 기준 시간(전역 공유) — 컬럼별 "정리" 버튼이 이 값 사용 */}
+        <span className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-white/60 bg-white/55 px-2.5 py-0.5 text-xs text-slate-500 backdrop-blur-md">
+          🗑 정리 기준
           <select
             value={staleHours}
             onChange={e => setStaleHours(Number(e.target.value))}
-            aria-label="경과 기준 시간"
+            aria-label="오래된 태스크 정리 기준 시간"
             className="rounded-md bg-transparent py-0.5 pr-1 font-mono font-semibold text-slate-600 outline-none"
           >
-            <option value={6}>6시간</option>
-            <option value={12}>12시간</option>
-            <option value={24}>24시간</option>
+            <option value={6}>6시간+</option>
+            <option value={12}>12시간+</option>
+            <option value={24}>24시간+</option>
           </select>
-          <button
-            onClick={cleanupStale}
-            disabled={staleCount === 0}
-            title="②③④ 단계에 오래 머문 태스크를 삭제합니다 (①·발행·폐기 제외)"
-            className="inline-flex items-center gap-1 font-semibold text-slate-500 transition-colors hover:text-red-600 disabled:cursor-not-allowed disabled:text-slate-300"
-          >
-            <IconTrash className="h-3.5 w-3.5" /> 지난 건 정리{staleCount > 0 ? ` (${staleCount})` : ''}
-          </button>
+          <span className="text-slate-400">경과 (단계별 버튼으로 삭제)</span>
         </span>
       </div>
       <div className="flex min-h-0 flex-1 gap-5 overflow-x-auto px-4 pb-6 pt-3 sm:px-8">
@@ -213,6 +203,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
               (a.goldenTime?.expiresAt ?? Infinity) - (b.goldenTime?.expiresAt ?? Infinity));
           }
           const activeCount = colTasks.filter(taskActive).length;
+          const colStale = staleIdsFor(col.status).length;  // 이 단계 N시간+ 경과 건수
           const isCollapsed = collapsed.has(col.status);
           if (isCollapsed) {
             return (
@@ -231,6 +222,15 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
               <div className="flex items-center justify-between px-4 py-3.5">
                 <button onClick={() => toggleCollapse(col.status)} title="접기" className="text-[15px] font-bold text-slate-800 hover:text-slate-500">⌄ {col.label}</button>
                 <div className="flex items-center gap-2">
+                  {colStale > 0 && (
+                    <button
+                      onClick={() => cleanupStatus(col.status, col.label)}
+                      title={`이 단계에 ${staleHours}시간 이상 머문 ${colStale}건 삭제`}
+                      className="inline-flex items-center gap-0.5 rounded-full border border-red-200 bg-red-50/70 px-2 py-0.5 text-[10px] font-semibold text-red-500 transition-colors hover:bg-red-100"
+                    >
+                      <IconTrash className="h-3 w-3" /> 정리 {colStale}
+                    </button>
+                  )}
                   <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wide ${col.badge}`}>
                     {col.auto ? '자동' : '사람'}
                   </span>
