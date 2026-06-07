@@ -211,7 +211,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         continue; // 판단 결과 대기
       }
 
-      // ②-B 제작 가능성 — 쓸 이미지(수집 or 라이브러리) 있어야 제작. 없으면 보류(골든 만료 시 컷).
+      // ②-B 제작 가능성 — 쓸 이미지(수집 or 라이브러리) 있어야 제작. 없으면 보류(자동삭제 없음, 수동 정리로 비움).
       if (!producibilityRef.current.has(t.id)) {
         producibilityRef.current.add(t.id);
         const imgs = articles
@@ -222,7 +222,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
           .then(prod => {
             if (!mountedRef.current) return;
             if (prod.producible) updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
-            // 아니면 보류: topic_review 유지 → 다음 사이클 재평가, 골든 만료(1b) 시 자연 컷
+            // 아니면 보류: topic_review 유지 → 다음 사이클 재평가. 자동삭제 없음(staleTaskIds 수동 정리로 비움).
           })
           .catch(() => { if (mountedRef.current) updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' }); }) // 실패 시 통과(막힘 방지)
           .finally(() => { producibilityRef.current.delete(t.id); });
