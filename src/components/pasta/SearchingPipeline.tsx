@@ -183,6 +183,27 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         continue;
       }
 
+      // ②-B 제작 가능성 게이트 — intent/제외 LLM '앞'에 배치(fail-fast): 제작불가(이미지 없음) 건에
+      // LLM 낭비 안 하도록 먼저 컷. 통과=producibleChecked 영속, 미통과=보류(자동삭제 없음, 수동 정리).
+      if (!t.producibleChecked) {
+        if (!producibilityRef.current.has(t.id)) {
+          producibilityRef.current.add(t.id);
+          const imgs = articles
+            .filter(a => t.sources.some(s => s.articleId === a.id))
+            .flatMap(a => (a.images ?? []).map(im => ({ url: im.url })));
+          const cluster = clusters.find(c => c.id === t.clusterId);
+          assessProducibility({ images: imgs, entities: cluster?.entities, groupId: campaign.groupId })
+            .then(prod => {
+              if (!mountedRef.current) return;
+              if (prod.producible) updateTask(t.id, { producibleChecked: true });
+              // 미통과: 보류 — producibleChecked 안 함 → 다음 사이클 재평가(이미지 생기면 통과).
+            })
+            .catch(() => { if (mountedRef.current) updateTask(t.id, { producibleChecked: true }); }) // 실패 시 통과(막힘 방지)
+            .finally(() => { producibilityRef.current.delete(t.id); });
+        }
+        continue; // 제작 가능성 판정 대기 (LLM 전)
+      }
+
       // 주제 정의(intent) 적합성 게이트 — 캠페인 주제정의에 맞는 기사만 통과.
       const intent = (campaign.settings.topicReview.intent ?? '').trim();
       if (intent && !t.intentChecked) {
@@ -227,23 +248,8 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         continue; // 판단 결과 대기
       }
 
-      // ②-B 제작 가능성 — 쓸 이미지(수집 or 라이브러리) 있어야 제작. 없으면 보류(자동삭제 없음, 수동 정리로 비움).
-      if (!producibilityRef.current.has(t.id)) {
-        producibilityRef.current.add(t.id);
-        const imgs = articles
-          .filter(a => t.sources.some(s => s.articleId === a.id))
-          .flatMap(a => (a.images ?? []).map(im => ({ url: im.url })));
-        const cluster = clusters.find(c => c.id === t.clusterId);
-        assessProducibility({ images: imgs, entities: cluster?.entities, groupId: campaign.groupId })
-          .then(prod => {
-            if (!mountedRef.current) return;
-            if (prod.producible) updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
-            // 아니면 보류: topic_review 유지 → 다음 사이클 재평가. 자동삭제 없음(staleTaskIds 수동 정리로 비움).
-          })
-          .catch(() => { if (mountedRef.current) updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' }); }) // 실패 시 통과(막힘 방지)
-          .finally(() => { producibilityRef.current.delete(t.id); });
-      }
-      continue; // 제작 가능성 판정 대기
+      // 모든 게이트 통과(extract→producibility→intent→제외주제) → ③ 제작 승급
+      updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskSig, articles, settings, searchingCfg.excludeTopics, campaign.settings.topicReview.intent, campaign.autoProcess?.enabled]);
