@@ -89,7 +89,10 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   const maxPerHour = campaigns.find(c => c.id === campaignId)?.settings.searching.maxPerHour ?? 3;
   const rhythm = useMemo(() => {
     const now = Date.now();
-    const promotedInWindow = tasks.filter(t => t.promotedAt && now - t.promotedAt <= HOUR);
+    // promotionBudget(promotion.ts)과 동일 기준: 발행분 포함, 폐기(discardReason)만 제외.
+    // 보드 tasks는 발행/폐기 제외라 발행된 승급분이 누락돼 게이지가 실제 예산 소비보다 작게 보이던 문제 정합.
+    const promotedInWindow = allTasks.filter(t =>
+      t.campaignId === campaignId && t.promotedAt && now - t.promotedAt <= HOUR && !t.discardReason);
     const promotedLastHour = promotedInWindow.length;
     const queueCount = tasks.filter(t => t.status === 'searching' && !t.error && !t.paused).length;
     const atCap = maxPerHour > 0 && promotedLastHour >= maxPerHour;
@@ -100,7 +103,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
       nextPromotionMs = Math.max(0, oldest + HOUR - now);
     }
     return { promotedLastHour, maxPerHour, queueCount, collected: articles.length, atCap, nextPromotionMs };
-  }, [tasks, maxPerHour, articles.length]);
+  }, [allTasks, tasks, campaignId, maxPerHour, articles.length]);
 
   // 0건 진단: 수집은 됐는데 태스크가 안 생기는 이유를 클러스터 거부 사유로 집계
   const searching = campaigns.find(c => c.id === campaignId)?.settings.searching;
