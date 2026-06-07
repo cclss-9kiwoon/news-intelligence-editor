@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { makeCampaign, migrateCampaign } from './defaultCampaign';
+import { makeCampaign, migrateCampaign, makeDefaultCampaignSettings } from './defaultCampaign';
+import { resolveStageLLM } from './stageLLM';
+import { DEFAULT_SETTINGS } from './defaultSettings';
 
 describe('migrateCampaign — autoProcess', () => {
   it('autoProcess 없으면 autoCollect.enabled로 초기화 (ON 보존)', () => {
@@ -31,5 +33,31 @@ describe('migrateCampaign — autoProcess', () => {
 
   it('makeCampaign은 autoProcess ON 기본', () => {
     expect(makeCampaign('g', 'n').autoProcess).toEqual({ enabled: true });
+  });
+});
+
+describe('스테이지 기본 모델 — ②④ flash 핀, ③ 글로벌 상속', () => {
+  const s = makeDefaultCampaignSettings();
+  const settings = { ...DEFAULT_SETTINGS, apiKey: 'k', model: 'gemini-2.5-pro' };
+
+  it('② topicReview 기본 flash 오버라이드', () => {
+    expect(s.topicReview.llm?.model).toBe('gemini-2.5-flash');
+    expect(resolveStageLLM(settings, undefined, s.topicReview.llm).model).toBe('gemini-2.5-flash');
+  });
+
+  it('④ finalReview 기본 flash 오버라이드', () => {
+    expect(s.finalReview.llm?.model).toBe('gemini-2.5-flash');
+    expect(resolveStageLLM(settings, undefined, s.finalReview.llm).model).toBe('gemini-2.5-flash');
+  });
+
+  it('③ generation은 stage llm 미설정 → 글로벌 모델(상위) 상속', () => {
+    expect(s.generation.llm).toBeUndefined();
+    expect(resolveStageLLM(settings, undefined, s.generation.llm).model).toBe('gemini-2.5-pro');
+  });
+
+  it('model만 오버라이드 — provider/키는 글로벌 상속', () => {
+    const r = resolveStageLLM(settings, undefined, s.topicReview.llm);
+    expect(r.provider).toBe(settings.provider);
+    expect(r.apiKey).toBe('k');
   });
 });
