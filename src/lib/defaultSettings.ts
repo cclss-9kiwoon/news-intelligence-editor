@@ -81,7 +81,7 @@ export const DEFAULT_SETTINGS: Settings = {
   articleWindow: '24h',
   rssSources: DEFAULT_RSS_SOURCES,
   rssPollMinutes: 5,
-  clusterThreshold: 0.35,
+  clusterThreshold: 0.3,
   simulatorEnabled: true,
   simulatorIntervalSec: 30,
   alertSoundEnabled: true,
