@@ -202,7 +202,9 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     // 사이클당 LLM 콜 캡(PM 308f0416): 1콜은 백로그에 너무 느림 → 상향.
     // agent(위임)=비용0이라 넉넉히, api=비용 고려해 적당히. 큐가 짧으면 어차피 큐 길이로 자연 제한.
     const backend = settings.llmBackend ?? 'api';
-    let llmBudget = backend === 'agent' ? 12 : 4;  // 이번 사이클 새 LLM 콜 허용 수
+    // agent는 턴기반(직렬) 에이전트 — 동시 다발 전송 시 과부하/적체로 RW 오류·타임아웃. 소수만.
+    // api는 동시성 서킷이 별도 관리하므로 사이클당 약간 넉넉히.
+    let llmBudget = backend === 'agent' ? 3 : 4;  // 이번 사이클 새 LLM 콜 허용 수
     // 진단(PM 7ab6683e): ② effect 실제 구동/큐/백엔드 가시화. 0건이면 effect 미실행, queue>0인데 judge 안뜨면 in-flight hang.
     console.log(`[②effect] run auto=${auto} backend=${backend} queue=${reviewQueue.length} inFlight=${intentJudgeRef.current.size} budget=${llmBudget}`);
     for (const t of reviewQueue) {

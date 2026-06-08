@@ -35,16 +35,17 @@ export function SettingsModal({ open, onClose }: Props) {
   const [categoryOpen, setCategoryOpen] = useState<Record<string, boolean>>({});
   const [refUrl, setRefUrl] = useState('');
   const [refFetching, setRefFetching] = useState(false);
-  // B 모드 연결 테스트(PM 8f870827, 선택) — agent에 ping 1회. dev+KHALA_API_KEY 필요.
+  // B 모드 연결 테스트(PM 8f870827) — 프로토콜 stage(judgeTopic)로 1회 왕복.
+  // 'ping'은 스펙 stage가 아니라 RW 핸들러가 없어 항상 타임아웃 → judgeTopic으로 정렬(기존 핸들러 재사용).
   const [agentTest, setAgentTest] = useState<{ state: 'idle' | 'testing' | 'ok' | 'fail'; msg?: string }>({ state: 'idle' });
   const testAgentConnection = async () => {
     setAgentTest({ state: 'testing' });
     try {
-      const res = await llmCall<{ ok?: boolean }>({
+      const res = await llmCall<Record<string, unknown>>({
         apiKey: settings.apiKey, model: settings.model,
-        system: 'You are a connectivity probe. Reply ONLY with compact JSON.',
-        user: 'Return exactly {"ok":true}',
-        backend: llmBackendFrom(settings), stage: 'ping',
+        system: 'You judge if a news topic fits. Reply ONLY compact JSON: {"adequate":boolean,"excluded":boolean}.',
+        user: 'title: "연결 테스트". intent: 아무거나 적합. Return {"adequate":true,"excluded":false}',
+        backend: llmBackendFrom(settings), stage: 'judgeTopic',
       });
       setAgentTest({ state: 'ok', msg: `응답 수신: ${JSON.stringify(res).slice(0, 80)}` });
     } catch (e) {
