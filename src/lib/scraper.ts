@@ -66,6 +66,70 @@ function isBlacklistedDomain(url: string): boolean {
 }
 
 /**
+ * 매체 추출 우선순위 (교차소스 작성을 위한 순서 제어).
+ * 추출은 모든 source에 시도하되, 잘 긁히는 매체(화이트)를 먼저·자주 차단되는 매체(후순위)를
+ * 나중에 시도해 fullText를 빠르게 1건+ 확보한다. 하드 스킵은 DOMAIN_BLACKLIST(소셜 등)만.
+ *
+ * 시드 리스트 — akp-RW가 매체 화이트/블랙리스트를 주면 setMediaPriorityLists로 교체/정교화.
+ */
+const DEFAULT_MEDIA_WHITELIST: readonly string[] = [
+  'yna.co.kr',        // 연합뉴스
+  'yonhapnewstv.co.kr',
+  'pstatic.net',      // 네이버뉴스 본문/이미지
+  'naver.com',
+  'news1.kr',
+  'newsis.com',
+];
+// 자주 차단되는(451 등) 어그리게이터/매체 — 후순위(스킵 아님: 유일 소스일 수 있음)
+const DEFAULT_MEDIA_DEPRIORITIZE: readonly string[] = [
+  'topstarnews.net',
+  'bizwnews',
+  'gukjenews',
+  'jndn',
+];
+
+let mediaWhitelist: string[] = [...DEFAULT_MEDIA_WHITELIST];
+let mediaDeprioritize: string[] = [...DEFAULT_MEDIA_DEPRIORITIZE];
+
+/** akp-RW 매체 화이트/블랙리스트 주입용. 빈 배열 전달 시 해당 목록 초기화. */
+export function setMediaPriorityLists(opts: { whitelist?: string[]; deprioritize?: string[] }): void {
+  if (opts.whitelist) mediaWhitelist = [...opts.whitelist];
+  if (opts.deprioritize) mediaDeprioritize = [...opts.deprioritize];
+}
+
+/** 테스트/관측용 — 현재 우선순위 목록 */
+export function getMediaPriorityLists(): { whitelist: string[]; deprioritize: string[] } {
+  return { whitelist: [...mediaWhitelist], deprioritize: [...mediaDeprioritize] };
+}
+
+/** 테스트용 — 시드 기본값으로 복원 */
+export function _resetMediaPriorityLists(): void {
+  mediaWhitelist = [...DEFAULT_MEDIA_WHITELIST];
+  mediaDeprioritize = [...DEFAULT_MEDIA_DEPRIORITIZE];
+}
+
+/**
+ * 추출 우선순위 랭크: 0=화이트(먼저), 1=일반, 2=후순위(나중).
+ * 화이트=정확/서픽스 일치. 후순위=느슨한 substring(시드라 TLD 미정 가능) + 런타임 Jina 차단 도메인 통합.
+ */
+export function mediaPriorityRank(url: string): 0 | 1 | 2 {
+  const host = domainOf(url);
+  if (!host) return 2; // 파싱 불가 → 맨 뒤
+  if (mediaWhitelist.some(d => host === d || host.endsWith(`.${d}`))) return 0;
+  if (jinaBlockedDomains.has(host)) return 2; // 상시 451 → 후순위로 통합
+  if (mediaDeprioritize.some(d => host.includes(d))) return 2;
+  return 1;
+}
+
+/** 추출 후보를 우선순위로 안정 정렬(화이트 먼저, 후순위 나중). 원본 불변. */
+export function orderByMediaPriority<T extends { link: string }>(items: T[]): T[] {
+  return items
+    .map((item, i) => ({ item, i, rank: mediaPriorityRank(item.link) }))
+    .sort((a, b) => a.rank - b.rank || a.i - b.i)
+    .map(x => x.item);
+}
+
+/**
  * Reject non-article images by URL pattern: tracking pixels, sprites, icons,
  * logos, watermark/badge overlays, avatars, emoji, data URIs.
  * Visual watermark detection (pixel analysis) is out of scope — URL heuristics only.
@@ -287,6 +351,13 @@ async function extractViaProxy(url: string): Promise<ExtractResult> {
       }
     }
 
+    // og:image (대표/리드 이미지) — 본문 첫 <img>보다 우선해 thumbnail로. 중복/정크 제외.
+    const ogImage = doc.querySelector('meta[property="og:image"], meta[name="og:image"]')
+      ?.getAttribute('content')?.trim() || '';
+    if (ogImage && !isJunkImage(ogImage) && !images.some(im => im.url === ogImage)) {
+      images.unshift({ url: ogImage });
+    }
+
     // Remove noise elements
     articleEl.querySelectorAll(
       'script, style, nav, footer, header, aside, .ad, .advertisement, .social-share, .related-articles, .comments',
@@ -453,7 +524,8 @@ export async function enrichArticlesWithFullText(
       !isBlacklistedDomain(a.link),
   );
   const blocked = eligible.filter(a => (failedUrls.get(a.link) || 0) >= MAX_RETRIES).length;
-  const candidates = eligible.filter(a => (failedUrls.get(a.link) || 0) < MAX_RETRIES);
+  // 매체 우선순위로 정렬: 잘 긁히는 화이트 매체 먼저 추출 → 교차소스 fullText 빠르게 확보.
+  const candidates = orderByMediaPriority(eligible.filter(a => (failedUrls.get(a.link) || 0) < MAX_RETRIES));
 
   if (candidates.length === 0) {
     return {
