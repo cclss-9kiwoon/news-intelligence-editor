@@ -22,6 +22,41 @@ export function sanitizeBody(body: string): string {
     .trim();
 }
 
+// 영문 헤드라인 케이싱 후처리 — 전치사/접속사/관사는 소문자(lowercaseMinor), 나머지 주요 단어는 첫 글자 대문자.
+// 첫·끝 단어는 항상 대문자. 약어(BTS, NCT)는 원형 보존(첫 글자만 손대고 나머지 유지).
+const MINOR_WORDS = new Set([
+  'a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'to', 'of', 'in', 'on', 'at',
+  'by', 'from', 'with', 'as', 'vs', 'via', 'per', 'up', 'off', 'into', 'over',
+]);
+export function titleCaseHeadline(headline: string, lowercaseMinor: boolean): string {
+  const tokens = headline.split(/(\s+)/); // 공백 보존
+  const wordIdx = tokens.map((t, i) => (/\S/.test(t) ? i : -1)).filter(i => i >= 0);
+  const first = wordIdx[0];
+  const last = wordIdx[wordIdx.length - 1];
+  const cap = (w: string) => w.replace(/^([^A-Za-z]*)([a-z])/, (_, p, c) => p + c.toUpperCase());
+  return tokens
+    .map((tok, i) => {
+      if (!/\S/.test(tok)) return tok;
+      const bare = tok.replace(/[^A-Za-z]/g, '').toLowerCase();
+      if (lowercaseMinor && i !== first && i !== last && MINOR_WORDS.has(bare)) {
+        return tok.toLowerCase();
+      }
+      return cap(tok);
+    })
+    .join('');
+}
+
+// 본문에 블록 태그(<p> 등)가 없으면 빈 줄 단위로 단락을 <p>로 감싼다(HTML <p> 필수 보장).
+// 이미 <p>가 있으면 그대로 둔다. <blockquote>/<img>/<h*>로 시작하는 블록은 감싸지 않는다.
+export function ensureParagraphs(html: string): string {
+  if (/<p[\s>]/i.test(html)) return html;
+  const blocks = html.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
+  if (blocks.length === 0) return html;
+  return blocks
+    .map(b => (/^<(?:blockquote|img|figure|h[1-6]|ul|ol|table|div)\b/i.test(b) ? b : `<p>${b.replace(/\n/g, ' ')}</p>`))
+    .join('\n');
+}
+
 function buildStorySystem(category: Category, settings: Settings, summaryBased = false): string {
   const { promptConfig, referenceArticles } = settings;
 
@@ -82,9 +117,18 @@ function buildStorySystem(category: Category, settings: Settings, summaryBased =
   sections.push('- headline: 기사 제목.');
   sections.push('- body: 머리표·섹션 라벨(#, "## 2." 등) 없이 깨끗한 발행용 본문. 매체 간 충돌 시 가장 일관된 값 채택, 충돌 사실은 summary에 명시.');
   sections.push('- body 포맷(HTML): 각 문단을 별도 <p>…</p>로 분리(여러 문단을 한 <p>에 몰지 말 것). 가사·직접 인용은 <blockquote>…</blockquote>. 강조는 <strong>. 빈 <p></p>나 src 없는 <img> 금지. 한 문단은 2~4문장 권장.');
-  sections.push('- 원문에 없는 사실 추측·창작 금지. 핵심 이름(인물/장소/소속사) 누락 금지.');
+  // ── 안티-환각 하드룰 (모델 무관 핵심 — 발행 신뢰도 1순위) ──
+  sections.push('[안티-환각 — 절대 규칙]');
+  sections.push('- 제공된 매체 기사 본문에 *명시된 내용만* 작성한다. 직접 인용문·날짜·멤버명·곡명/앨범명·수치·소속사·기간 등 원문에 없는 것은 절대 창작·추측하지 마라.');
+  sections.push('- 직접 인용("...")은 원문에 그대로 있는 문장만 쓴다. 원문에 없는 발언을 지어내 인용하지 마라.');
+  sections.push('- "N년 만"·"N주년"·"데뷔 N년차" 같은 기간/횟수 계산은 원문에 그 수치가 명시돼 있을 때만 쓴다. 직접 연도를 빼서 계산하지 마라(예: 7년을 "10년 만"으로 틀리는 오류 방지). 명시 없으면 생략한다.');
+  sections.push('- 핵심 이름(인물/그룹/멤버/장소/소속사)은 원문에 있으면 누락하지 말고, 없으면 지어내지 마라.');
+  sections.push('- 불확실하면 단정하지 말고 생략한다. 정보가 빈약하면 차라리 짧게 써라(길이 채우려 창작 금지).');
+  sections.push('- 사실 신뢰도(원문 충실)가 분량·표현보다 우선이다.');
+  // 톤 블랙리스트 (에디토리얼/과장 표현 금지)
+  sections.push('- 에디토리얼·과장 표현 금지: "legendary, highly anticipated, overwhelming, immense love, iconic, sensation" 류의 단정적 찬사/과장은 쓰지 말고 중립적 사실 서술로 대체하거나 삭제한다.');
   if (summaryBased) {
-    sections.push('- ⚠️ 입력이 전문(full text) 없이 *요약/발췌(부분 정보)*뿐이다. 확인된 사실만 보수적으로 작성하고, 요약 범위를 넘는 세부·정황·인용을 절대 지어내지 마라. 빈약하면 짧게 써라(길이 위해 창작 금지). 불확실은 단정하지 말 것.');
+    sections.push('- ⚠️ 입력이 전문(full text) 없이 *요약/발췌(부분 정보)*뿐이다. 위 안티-환각 규칙을 *더 엄격히* 적용한다: 요약에 직접 드러난 사실만 쓰고, 요약 범위를 넘는 세부·정황·인용·수치·기간은 일절 지어내지 마라. 인용문은 사실상 금지(요약에 따옴표째 들어있지 않으면 쓰지 말 것). 빈약하면 짧게.');
   }
   sections.push('- tags: 해시태그 문자열 배열(# 없이 키워드만). imagePrompt: 순수 영문(Midjourney 호환, 한국어 금지).');
   sections.push('- sourceFacts: 원문에서 추출한 핵심 사실 5~10개를 불릿 리스트 배열로. 각 항목은 한 줄 이내, "누가 무엇을 했다" 형식. 드래프트에 반영했는지 에디터가 대조할 용도.');
@@ -183,10 +227,17 @@ export async function generateStory(
     temperature: 0.5,
   });
 
+  // ③ 포맷 후처리: 헤드라인 케이싱(영문) + 본문 <p> 보장
+  let headline = out.headline ?? '';
+  const casing = settings.projectProfile.formatRules.headlineCasing;
+  if (settings.projectProfile.outputLanguage === 'en' && (casing === 'title' || casing === 'lower-minor')) {
+    headline = titleCaseHeadline(headline, casing === 'lower-minor');
+  }
+
   return {
     summary: out.summary ?? '',
-    headline: out.headline ?? '',
-    body: sanitizeBody(out.body ?? ''),
+    headline,
+    body: ensureParagraphs(sanitizeBody(out.body ?? '')),
     tags: Array.isArray(out.tags) ? out.tags : [],
     imagePrompt: out.imagePrompt ?? '',
     sourceFacts: Array.isArray(out.sourceFacts) ? out.sourceFacts : [],

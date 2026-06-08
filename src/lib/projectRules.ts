@@ -19,7 +19,7 @@ const CASING_LABEL: Record<FormatRules['headlineCasing'], string> = {
 };
 
 const ARTIST_LABEL: Record<FormatRules['artistMarkup'], string> = {
-  'strong': '본문 첫 등장 아티스트/그룹명은 <strong>이름</strong>으로 감싼다. <a> 링크는 쓰지 않는다.',
+  'strong': '본문에서 아티스트/그룹명·멤버명·곡명·앨범명은 *첫 등장 시에만* <strong>이름</strong>으로 감싼다. 같은 대상의 재언급은 plain(마크업 없음). <a> 링크는 쓰지 않는다.',
   'link': '본문 아티스트/그룹명은 <a href> 링크로 처리한다.',
   'plain': '본문 아티스트/그룹명에 별도 마크업을 쓰지 않는다.',
 };

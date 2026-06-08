@@ -31,7 +31,7 @@ export const ALLKPOP_PROMPT_CONFIG: PromptConfig = {
   taskInstructions: `1. 한국 매체 2곳+ 교차검증된 팩트만 사용.
 2. allkpop 기존 기사와 내용 중복 확인 (같은 아티스트라도 내용 다르면 OK).
 3. 수치(차트/판매량/날짜) 정확성 확인, 헤드라인↔본문 내용 일치 유지.`,
-  bannedExpressions: 'Congratulations, Let us know your thoughts in the comments below, What do you think, exciting, heartwarming, captivating, we are absolutely here for it, delve, furthermore',
+  bannedExpressions: 'Congratulations, Let us know your thoughts in the comments below, What do you think, exciting, heartwarming, captivating, we are absolutely here for it, delve, furthermore, legendary, highly anticipated, overwhelming, immense love, iconic, sensation, takes the internet by storm',
 };
 
 // ── ③ 표기 규칙 (HTML/마크업) ──
