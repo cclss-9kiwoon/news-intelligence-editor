@@ -22,7 +22,7 @@ export function sanitizeBody(body: string): string {
     .trim();
 }
 
-function buildStorySystem(category: Category, settings: Settings): string {
+function buildStorySystem(category: Category, settings: Settings, summaryBased = false): string {
   const { promptConfig, referenceArticles } = settings;
 
   const sections: string[] = [];
@@ -83,6 +83,9 @@ function buildStorySystem(category: Category, settings: Settings): string {
   sections.push('- body: 머리표·섹션 라벨(#, "## 2." 등) 없이 깨끗한 발행용 본문. 매체 간 충돌 시 가장 일관된 값 채택, 충돌 사실은 summary에 명시.');
   sections.push('- body 포맷(HTML): 각 문단을 별도 <p>…</p>로 분리(여러 문단을 한 <p>에 몰지 말 것). 가사·직접 인용은 <blockquote>…</blockquote>. 강조는 <strong>. 빈 <p></p>나 src 없는 <img> 금지. 한 문단은 2~4문장 권장.');
   sections.push('- 원문에 없는 사실 추측·창작 금지. 핵심 이름(인물/장소/소속사) 누락 금지.');
+  if (summaryBased) {
+    sections.push('- ⚠️ 입력이 전문(full text) 없이 *요약/발췌(부분 정보)*뿐이다. 확인된 사실만 보수적으로 작성하고, 요약 범위를 넘는 세부·정황·인용을 절대 지어내지 마라. 빈약하면 짧게 써라(길이 위해 창작 금지). 불확실은 단정하지 말 것.');
+  }
   sections.push('- tags: 해시태그 문자열 배열(# 없이 키워드만). imagePrompt: 순수 영문(Midjourney 호환, 한국어 금지).');
   sections.push('- sourceFacts: 원문에서 추출한 핵심 사실 5~10개를 불릿 리스트 배열로. 각 항목은 한 줄 이내, "누가 무엇을 했다" 형식. 드래프트에 반영했는지 에디터가 대조할 용도.');
 
@@ -168,11 +171,14 @@ export async function generateStory(
   // On-demand: retry extraction for articles still missing fullText (immutable)
   const enrichedArticles = await enrichMissingFullText(articles);
 
+  // 품질 플래그: 풀텍스트가 1건도 없으면 RSS 요약(description) 기반 생성 → 보수적 작성 + draft 배지.
+  const summaryBased = enrichedArticles.every(a => !a.fullText?.trim());
+
   const out = await chatJson<StoryOutput>({
     apiKey: settings.apiKey,
     baseUrl: settings.apiBaseUrl,
     model: settings.model,
-    system: buildStorySystem(category, settings),
+    system: buildStorySystem(category, settings, summaryBased),
     user: buildStoryUser(enrichedArticles),
     temperature: 0.5,
   });
@@ -184,6 +190,7 @@ export async function generateStory(
     tags: Array.isArray(out.tags) ? out.tags : [],
     imagePrompt: out.imagePrompt ?? '',
     sourceFacts: Array.isArray(out.sourceFacts) ? out.sourceFacts : [],
+    summaryBased,
   };
 }
 
