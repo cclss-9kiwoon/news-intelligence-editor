@@ -125,7 +125,7 @@ export function shouldClaimCluster(
     if (clusterArticles.length === 0) return { ok: false, reason: 'excluded_keyword' };
   }
   // excludeTopics는 의미 판단(AI)이라 동기 필터에서 처리하지 않음.
-  // 주제 검수 단계(SearchingPipeline)에서 judgeExcludedTopic으로 게이트.
+  // 주제 검수 단계(SearchingPipeline)에서 judgeTopic(적합+제외 통합)으로 게이트.
 
   // 매체 수 하한 (키워드 필터 후 남은 기사 기준 — 무관 기사는 매체 다양성에 안 셈)
   const distinctOriginalCount = new Set(clusterArticles.map(a => originalKey(a.link))).size;
