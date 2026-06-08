@@ -30,9 +30,11 @@ export type ChatJsonArgs = {
 // 통과하므로, 여기 세마포어 하나로 전 파이프라인 동시성을 제한한다.
 // 동시 MAX_CONCURRENT_LLM개만 실행, 초과분은 FIFO 큐로 대기.
 //
-// 기본 8 (유료 키 RPM 여유 → ②판단·③작성·④검수 직렬화 병목 완화). 순간 429는
-// 위 429 지수백오프가 흡수. VITE_MAX_CONCURRENT_LLM로 빌드시 조정, setMaxConcurrentLlm로 런타임 조정.
-const DEFAULT_MAX_CONCURRENT_LLM = 8;
+// 기본 3 (gemini RPM/TPM 보호 + 비용효율). 단일 호출은 200이지만 8 동시 + 백로그 판정
+// 버스트가 RPM/TPM을 초과해 전건 429 → 처리 0이 실관측됨. 3이면 분당 호출이 한도 안쪽으로
+// 들어와 판정 흐름 유지 + 429 재시도 토큰 낭비↓. 순간 429는 위 429 지수백오프가, 모델 과부하는
+// 서킷브레이커가 백스톱. 상위 티어로 RPM 여유 크면 VITE_MAX_CONCURRENT_LLM 또는 setMaxConcurrentLlm로 상향.
+const DEFAULT_MAX_CONCURRENT_LLM = 3;
 function envMaxConcurrent(): number {
   try {
     const v = Number((import.meta as any)?.env?.VITE_MAX_CONCURRENT_LLM);

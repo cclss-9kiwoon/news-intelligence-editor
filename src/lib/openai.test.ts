@@ -104,8 +104,8 @@ describe('chatJson 글로벌 동시성 상한', () => {
     expect(getLlmConcurrency()).toEqual({ active: 0, queued: 0 });
   });
 
-  it('기본 동시성 상한 8 (throughput)', () => {
-    expect(MAX_CONCURRENT_LLM).toBe(8);
+  it('기본 동시성 상한 3 (gemini RPM 보호 + 비용효율)', () => {
+    expect(MAX_CONCURRENT_LLM).toBe(3);
   });
 
   it('setMaxConcurrentLlm 런타임 조정 + 1 미만 무시', async () => {
