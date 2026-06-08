@@ -1,6 +1,6 @@
 import type { Article, Settings, Category, ConvertedResult, StoryOutput, TranslatedFields, ReferenceArticle } from '../types';
 import { CONVERTED_RESULT_SCHEMA_VERSION } from '../types';
-import { chatJson } from './openai';
+import { llmCall, llmBackendFrom } from './llmBackend';
 import { extractArticleText } from './scraper';
 import { buildProjectRulesText } from './projectRules';
 
@@ -218,13 +218,15 @@ export async function generateStory(
   // 품질 플래그: 풀텍스트가 1건도 없으면 RSS 요약(description) 기반 생성 → 보수적 작성 + draft 배지.
   const summaryBased = enrichedArticles.every(a => !a.fullText?.trim());
 
-  const out = await chatJson<StoryOutput>({
+  const out = await llmCall<StoryOutput>({
     apiKey: settings.apiKey,
     baseUrl: settings.apiBaseUrl,
     model: settings.model,
     system: buildStorySystem(category, settings, summaryBased),
     user: buildStoryUser(enrichedArticles),
     temperature: 0.5,
+    backend: llmBackendFrom(settings),
+    stage: 'generateStory',
   });
 
   // ③ 포맷 후처리: 헤드라인 케이싱(영문) + 본문 <p> 보장
@@ -265,13 +267,15 @@ export async function translateToEnglish(
     `[tags]\n${fields.tags.join(', ')}`,
   ].join('\n\n');
 
-  const out = await chatJson<TranslatedFields>({
+  const out = await llmCall<TranslatedFields>({
     apiKey: settings.apiKey,
     baseUrl: settings.apiBaseUrl,
     model: settings.model,
     system,
     user,
     temperature: 0.3,
+    backend: llmBackendFrom(settings),
+    stage: 'translate',
   });
 
   return {

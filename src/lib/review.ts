@@ -1,5 +1,5 @@
 import type { Settings, StoryOutput, ReviewFinding, ReviewResult, ProjectProfile } from '../types';
-import { chatJson } from './openai';
+import { llmCall, llmBackendFrom } from './llmBackend';
 
 /**
  * 검수 엔진 (CM 역할).
@@ -190,13 +190,15 @@ export async function runLlmChecks(draft: DraftFields, settings: Settings): Prom
   const enabled = settings.projectProfile.reviewRules.filter(r => r.enabled);
   if (enabled.length === 0) return { findings: [], sensitive: { flag: false } };
 
-  const out = await chatJson<LlmResponse>({
+  const out = await llmCall<LlmResponse>({
     apiKey: settings.apiKey,
     baseUrl: settings.apiBaseUrl,
     model: settings.model,
     system: buildReviewSystem(settings.projectProfile),
     user: buildReviewUser(draft),
     temperature: 0.2,
+    backend: llmBackendFrom(settings),
+    stage: 'review',
   });
 
   const ALLOWED_FIELDS: ReviewFinding['field'][] = ['headline', 'body', 'tags', 'imagePrompt'];

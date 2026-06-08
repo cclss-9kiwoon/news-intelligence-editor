@@ -409,6 +409,8 @@ export type Task = {
   updatedAt: number;
 };
 
+export type LlmBackendMode = 'api' | 'agent';
+
 export type Settings = {
   provider: ProviderId;
   apiKey: string;
@@ -416,6 +418,12 @@ export type Settings = {
   rss2jsonApiKey: string;
   model: ModelId;
   fastModel?: string;          // ②판단·④검수용 경량 모델(throughput·비용). 비면 model로 폴백
+  // ── LLM 백엔드 모드 (B = 테스트/dev 전용, 격리·제거 용이) ──
+  // 'api'=gemini API 직결(본선). 'agent'=Khala LLM 에이전트 위임(크레딧 0 가동, dev proxy /api/khala 경유).
+  // 추상화 지점은 llmCall 한 곳 — 파이프라인/게이트/카드는 모드 무관 동일.
+  llmBackend?: LlmBackendMode;  // 기본 'api'
+  agentInboxCode?: string;      // B 모드: 위임할 LLM 에이전트 inbox code (임의 — 사용자 구독 LLM)
+  khalaInboxCode?: string;      // B 모드: 응답 수신용 우리(NIE) inbox code (recv session_code)
 
   categories: Category[];
   activeCategoryId: string;

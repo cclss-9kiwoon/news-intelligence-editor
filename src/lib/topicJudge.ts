@@ -1,5 +1,6 @@
 import type { Settings } from '../types';
-import { chatJson, getLlmCircuitState } from './openai';
+import { getLlmCircuitState } from './openai';
+import { llmCall, llmBackendFrom } from './llmBackend';
 
 /**
  * ② 주제 판정 통합 — 주제 적합성(intent) + 제외 주제(excludeTopics)를
@@ -39,9 +40,13 @@ export async function judgeTopic(
 
   // 게이트 전체 비활성(주제정의·제외주제 모두 없음) → LLM 콜 없이 통과. decided.
   if (!wantIntent && topics.length === 0) return { decided: true, adequate: true, excluded: false };
-  // 키 없음 / 서킷 open(429 소진) → 판단 불가 = 보류 (fail-closed)
-  if (!settings.apiKey) return { decided: false, adequate: false, excluded: false, reason: 'API 키 없음 — AI 판단 대기' };
-  if (getLlmCircuitState().open) return { decided: false, adequate: false, excluded: false, reason: 'LLM 한도 소진 — AI 판단 대기(키 확인)' };
+  // API 직결 모드 사전 가드(fail-closed): 키 없음 / 서킷 open(429 소진) → 보류.
+  // agent(위임) 모드는 gemini 키·API 서킷과 무관하므로 이 가드를 건너뛴다(크레딧 0 가동).
+  const isAgent = settings.llmBackend === 'agent';
+  if (!isAgent) {
+    if (!settings.apiKey) return { decided: false, adequate: false, excluded: false, reason: 'API 키 없음 — AI 판단 대기' };
+    if (getLlmCircuitState().open) return { decided: false, adequate: false, excluded: false, reason: 'LLM 한도 소진 — AI 판단 대기(키 확인)' };
+  }
 
   const tasks: string[] = [];
   const jsonKeys: string[] = [];
@@ -87,13 +92,15 @@ export async function judgeTopic(
   ].join('\n');
 
   try {
-    const out = await chatJson<JudgmentResponse>({
+    const out = await llmCall<JudgmentResponse>({
       apiKey: settings.apiKey,
       baseUrl: settings.apiBaseUrl,
       model: settings.model,
       system,
       user,
       temperature: 0.1,
+      backend: llmBackendFrom(settings),
+      stage: 'judgeTopic',
     });
 
     // 적합성: intent 활성인데 불리언 없으면 판단 모호 → 보류(fail-closed).
