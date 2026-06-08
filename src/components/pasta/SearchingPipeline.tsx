@@ -23,6 +23,11 @@ const isManualRun = (t: Task) => t.manualRun === true;
 // 차단(excluded)·적합 둘 다 캐시. 세션 메모리(재유입은 discardLedger가 별도 차단).
 const topicVerdictCache = new Map<string, { adequate: boolean; excluded: boolean }>();
 
+// 봇차단(Jina/proxy 추출 영구실패) 도메인 — 단일소스면 ②서 무한 추출재시도/head-of-line 유발.
+// 이런 단일소스는 즉시 폐기(클러스터 보강용으로만 가치). akp-RW 후순위목록(PM 40a06df1).
+const BOT_BLOCKED_SOURCES = ['topstarnews'];
+const isBotBlockedSource = (s: string) => { const x = s.toLowerCase(); return BOT_BLOCKED_SOURCES.some(b => x.includes(b)); };
+
 const SOURCE_REVIEW_TIMEOUT_MS = 90_000; // 전문 수집 대기 상한
 const MIN_MEDIA_FOR_WRITE = 2; // ③ 작성 전 교차검증 최소 매체 수(단일소스 차단). TODO: campaign 설정값화(minMediaForWrite)
 const HOUR_MS = 3600_000;
@@ -183,11 +188,13 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         (b.priority ? 1 : 0) - (a.priority ? 1 : 0) ||
         expiresAtOf(a) - expiresAtOf(b) ||
         a.createdAt - b.createdAt);
-    // 자동 ON: 상단 1건 / 자동 OFF: 수동실행 마커 1건만
-    const target = auto ? reviewQueue[0] : reviewQueue.find(isManualRun);
-    if (!target) return;
-
-    for (const t of [target]) {
+    // head-of-line 방지(PM 40a06df1): 막힌 1건(단일소스/추출대기)이 큐 head면 전체 정지하던 버그.
+    // → 전체 큐를 순회하되 LLM 콜(judge/producibility)만 사이클당 1건으로 캡(비용 페이싱 유지).
+    //   패시브 게이트(추출 대기·단일소스 보류·승급)는 막힌 건을 skip하고 다음 건으로 계속 진행.
+    // 자동 OFF: manualRun 마커 건만 대상.
+    let llmBudget = 1;  // 이번 사이클 새 LLM 콜 허용 수
+    for (const t of reviewQueue) {
+      if (!auto && !isManualRun(t)) continue;
       const srcArts = articles.filter(a => t.sources.some(s => s.articleId === a.id));
       const refreshed = t.sources.map(s => {
         const a = articles.find(x => x.id === s.articleId);
@@ -213,7 +220,10 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
           else updateTask(t.id, { intentChecked: true, topicChecked: true });
           continue;
         }
-        if (!intentJudgeRef.current.has(t.id)) {
+        if (intentJudgeRef.current.has(t.id)) continue;   // 이미 판정 진행중 → 다음 건
+        if (llmBudget <= 0) continue;                     // 이번 사이클 LLM 소진 → skip(head-of-line 방지)
+        {
+          llmBudget--;
           intentJudgeRef.current.add(t.id);
           judgeTopic({ title: t.title, snippets }, intent, excludeTopics, stageSettings(campaign.settings.topicReview.llm, 'fast'))
             .then(r => {
@@ -235,11 +245,20 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       //    minMediaForWrite: campaign 설정값(없으면 기본 2). 임시 1로 흐름 확인 가능.
       const minMediaForWrite = searchingCfg.minMediaForWrite ?? MIN_MEDIA_FOR_WRITE;
       const distinctMedia = new Set(refreshed.map(s => s.source)).size;
-      if (distinctMedia < minMediaForWrite) continue;
+      if (distinctMedia < minMediaForWrite) {
+        // 단일소스 교차검증 미달. 봇차단 단일소스는 추출도 영구실패 → 즉시 폐기(무한 재시도/적체 방지).
+        const allBotBlocked = refreshed.every(s => isBotBlockedSource(s.source));
+        const pastTimeout = Date.now() - (t.promotedAt ?? t.createdAt) > SOURCE_REVIEW_TIMEOUT_MS;
+        if (allBotBlocked || pastTimeout) discardTask(t.id, 'low_quality');  // 2번째 소스 안 붙음 → 정리
+        continue;  // 막혀도 다음 건 진행(head-of-line 방지)
+      }
 
       // 4) ②-B 제작 가능성(이미지) — intent/제외/교차검증 통과분만.
       if (!t.producibleChecked) {
-        if (!producibilityRef.current.has(t.id)) {
+        if (producibilityRef.current.has(t.id)) continue;
+        if (llmBudget <= 0) continue;  // 사이클당 LLM 캡 — 막혀도 다음 건 진행
+        {
+          llmBudget--;
           producibilityRef.current.add(t.id);
           const imgs = srcArts.flatMap(a => (a.images ?? []).map(im => ({ url: im.url })));
           const cluster = clusters.find(c => c.id === t.clusterId);
