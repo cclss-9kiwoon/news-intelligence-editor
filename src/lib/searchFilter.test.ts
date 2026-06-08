@@ -196,3 +196,26 @@ describe('civic noise 필터 (① 사전 컷)', () => {
     expect(d.ok).toBe(true);
   });
 });
+
+describe('봇차단 단일소스 ① 제외', () => {
+  it('후순위(topstarnews) 단일소스 → bot_blocked_single', () => {
+    const arts = [art('a1', 'topstarnews', 'aespa 단독 보도', { link: 'https://topstarnews.net/news/1' })];
+    const d = shouldClaimCluster(cluster('cl1', ['a1'], 'aespa 단독'), arts, baseCfg, [], NOW);
+    expect(d).toEqual({ ok: false, reason: 'bot_blocked_single' });
+  });
+
+  it('봇차단 + 정상매체 다중소스면 보존(보강용)', () => {
+    const arts = [
+      art('a1', 'topstarnews', 'aespa 컴백', { link: 'https://topstarnews.net/news/1' }),
+      art('a2', 'yna', 'aespa 컴백', { link: 'https://www.yna.co.kr/view/2' }),
+    ];
+    const d = shouldClaimCluster(cluster('cl1', ['a1', 'a2'], 'aespa 컴백'), arts, baseCfg, [], NOW);
+    expect(d.ok).toBe(true);
+  });
+
+  it('정상매체 단일소스는 통과(봇차단 아님)', () => {
+    const arts = [art('a1', 'yna', 'aespa 컴백', { link: 'https://www.yna.co.kr/view/1' })];
+    const d = shouldClaimCluster(cluster('cl1', ['a1'], 'aespa 컴백'), arts, baseCfg, [], NOW);
+    expect(d.ok).toBe(true);
+  });
+});

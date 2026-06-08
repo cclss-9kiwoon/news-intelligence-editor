@@ -9,6 +9,7 @@
  */
 import type { SourceConfig, Task, TaskSource, Cluster, Article } from '../types';
 import { normalizeLink } from './rss';
+import { mediaPriorityRank } from './scraper';
 
 const DAY_MS = 86_400_000;
 
@@ -49,6 +50,7 @@ export type ClaimReason =
   | 'no_allowed_entity'      // 허용 엔티티 미등장
   | 'entity_daily_limit'     // 엔티티 일일 상한 초과
   | 'civic_noise'            // 지자체/행정 등 비-연예 노이즈 (① 사전 컷, judge 토큰 절약)
+  | 'bot_blocked_single'     // 봇차단/후순위 도메인 단일소스 (교차검증 불가 — ① 프로모션 제외)
   | 'own_site_dup';          // 자체 기보도 제목과 중복
 
 /**
@@ -154,6 +156,16 @@ export function shouldClaimCluster(
   }
   // excludeTopics는 의미 판단(AI)이라 동기 필터에서 처리하지 않음.
   // 주제 검수 단계(SearchingPipeline)에서 judgeTopic(적합+제외 통합)으로 게이트.
+
+  // 봇차단/후순위 단일소스 ① 프로모션 제외 — 단일 출처가 deprioritize(rank 2) 도메인이면
+  // 교차검증 불가 + 환각/저품질 위험 → claim 스킵(원천 차단). 다매체 클러스터 보강용으로는 유지.
+  // Engineer ② 안전망(즉시 discard)과 2중 방어. scraper의 우선순위 목록을 단일 출처로 재사용.
+  {
+    const distinctSources = new Set(clusterArticles.map(a => a.source)).size;
+    if (distinctSources < 2 && clusterArticles.every(a => mediaPriorityRank(a.link) === 2)) {
+      return { ok: false, reason: 'bot_blocked_single' };
+    }
+  }
 
   // 매체 수 하한 (키워드 필터 후 남은 기사 기준 — 무관 기사는 매체 다양성에 안 셈)
   const distinctOriginalCount = new Set(clusterArticles.map(a => originalKey(a.link))).size;
