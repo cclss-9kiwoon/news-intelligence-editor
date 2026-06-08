@@ -3,8 +3,8 @@ import { useClusters } from '../../state/ClustersContext';
 import { useArticles } from '../../state/ArticlesContext';
 import { useSettings } from '../../state/SettingsContext';
 import { useTasks } from '../../state/TaskContext';
-import { generateStory, judgeExcludedTopic } from '../../lib/promptChain';
-import { judgeTopicAdequacy } from '../../lib/topicJudge';
+import { generateStory } from '../../lib/promptChain';
+import { judgeTopic } from '../../lib/topicJudge';
 import { assessProducibility } from '../../lib/producibility';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
@@ -42,8 +42,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     return { ...settings, provider: r.provider, apiKey: r.apiKey, model: r.model, apiBaseUrl: r.baseUrl };
   };
   const producingRef = useRef<Set<string>>(new Set());
-  const topicJudgeRef = useRef<Set<string>>(new Set()); // 제외 주제 AI 판단 진행 중 가드
-  const intentJudgeRef = useRef<Set<string>>(new Set()); // 주제 적합성 AI 판단 진행 중 가드
+  const intentJudgeRef = useRef<Set<string>>(new Set()); // 주제 판단(intent+제외 통합) 진행 중 가드
   const producibilityRef = useRef<Set<string>>(new Set()); // 제작 가능성 판정 진행 중 가드
   const mountedRef = useRef(true);
 
@@ -168,22 +167,21 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       // 요약 스니펫 — RSS description 우선, 없으면 fullText 앞부분. intent/제외 판단은 추출 전 요약만으로 가능.
       const snippets = srcArts.map(a => a.description || a.fullText?.slice(0, 300) || '');
 
-      // ── ② 컬링 순서: ①무료필터(claim)→intent flash→제외 flash→단일소스 차단→추출+producibility→③ ──
-      // intent/제외를 단일소스 차단 '앞'에: 무관 단일소스도 intent가 off_topic 먼저 컷해야 ②에 안 쌓임.
-      // (단일소스 N≥2 보류는 "주제 적합한데 소스 1개"인 건에만 적용)
+      // ── ② 컬링 순서: ①무료필터(claim)→주제판단(intent+제외 1콜)→단일소스 차단→추출+producibility→③ ──
+      // 주제판단을 단일소스 차단 '앞'에: 무관 단일소스도 off_topic 먼저 컷해야 ②에 안 쌓임.
 
-      // 1) 주제 정의(intent) 적합성 — 요약 기반. decided-부적합 즉시 폐기.
+      // 1) 주제 판단 — intent 적합성 + 제외 주제를 judgeTopic 단일 콜로(콜 절반). 요약 기반. fail-CLOSED.
       const intent = (campaign.settings.topicReview.intent ?? '').trim();
-      if (intent && !t.intentChecked) {
+      if (!t.intentChecked || !t.topicChecked) {
         if (!intentJudgeRef.current.has(t.id)) {
           intentJudgeRef.current.add(t.id);
-          judgeTopicAdequacy({ title: t.title, snippets }, intent, stageSettings(campaign.settings.topicReview.llm, 'fast'))
+          judgeTopic({ title: t.title, snippets }, intent, excludeTopics, stageSettings(campaign.settings.topicReview.llm, 'fast'))
             .then(r => {
               if (!mountedRef.current) return;
-              // fail-CLOSED 3-state: 미결정(429/서킷/실패)→보류(재판단), 부적합→컷, 적합→통과
+              // 미결정(429/서킷/실패)→보류(재판단). 부적합 or 제외 해당→off_topic 컷. 적합&미제외→양 플래그 동시 set.
               if (!r.decided) return;
-              if (!r.adequate) discardTask(t.id, 'off_topic');
-              else updateTask(t.id, { intentChecked: true });
+              if (!r.adequate || r.excluded) discardTask(t.id, 'off_topic');
+              else updateTask(t.id, { intentChecked: true, topicChecked: true });
             })
             .catch(() => { /* 예외=미결정=보류 */ })
             .finally(() => { intentJudgeRef.current.delete(t.id); });
@@ -191,26 +189,10 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         continue;
       }
 
-      // 2) 제외 주제 — 요약 기반.
-      if (excludeTopics.length > 0 && !t.topicChecked) {
-        if (!topicJudgeRef.current.has(t.id)) {
-          topicJudgeRef.current.add(t.id);
-          judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, stageSettings(campaign.settings.topicReview.llm, 'fast'))
-            .then(r => {
-              if (!mountedRef.current) return;
-              if (r.excluded) discardTask(t.id, 'off_topic');
-              else updateTask(t.id, { topicChecked: true });
-            })
-            .catch(() => { if (mountedRef.current) updateTask(t.id, { topicChecked: true }); }) // fail-open
-            .finally(() => { topicJudgeRef.current.delete(t.id); });
-        }
-        continue;
-      }
-
-      // 3) 단일소스 차단 — 주제 적합(intent/제외 통과)한데 교차검증(distinct 매체) 부족하면 ③ 작성 안 함
+      // 2) 단일소스 차단 — 주제 적합(통과)한데 교차검증(distinct 매체) 부족하면 ③ 작성 안 함
       //    (allkpop 신뢰도 원칙). 보류(2번째 소스 대기), 미충족 지속 시 staleTaskIds 정리.
       //    minMediaForWrite: campaign 설정값(없으면 기본 2). 임시 1로 흐름 확인 가능.
-      const minMediaForWrite = (searchingCfg as { minMediaForWrite?: number }).minMediaForWrite ?? MIN_MEDIA_FOR_WRITE;
+      const minMediaForWrite = searchingCfg.minMediaForWrite ?? MIN_MEDIA_FOR_WRITE;
       const distinctMedia = new Set(refreshed.map(s => s.source)).size;
       if (distinctMedia < minMediaForWrite) continue;
 
