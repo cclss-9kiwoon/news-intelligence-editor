@@ -8,6 +8,7 @@ import { judgeTopic } from '../../lib/topicJudge';
 import { assessProducibility } from '../../lib/producibility';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster, normalizeTitle } from '../../lib/searchFilter';
+import { getMediaPriorityLists } from '../../lib/scraper';
 import { loadDiscarded, buildDiscardIndex } from '../../lib/discardLedger';
 import { promotionBudget } from '../../lib/promotion';
 import { judgeBreaking } from '../../lib/breakingDetector';
@@ -23,10 +24,16 @@ const isManualRun = (t: Task) => t.manualRun === true;
 // 차단(excluded)·적합 둘 다 캐시. 세션 메모리(재유입은 discardLedger가 별도 차단).
 const topicVerdictCache = new Map<string, { adequate: boolean; excluded: boolean }>();
 
-// 봇차단(Jina/proxy 추출 영구실패) 도메인 — 단일소스면 ②서 무한 추출재시도/head-of-line 유발.
-// 이런 단일소스는 즉시 폐기(클러스터 보강용으로만 가치). akp-RW 후순위목록(PM 40a06df1).
-const BOT_BLOCKED_SOURCES = ['topstarnews'];
-const isBotBlockedSource = (s: string) => { const x = s.toLowerCase(); return BOT_BLOCKED_SOURCES.some(b => x.includes(b)); };
+// 봇차단/후순위(Jina/proxy 추출 영구실패·소규모·교차미달) 도메인 — 단일소스면 ②서 무한
+// 추출재시도/head-of-line 유발. 즉시 폐기(클러스터 보강용으로만 가치).
+// 목록은 scraper의 단일 출처(getMediaPriorityLists().deprioritize, akp-RW 091403c2)에서 읽음 — 중복 정의 방지.
+const SEED_BOT_BLOCKED = ['topstarnews', 'bizwnews', 'gukjenews', 'mhnse', 'enews.imbc', 'jndn'];
+const isBotBlockedSource = (s: string) => {
+  const x = s.toLowerCase();
+  const list = getMediaPriorityLists().deprioritize;
+  const pats = list.length > 0 ? list : SEED_BOT_BLOCKED;
+  return pats.some(b => x.includes(b.toLowerCase()));
+};
 
 const SOURCE_REVIEW_TIMEOUT_MS = 90_000; // 전문 수집 대기 상한
 const MIN_MEDIA_FOR_WRITE = 2; // ③ 작성 전 교차검증 최소 매체 수(단일소스 차단). TODO: campaign 설정값화(minMediaForWrite)
