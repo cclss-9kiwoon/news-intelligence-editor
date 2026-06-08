@@ -255,7 +255,10 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       if (producingRef.current.has(t.id)) continue;
       producingRef.current.add(t.id);
 
-      const srcArticles = articles.filter(a => t.sources.some(s => s.articleId === a.id));
+      // 풀텍스트 보유 source 우선 정렬 → generateStory 입력 품질↑(요약보다 본문 먼저).
+      const srcArticles = articles
+        .filter(a => t.sources.some(s => s.articleId === a.id))
+        .sort((a, b) => (b.fullText ? 1 : 0) - (a.fullText ? 1 : 0));
       const category: Category =
         settings.categories.find(c => c.id === settings.activeCategoryId)
         ?? settings.categories[0]
