@@ -9,7 +9,6 @@ import { assessProducibility } from '../../lib/producibility';
 import { reviewDraft } from '../../lib/review';
 import { shouldClaimCluster } from '../../lib/searchFilter';
 import { loadDiscarded, buildDiscardIndex } from '../../lib/discardLedger';
-import { shouldDiscardAfterExtractFail } from '../../lib/extractRetry';
 import { promotionBudget } from '../../lib/promotion';
 import { judgeBreaking } from '../../lib/breakingDetector';
 import { resolveStageLLM } from '../../lib/stageLLM';
@@ -163,6 +162,14 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     const auto = campaign.autoProcess?.enabled !== false;  // 자동 진행
     const excludeTopics = (searchingCfg.excludeTopics ?? []).filter(x => x.trim());
 
+    // 추출실패 error 잔류 즉시 폐기(PM bb39398a): 아래 reviewQueue가 !t.error로 거르기 때문에
+    // 옛 코드가 error를 박은 레거시 건(예: "전문 수집 실패 (출처 0건)")이 ②에 영구 잔류(16h)하던 버그.
+    // 추출실패류 error는 처리 대상이 아니라 폐기 대상 — 가드 전에 먼저 정리(LLM 0콜, 자동 OFF여도 실행).
+    const extractFailRe = /전문\s*수집\s*실패|출처\s*0건|추출\s*실패|extract[_\s]?fail/i;
+    for (const t of myTasks) {
+      if (t.status === 'topic_review' && t.error && extractFailRe.test(t.error)) discardTask(t.id, 'extract_failed');
+    }
+
     // 페이싱(PM 5fdac5c1): ② 동시 1건만 — 상단(우선→골든임박→오래된) 1건만 판정 진행.
     // 그 1건이 ②를 떠나면(통과→③ or 폐기) 다음 1건. 동시 다발(gemini 버스트) 차단.
     // 수동실행(PM b129d4a0): 자동 OFF여도 manualRun 마커 카드는 1건 처리(드래그/선택분).
@@ -245,9 +252,9 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         }
         const hasSummary = srcArts.some(a => (a.description || '').trim().length > 0);
         if (!hasSummary) {
-          const attempts = (t.extractAttempts ?? 0) + 1;
-          if (shouldDiscardAfterExtractFail(attempts)) discardTask(t.id, 'extract_failed');
-          else updateTask(t.id, { sources: refreshed, extractAttempts: attempts });
+          // 즉시성(PM bb39398a): 타임아웃 경과 + fullText 0 + 요약도 0 = 데드엔드.
+          // 90s 대기창이 이미 일시 429/timeout을 흡수했으므로 추가 3회 대기 없이 즉시 폐기("바로 삭제").
+          discardTask(t.id, 'extract_failed');
           continue;
         }
         // 요약 있음 → 폐기 안 함. 아래 승급(요약 기반 작성).
