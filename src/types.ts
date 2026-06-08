@@ -285,6 +285,7 @@ export type SourceConfig = {
   excludeKeywords: string[]; // 제외 키워드
   minMediaCount: number;     // 태스크 생성 최소 매체 수
   minMediaForWrite?: number; // ③ 작성 전 교차검증 최소 distinct 매체 수(단일소스 차단). 기본 2. 임시 1로 흐름 확인 가능
+  maxSearchingQueue?: number; // ① searching 큐 총상한(미폐기·미발행 태스크 최대). 도달 시 신규 claim 중단. 기본 20
   // ── 중복·범위 보강 (범용 스키마) ──
   entityAllowlist: string[];   // 허용 엔티티(인물/브랜드). 비면 전체 허용
   excludeTopics: string[];     // 제외 주제(구문 단위, 대소문자 무시)
@@ -403,6 +404,7 @@ export type Task = {
   promotedAt?: number;       // ①→② 승급 시각 (시간당 승급 상한 카운트용)
   goldenTime?: { startsAt: number; expiresAt: number };  // 후보 유효창(입력값만 저장, 잔여/비율은 렌더 시 계산)
   isBreaking?: boolean;      // 속보 — 최상단 정렬·자동발행 차단·알림. 판정은 검수 로직(NIE)이 채움
+  manualRun?: boolean;       // 수동 실행 마커 — 자동진행 OFF여도 이 카드 1건만 ②/③ 즉시 처리. 처리 완료 시 해제
   createdAt: number;
   updatedAt: number;
 };
