@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { getLlmCircuitState } from '../../lib/openai';
 import { useTasks } from '../../state/TaskContext';
 import { useArticles } from '../../state/ArticlesContext';
 import { useClusters } from '../../state/ClustersContext';
@@ -43,8 +44,18 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   const { isRefreshing, loadingStatus, lastRefreshedAt, articles, refreshNow, collectError } = useArticles();
   const { clusters } = useClusters();
   const { campaigns } = useCampaigns();
-  const { settings } = useSettings();
+  const { settings, setModel } = useSettings();
   const noLlmKey = !settings.apiKey;  // 그룹 LLM 키는 브리지로 settings.apiKey에 주입됨 → 비면 미설정
+
+  // LLM 서킷 상태 폴링 — 과부하(503/429 연속·서킷 open) 시 모델 변경 배너 노출.
+  const [circuit, setCircuit] = useState(() => getLlmCircuitState());
+  useEffect(() => {
+    const id = setInterval(() => setCircuit(getLlmCircuitState()), 4000);
+    return () => clearInterval(id);
+  }, []);
+  const overloaded = circuit.open || circuit.consecutive429 >= 3;
+  // 빠른 전환 후보(현재 모델 제외). PM: gemini-2.0-flash / 2.5-pro
+  const SWITCH_MODELS = ['gemini-2.0-flash', 'gemini-2.5-pro', 'gemini-2.5-flash'].filter(m => m !== settings.model);
   const autoOff = campaigns.find(c => c.id === campaignId)?.autoCollect?.enabled === false;
   const noIntent = !(campaigns.find(c => c.id === campaignId)?.settings.topicReview.intent ?? '').trim();
   // 보드는 진행중 태스크만 — 발행됨(→발행함)·폐기됨(→폐기함)은 제외
@@ -166,6 +177,19 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
           </span>
         )}
 
+        {overloaded && (
+          <span className="inline-flex items-center gap-2 rounded-full border border-orange-300 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
+            ⚡ AI 모델 과부하{circuit.open ? ' (일시 차단 중)' : ` (연속 ${circuit.consecutive429}회 한도초과)`} — 모델 변경하시겠습니까?
+            {SWITCH_MODELS.map(m => (
+              <button
+                key={m}
+                onClick={() => setModel(m as typeof settings.model)}
+                className="rounded-md border border-orange-300 bg-white px-2 py-0.5 font-mono text-[11px] text-orange-700 transition-colors hover:bg-orange-100"
+              >→ {m}</button>
+            ))}
+          </span>
+        )}
+
         {noTaskHint && (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/80 bg-amber-50/80 px-3 py-1 text-xs text-amber-700 backdrop-blur-md">
             ⚠ 묶음 {noTaskHint.clusterCount}개 · 생성 0 — {noTaskHint.text}
@@ -193,6 +217,8 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
             aria-label="오래된 태스크 정리 기준 시간"
             className="rounded-md bg-transparent py-0.5 pr-1 font-mono font-semibold text-slate-600 outline-none"
           >
+            <option value={1}>1시간+</option>
+            <option value={3}>3시간+</option>
             <option value={6}>6시간+</option>
             <option value={12}>12시간+</option>
             <option value={24}>24시간+</option>
