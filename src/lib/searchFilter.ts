@@ -48,7 +48,23 @@ export type ClaimReason =
   | 'excluded_topic'         // 제외 주제 등장
   | 'no_allowed_entity'      // 허용 엔티티 미등장
   | 'entity_daily_limit'     // 엔티티 일일 상한 초과
+  | 'civic_noise'            // 지자체/행정 등 비-연예 노이즈 (① 사전 컷, judge 토큰 절약)
   | 'own_site_dup';          // 자체 기보도 제목과 중복
+
+/**
+ * 비-연예 노이즈 키워드 — 지자체/행정/공공 뉴스가 일반 RSS·검색으로 ①에 유입돼
+ * ② judge가 비싸게 off_topic 처리하는 토큰 낭비를 막기 위한 ① 사전 컷(LLM 0).
+ * 연예 엔티티(entityAllowlist)가 함께 등장하면 컷하지 않음(오컷 방지).
+ * NIE = K-pop/연예 제품이라 기본 활성. searching.filterCivicNoise=false로 끌 수 있음.
+ */
+const CIVIC_NOISE_KEYWORDS: readonly string[] = [
+  '시청', '군청', '구청', '도청', '시의회', '군의회', '구의회', '도의회', '조례', '예산안', '의정',
+  '시장 당선', '당선인', '당선자', '군수', '구청장', '도지사', '시의원', '군의원',
+  '추념식', '현충일', '기념식', '위령제',
+  '보건소', '주민센터', '행정복지센터', '치매안심센터', '복지관', '경로당', '보건지소',
+  '특강', '영양교육', '평생학습', '문해교실', '민원', '주민설명회',
+  '관광객 유치', '농업박물관', '농업기술센터', '읍면동',
+];
 
 export type ClaimDecision =
   | { ok: true; sources: TaskSource[]; matchedEntity: string | null; imageCount: number }
@@ -123,6 +139,18 @@ export function shouldClaimCluster(
     const kws = excludeKeywords.map(k => k.toLowerCase());
     clusterArticles = clusterArticles.filter(a => { const h = artHay(a); return !kws.some(k => h.includes(k)); });
     if (clusterArticles.length === 0) return { ok: false, reason: 'excluded_keyword' };
+  }
+  // 지자체/행정 노이즈 ① 사전 컷 (기본 활성, filterCivicNoise=false로 해제).
+  // 연예 엔티티가 함께 있으면 보존(오컷 방지) — 순수 행정 기사만 제거 → ② judge 토큰 절약.
+  if ((searching as { filterCivicNoise?: boolean }).filterCivicNoise !== false) {
+    const allow = entityAllowlist.map(e => e.toLowerCase()).filter(Boolean);
+    clusterArticles = clusterArticles.filter(a => {
+      const h = artHay(a);
+      const isNoise = CIVIC_NOISE_KEYWORDS.some(k => h.includes(k));
+      if (!isNoise) return true;
+      return allow.length > 0 && allow.some(e => h.includes(e)); // 노이즈여도 연예 엔티티 있으면 유지
+    });
+    if (clusterArticles.length === 0) return { ok: false, reason: 'civic_noise' };
   }
   // excludeTopics는 의미 판단(AI)이라 동기 필터에서 처리하지 않음.
   // 주제 검수 단계(SearchingPipeline)에서 judgeTopic(적합+제외 통합)으로 게이트.

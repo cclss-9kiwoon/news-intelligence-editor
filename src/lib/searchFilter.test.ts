@@ -161,3 +161,38 @@ describe('shouldClaimCluster', () => {
     expect(d).toEqual({ ok: false, reason: 'excluded_keyword' });
   });
 });
+
+describe('civic noise 필터 (① 사전 컷)', () => {
+  it('지자체/행정 노이즈 클러스터는 civic_noise로 컷', () => {
+    const arts = [
+      art('a1', 'yna', '밀양시 여름철 관광객 유치 총력'),
+      art('a2', 'newsis', '창녕군치매안심센터 프로그램 운영'),
+    ];
+    const d = shouldClaimCluster(cluster('cl1', ['a1', 'a2'], '밀양시 관광객 유치'), arts, baseCfg, [], NOW);
+    expect(d).toEqual({ ok: false, reason: 'civic_noise' });
+  });
+
+  it('당선인/추념식/특강 등 행정 키워드 컷', () => {
+    const arts = [art('a1', 'yna', '평택시장 당선인 첫 행보')];
+    const d = shouldClaimCluster(cluster('cl1', ['a1'], '평택시장 당선인'), arts, baseCfg, [], NOW);
+    expect(d).toEqual({ ok: false, reason: 'civic_noise' });
+  });
+
+  it('연예 기사는 통과(노이즈 키워드 없음)', () => {
+    const arts = [art('a1', 'osen', 'aespa 새 미니앨범 컴백')];
+    const d = shouldClaimCluster(cluster('cl1', ['a1'], 'aespa 컴백'), arts, baseCfg, [], NOW);
+    expect(d.ok).toBe(true);
+  });
+
+  it('노이즈 키워드 있어도 연예 엔티티 동반 시 보존(오컷 방지)', () => {
+    const arts = [art('a1', 'osen', 'aespa, 서초구 주민센터 행사 출연')];
+    const d = shouldClaimCluster(cluster('cl1', ['a1'], 'aespa 행사'), arts, { ...baseCfg, entityAllowlist: ['aespa'] }, [], NOW);
+    expect(d.ok).toBe(true);
+  });
+
+  it('filterCivicNoise=false면 컷 안 함', () => {
+    const arts = [art('a1', 'yna', '밀양시 관광객 유치')];
+    const d = shouldClaimCluster(cluster('cl1', ['a1'], '밀양시 관광객 유치'), arts, { ...baseCfg, filterCivicNoise: false } as SourceConfig, [], NOW);
+    expect(d.ok).toBe(true);
+  });
+});

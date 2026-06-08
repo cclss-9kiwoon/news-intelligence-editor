@@ -286,6 +286,7 @@ export type SourceConfig = {
   minMediaCount: number;     // 태스크 생성 최소 매체 수
   minMediaForWrite?: number; // ③ 작성 전 교차검증 최소 distinct 매체 수(단일소스 차단). 기본 2. 임시 1로 흐름 확인 가능
   maxSearchingQueue?: number; // ① searching 큐 총상한(미폐기·미발행 태스크 최대). 도달 시 신규 claim 중단. 기본 20
+  filterCivicNoise?: boolean; // ① 지자체/행정 비-연예 노이즈 사전 컷(judge 토큰 절약). 기본 true
   // ── 중복·범위 보강 (범용 스키마) ──
   entityAllowlist: string[];   // 허용 엔티티(인물/브랜드). 비면 전체 허용
   excludeTopics: string[];     // 제외 주제(구문 단위, 대소문자 무시)
