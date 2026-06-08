@@ -284,6 +284,7 @@ export type SourceConfig = {
   topicKeywords: string[];   // 포함 키워드 (비면 전체)
   excludeKeywords: string[]; // 제외 키워드
   minMediaCount: number;     // 태스크 생성 최소 매체 수
+  minMediaForWrite?: number; // ③ 작성 전 교차검증 최소 distinct 매체 수(단일소스 차단). 기본 2. 임시 1로 흐름 확인 가능
   // ── 중복·범위 보강 (범용 스키마) ──
   entityAllowlist: string[];   // 허용 엔티티(인물/브랜드). 비면 전체 허용
   excludeTopics: string[];     // 제외 주제(구문 단위, 대소문자 무시)
