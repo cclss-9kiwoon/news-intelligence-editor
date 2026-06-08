@@ -13,6 +13,7 @@ export function SettingsModal({ open, onClose }: Props) {
   const {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
     setModel, setFastModel, setLlmBackend, setAgentInboxCode, setKhalaInboxCode,
+    setBudgetDailyUsd, setBudgetHourlyUsd, setCurrencyKrwPerUsd,
     addCategory, updateCategory, removeCategory, setArticleWindow,
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold,
     setSimulatorEnabled, setSimulatorIntervalSec,
@@ -256,6 +257,33 @@ export function SettingsModal({ open, onClose }: Props) {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* 예산 가드(NIE 비용추적) — 누적 소비 도달 시 API 자동 호출 정지(하드 스톱). 0=무제한 */}
+              <div className="mt-3 border-t border-slate-100 pt-2">
+                <span className="text-xs font-semibold text-slate-600">예산 가드 (0 = 무제한)</span>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  <label className="flex items-center gap-1.5">
+                    <span className="whitespace-nowrap text-xs text-slate-500">일 한도 $</span>
+                    <input type="number" min={0} step="0.5" value={settings.budgetDailyUsd || 0}
+                      onChange={e => setBudgetDailyUsd(Number(e.target.value))}
+                      className="w-20 rounded border border-slate-300 px-2 py-1 text-xs font-mono" />
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <span className="whitespace-nowrap text-xs text-slate-500">시간 한도 $</span>
+                    <input type="number" min={0} step="0.5" value={settings.budgetHourlyUsd || 0}
+                      onChange={e => setBudgetHourlyUsd(Number(e.target.value))}
+                      className="w-20 rounded border border-slate-300 px-2 py-1 text-xs font-mono" />
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <span className="whitespace-nowrap text-xs text-slate-500">₩/$ 환율</span>
+                    <input type="number" min={0} step="10" value={settings.currencyKrwPerUsd || 0}
+                      onChange={e => setCurrencyKrwPerUsd(Number(e.target.value))}
+                      placeholder="0=병기안함"
+                      className="w-24 rounded border border-slate-300 px-2 py-1 text-xs font-mono" />
+                  </label>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">도달 시 칸반 배너 + API 자동 호출 정지. B(위임) 호출은 비용 0이라 가드 비대상.</p>
               </div>
             </div>
           </section>

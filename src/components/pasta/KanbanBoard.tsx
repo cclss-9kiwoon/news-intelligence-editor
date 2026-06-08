@@ -5,6 +5,7 @@ import { useArticles } from '../../state/ArticlesContext';
 import { useClusters } from '../../state/ClustersContext';
 import { useCampaigns } from '../../state/CampaignContext';
 import { useSettings } from '../../state/SettingsContext';
+import { useUsage } from '../../state/UsageContext';
 import { shouldClaimCluster } from '../../lib/searchFilter';
 import { staleTaskIds, staleCountByStatus, hoursToMs } from '../../lib/taskCleanup';
 import { IconTrash, IconRefresh } from './icons';
@@ -49,6 +50,9 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   const { clusters } = useClusters();
   const { campaigns } = useCampaigns();
   const { settings, setModel } = useSettings();
+  const { usage, budget, krwPerUsd } = useUsage();
+  const usd = (n: number) => `$${n.toFixed(n < 1 ? 4 : 2)}`;
+  const won = (n: number) => krwPerUsd > 0 ? ` (₩${Math.round(n * krwPerUsd).toLocaleString()})` : '';
   const noLlmKey = !settings.apiKey;  // 그룹 LLM 키는 브리지로 settings.apiKey에 주입됨 → 비면 미설정
 
   // LLM 서킷 상태 폴링 — 과부하(503/429 연속·서킷 open) 시 모델 변경 배너 노출.
@@ -209,6 +213,11 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
           </span>
         )}
 
+        {budget.tripped && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+            🛑 예산 초과({budget.scope === 'day' ? '일' : '시간'} 한도) — API 자동 호출 정지됨. {budget.scope === 'day' ? `오늘 ${usd(budget.daySpentUsd)}/${usd(budget.dayLimitUsd)}` : `시간 ${usd(budget.hourSpentUsd)}/${usd(budget.hourLimitUsd)}`}. 한도 상향(설정) 또는 B 모드(위임) 전환
+          </span>
+        )}
         {overloaded && (
           <span className="inline-flex items-center gap-2 rounded-full border border-orange-300 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
             ⚡ AI 모델 과부하{circuit.open ? ' (일시 차단 중)' : ` (연속 ${circuit.consecutive429}회 한도초과)`} · 현재 <span className="font-mono">{settings.model}</span> — 변경:
@@ -235,6 +244,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
             : <InfoChip tone={rhythm.atCap ? 'amber' : 'neutral'}>시간당 처리 {rhythm.promotedLastHour} · 무제한</InfoChip>}
           <InfoChip tone="blue">① 대기 {rhythm.queueCount}</InfoChip>
           <InfoChip>수집 {rhythm.collected}</InfoChip>
+          <InfoChip tone={budget.tripped ? 'amber' : 'neutral'}>오늘 {usd(usage.today.usd)}{won(usage.today.usd)} · 시간 {usd(usage.hourlyUsd)}</InfoChip>
           {rhythm.atCap && rhythm.nextPromotionMs > 0 && (
             <InfoChip tone="amber">다음 처리 {formatRemaining(rhythm.nextPromotionMs)} 뒤 (멈춤 아님)</InfoChip>
           )}

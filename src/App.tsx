@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { SettingsProvider, useSettings } from './state/SettingsContext';
+import { UsageProvider } from './state/UsageContext';
 import { CampaignProvider, useCampaigns } from './state/CampaignContext';
 import { TaskProvider } from './state/TaskContext';
 import { HistoryProvider } from './state/HistoryContext';
@@ -189,13 +190,15 @@ function PastaRouter() {
 export default function App() {
   return (
     <SettingsProvider>
-      <CampaignProvider>
-        <TaskProvider>
-          <ErrorBoundary label="pasta-root">
-            <PastaRouter />
-          </ErrorBoundary>
-        </TaskProvider>
-      </CampaignProvider>
+      <UsageProvider>
+        <CampaignProvider>
+          <TaskProvider>
+            <ErrorBoundary label="pasta-root">
+              <PastaRouter />
+            </ErrorBoundary>
+          </TaskProvider>
+        </CampaignProvider>
+      </UsageProvider>
     </SettingsProvider>
   );
 }
