@@ -192,7 +192,10 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     // → 전체 큐를 순회하되 LLM 콜(judge/producibility)만 사이클당 1건으로 캡(비용 페이싱 유지).
     //   패시브 게이트(추출 대기·단일소스 보류·승급)는 막힌 건을 skip하고 다음 건으로 계속 진행.
     // 자동 OFF: manualRun 마커 건만 대상.
-    let llmBudget = 1;  // 이번 사이클 새 LLM 콜 허용 수
+    // 사이클당 LLM 콜 캡(PM 308f0416): 1콜은 백로그에 너무 느림 → 상향.
+    // agent(위임)=비용0이라 넉넉히, api=비용 고려해 적당히. 큐가 짧으면 어차피 큐 길이로 자연 제한.
+    const backend = settings.llmBackend ?? 'api';
+    let llmBudget = backend === 'agent' ? 12 : 4;  // 이번 사이클 새 LLM 콜 허용 수
     for (const t of reviewQueue) {
       if (!auto && !isManualRun(t)) continue;
       const srcArts = articles.filter(a => t.sources.some(s => s.articleId === a.id));
@@ -229,8 +232,10 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
             .then(r => {
               if (!mountedRef.current) return;
               // 미결정(429/서킷/실패)→보류(재판단). 부적합 or 제외 해당→off_topic 컷. 적합&미제외→양 플래그 동시 set.
-              if (!r.decided) return;
+              if (!r.decided) { console.log(`[②judge] "${t.title.slice(0, 30)}" 미결정(429/서킷) → 보류`); return; }
               topicVerdictCache.set(sig, { adequate: r.adequate, excluded: r.excluded });  // verdict 캐시(중복 LLM콜 차단)
+              const verdict = (!r.adequate || r.excluded) ? '폐기(off_topic)' : '통과';
+              console.log(`[②judge] "${t.title.slice(0, 30)}" → ${verdict} (adequate=${r.adequate} excluded=${r.excluded})`);
               if (!r.adequate || r.excluded) discardTask(t.id, 'off_topic');
               else updateTask(t.id, { intentChecked: true, topicChecked: true });
             })
@@ -293,6 +298,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       }
 
       // 5) 모든 게이트 통과 → ③ 제작 승급 (풀텍스트 있으면 그걸로, 없으면 요약 폴백)
+      console.log(`[②→③] "${t.title.slice(0, 30)}" 승급 (매체 ${distinctMedia} · 전문 ${fullTextCount}/${refreshed.length})`);
       updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
