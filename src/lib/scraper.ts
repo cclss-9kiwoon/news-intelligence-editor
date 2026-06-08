@@ -509,7 +509,7 @@ export type EnrichResult = {
  *   2. Fallback: HTML proxy
  */
 export async function enrichArticlesWithFullText(
-  articles: { title: string; link: string; fullText?: string; description: string; images?: ArticleImage[] }[],
+  articles: { title: string; link: string; fullText?: string; description: string; images?: ArticleImage[]; source?: string }[],
   _naverClientId?: string,
   _naverClientSecret?: string,
   onProgress?: (done: number, total: number) => void,
@@ -551,9 +551,11 @@ export async function enrichArticlesWithFullText(
       batch.map(async article => {
         const result = await extractArticleText(article.link);
         if (result.ok && result.text) {
+          // 이미지에 출처 매체명 주입 — Engineer 워터마크 필터의 소스명 매칭 정확도↑.
+          const images = result.images?.map(img => ({ ...img, source: img.source ?? article.source }));
           updates.set(article.link, {
             fullText: result.text,
-            ...(result.images ? { images: result.images } : {}),
+            ...(images ? { images } : {}),
           });
           lastEnrichMethod = result.method === 'jina' ? 'jina' : 'naver';
           enriched++;
