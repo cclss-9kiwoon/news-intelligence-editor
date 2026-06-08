@@ -72,19 +72,31 @@ function isBlacklistedDomain(url: string): boolean {
  *
  * 시드 리스트 — akp-RW가 매체 화이트/블랙리스트를 주면 setMediaPriorityLists로 교체/정교화.
  */
+// akp-RW 실전 기준(091403c2) 반영. 1순위 4개 + 안정 1차매체.
 const DEFAULT_MEDIA_WHITELIST: readonly string[] = [
-  'yna.co.kr',        // 연합뉴스
-  'yonhapnewstv.co.kr',
-  'pstatic.net',      // 네이버뉴스 본문/이미지
+  'yna.co.kr',          // 연합뉴스 (1순위)
+  'sports.khan.co.kr',  // 스포츠경향 (1순위)
+  'news1.kr',           // 뉴스1 (1순위)
+  'sportschosun.com',   // 스포츠조선 (1순위)
+  'osen.mt.co.kr',      // OSEN
+  'heraldcorp.com',     // 헤럴드
+  'sportsseoul.com',    // 스포츠서울
+  'mydaily.co.kr',      // 마이데일리
+  'tenasia.co.kr',      // 텐아시아
+  'xportsnews.com',     // 엑스포츠뉴스
+  'pstatic.net',        // 네이버뉴스 본문/이미지
   'naver.com',
-  'news1.kr',
   'newsis.com',
+  'yonhapnewstv.co.kr',
 ];
-// 자주 차단되는(451 등) 어그리게이터/매체 — 후순위(스킵 아님: 유일 소스일 수 있음)
+// 후순위/스킵(akp-RW): 봇차단·불안정·소규모(단독·환각유발)·방송사 자체(교차미달).
+// 스킵 아님 — 유일 소스일 수 있어 후순위로만(단일소스 차단은 minMediaForWrite가 처리).
 const DEFAULT_MEDIA_DEPRIORITIZE: readonly string[] = [
-  'topstarnews.net',
-  'bizwnews',
-  'gukjenews',
+  'topstarnews.net',  // 봇차단
+  'bizwnews',         // 불안정
+  'gukjenews',        // 불안정
+  'mhnse.com',        // 소규모(단독·환각유발)
+  'enews.imbc',       // 방송사 자체(단일출처 교차미달)
   'jndn',
 ];
 
