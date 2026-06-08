@@ -7,7 +7,7 @@ import { generateStory } from '../../lib/promptChain';
 import { judgeTopic } from '../../lib/topicJudge';
 import { assessProducibility } from '../../lib/producibility';
 import { reviewDraft } from '../../lib/review';
-import { shouldClaimCluster } from '../../lib/searchFilter';
+import { shouldClaimCluster, normalizeTitle } from '../../lib/searchFilter';
 import { loadDiscarded, buildDiscardIndex } from '../../lib/discardLedger';
 import { promotionBudget } from '../../lib/promotion';
 import { judgeBreaking } from '../../lib/breakingDetector';
@@ -17,6 +17,11 @@ import type { Campaign, Category, Task, StageLLMConfig } from '../../types';
 
 // 수동실행 마커(PM b129d4a0) — 자동진행 OFF여도 사용자가 드래그/선택한 1건만 ②/③ 처리.
 const isManualRun = (t: Task) => t.manualRun === true;
+
+// ② 주제판단 결과 캐시(PM 7d8d280f) — titleSig별 직전 verdict 재사용.
+// 동일 토픽이 여러 태스크/재렌더로 judgeTopic LLM콜 중복(1분내 3회 관측) → 비용 낭비.
+// 차단(excluded)·적합 둘 다 캐시. 세션 메모리(재유입은 discardLedger가 별도 차단).
+const topicVerdictCache = new Map<string, { adequate: boolean; excluded: boolean }>();
 
 const SOURCE_REVIEW_TIMEOUT_MS = 90_000; // 전문 수집 대기 상한
 const MIN_MEDIA_FOR_WRITE = 2; // ③ 작성 전 교차검증 최소 매체 수(단일소스 차단). TODO: campaign 설정값화(minMediaForWrite)
@@ -200,6 +205,14 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       // 1) 주제 판단 — intent 적합성 + 제외 주제를 judgeTopic 단일 콜로(콜 절반). 요약 기반. fail-CLOSED.
       const intent = (campaign.settings.topicReview.intent ?? '').trim();
       if (!t.intentChecked || !t.topicChecked) {
+        // 중복 판정 차단: 같은 titleSig를 이미 판정했으면 LLM콜 없이 직전 verdict 재사용.
+        const sig = normalizeTitle(t.title);
+        const cached = topicVerdictCache.get(sig);
+        if (cached) {
+          if (!cached.adequate || cached.excluded) discardTask(t.id, 'off_topic');
+          else updateTask(t.id, { intentChecked: true, topicChecked: true });
+          continue;
+        }
         if (!intentJudgeRef.current.has(t.id)) {
           intentJudgeRef.current.add(t.id);
           judgeTopic({ title: t.title, snippets }, intent, excludeTopics, stageSettings(campaign.settings.topicReview.llm, 'fast'))
@@ -207,6 +220,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
               if (!mountedRef.current) return;
               // 미결정(429/서킷/실패)→보류(재판단). 부적합 or 제외 해당→off_topic 컷. 적합&미제외→양 플래그 동시 set.
               if (!r.decided) return;
+              topicVerdictCache.set(sig, { adequate: r.adequate, excluded: r.excluded });  // verdict 캐시(중복 LLM콜 차단)
               if (!r.adequate || r.excluded) discardTask(t.id, 'off_topic');
               else updateTask(t.id, { intentChecked: true, topicChecked: true });
             })
