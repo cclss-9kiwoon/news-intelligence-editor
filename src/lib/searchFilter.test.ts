@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shouldClaimCluster, matchEntity, normalizeTitle } from './searchFilter';
+import { shouldClaimCluster, matchEntity, normalizeTitle, isCivicNoise } from './searchFilter';
 import type { Article, Cluster, SourceConfig, Task } from '../types';
 
 const NOW = 1_700_000_000_000;
@@ -159,6 +159,17 @@ describe('shouldClaimCluster', () => {
     const arts = [art('a1', 'osen', 'aespa 컴백 [홍보] 광고')];
     const d = shouldClaimCluster(cluster('cl1', ['a1'], 'aespa 컴백'), arts, { ...baseCfg, topicKeywords: ['컴백'], excludeKeywords: ['홍보'] }, [], NOW);
     expect(d).toEqual({ ok: false, reason: 'excluded_keyword' });
+  });
+});
+
+describe('isCivicNoise (공용 — ① + ② 소급)', () => {
+  it('행정 키워드 → true, 연예 → false', () => {
+    expect(isCivicNoise('광명시 현충일 추념식')).toBe(true);
+    expect(isCivicNoise('aespa 새 앨범 컴백')).toBe(false);
+  });
+  it('엔티티 동반 시 false(보존)', () => {
+    expect(isCivicNoise('aespa 서초구 주민센터 행사', ['aespa'])).toBe(false);
+    expect(isCivicNoise('밀양시 관광객 유치', ['aespa'])).toBe(true);
   });
 });
 

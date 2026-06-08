@@ -68,6 +68,19 @@ const CIVIC_NOISE_KEYWORDS: readonly string[] = [
   '관광객 유치', '농업박물관', '농업기술센터', '읍면동',
 ];
 
+/**
+ * 텍스트(제목+요약)가 지자체/행정 비-연예 노이즈인지 판정.
+ * 연예 엔티티(entityAllowlist)가 함께 등장하면 노이즈 아님(오컷 방지).
+ * ① claim 게이트 + ② 백로그 소급 재검(judge 전 discard)에 공용.
+ */
+export function isCivicNoise(text: string, entityAllowlist: string[] = []): boolean {
+  const h = text.toLowerCase();
+  if (!CIVIC_NOISE_KEYWORDS.some(k => h.includes(k))) return false;
+  const allow = entityAllowlist.map(e => e.toLowerCase()).filter(Boolean);
+  if (allow.length > 0 && allow.some(e => h.includes(e))) return false; // 엔티티 동반 → 보존
+  return true;
+}
+
 export type ClaimDecision =
   | { ok: true; sources: TaskSource[]; matchedEntity: string | null; imageCount: number }
   | { ok: false; reason: ClaimReason };
@@ -145,13 +158,7 @@ export function shouldClaimCluster(
   // 지자체/행정 노이즈 ① 사전 컷 (기본 활성, filterCivicNoise=false로 해제).
   // 연예 엔티티가 함께 있으면 보존(오컷 방지) — 순수 행정 기사만 제거 → ② judge 토큰 절약.
   if ((searching as { filterCivicNoise?: boolean }).filterCivicNoise !== false) {
-    const allow = entityAllowlist.map(e => e.toLowerCase()).filter(Boolean);
-    clusterArticles = clusterArticles.filter(a => {
-      const h = artHay(a);
-      const isNoise = CIVIC_NOISE_KEYWORDS.some(k => h.includes(k));
-      if (!isNoise) return true;
-      return allow.length > 0 && allow.some(e => h.includes(e)); // 노이즈여도 연예 엔티티 있으면 유지
-    });
+    clusterArticles = clusterArticles.filter(a => !isCivicNoise(artHay(a), entityAllowlist));
     if (clusterArticles.length === 0) return { ok: false, reason: 'civic_noise' };
   }
   // excludeTopics는 의미 판단(AI)이라 동기 필터에서 처리하지 않음.
