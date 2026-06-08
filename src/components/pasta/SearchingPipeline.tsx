@@ -17,6 +17,7 @@ import { useCampaigns } from '../../state/CampaignContext';
 import type { Campaign, Category, Task, StageLLMConfig } from '../../types';
 
 const SOURCE_REVIEW_TIMEOUT_MS = 90_000; // 전문 수집 대기 상한
+const MIN_MEDIA_FOR_WRITE = 2; // ③ 작성 전 교차검증 최소 매체 수(단일소스 차단). TODO: campaign 설정값화(minMediaForWrite)
 const HOUR_MS = 3600_000;
 const WINDOW_MS: Record<string, number> = {
   '1h': HOUR_MS, '24h': 24 * HOUR_MS, '7d': 7 * 24 * HOUR_MS, '30d': 30 * 24 * HOUR_MS, breaking: 30 * 24 * HOUR_MS,
@@ -167,8 +168,14 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       // 요약 스니펫 — RSS description 우선, 없으면 fullText 앞부분. intent/제외 판단은 추출 전 요약만으로 가능.
       const snippets = srcArts.map(a => a.description || a.fullText?.slice(0, 300) || '');
 
-      // ── ② 토큰-최적 컬링 순서: ①무료필터(claim단계)→intent flash→제외 flash→추출+producibility→③ ──
+      // ── ② 토큰-최적 컬링 순서: ①무료필터(claim단계)→단일소스 차단(무료)→intent flash→제외 flash→추출+producibility→③ ──
       // intent/제외를 추출 '앞'에: RSS 요약 기반이라 느린 Jina 추출 대기 없이 부적합 즉시 컷(②빠름·토큰절약).
+
+      // B) 단일소스 차단 — 교차검증(distinct 매체) 부족하면 ③ 작성 안 함(allkpop 신뢰도 원칙).
+      //    무료 count 체크라 intent/제외 LLM 전에 컷 = 최대 토큰절약. 단일소스는 보류(2번째 소스 대기),
+      //    미충족 지속 시 "단계별 정리"(staleTaskIds)로 청소. minMediaForWrite 기본 2.
+      const distinctMedia = new Set(refreshed.map(s => s.source)).size;
+      if (distinctMedia < MIN_MEDIA_FOR_WRITE) continue;
 
       // 1) 주제 정의(intent) 적합성 — 요약 기반. decided-부적합 즉시 폐기.
       const intent = (campaign.settings.topicReview.intent ?? '').trim();
