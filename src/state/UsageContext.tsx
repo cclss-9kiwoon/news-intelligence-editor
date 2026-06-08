@@ -29,13 +29,22 @@ export function UsageProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const init = loadJson<UsageEntry[]>(STORAGE_KEYS.usage, []);
     loadUsageEntries(Array.isArray(init) ? init : []);
-    setUsagePersist(all => saveJson(STORAGE_KEYS.usage, all));
+    // persist는 recordUsage마다 호출 → debounce(1s)로 localStorage 쓰기 thrash 방지(NIE 권장).
+    let saveTimer: ReturnType<typeof setTimeout> | null = null;
+    setUsagePersist(all => {
+      if (saveTimer) clearTimeout(saveTimer);
+      const snapshot = [...all];
+      saveTimer = setTimeout(() => saveJson(STORAGE_KEYS.usage, snapshot), 1_000);
+    });
     // 예산 가드: llmCall(api)이 호출 전 이걸 보고 초과 시 하드 스톱.
     setBudgetGuard(() => {
       const s = settingsRef.current;
       return budgetStatus(Date.now(), { dailyUsd: s.budgetDailyUsd, hourlyUsd: s.budgetHourlyUsd }, s.priceTable).tripped;
     });
-    return () => { setUsagePersist(null); setBudgetGuard(null); };
+    return () => {
+      if (saveTimer) { clearTimeout(saveTimer); saveJson(STORAGE_KEYS.usage, [...getUsageEntries()]); }  // 언마운트 시 즉시 flush
+      setUsagePersist(null); setBudgetGuard(null);
+    };
   }, []);
 
   // tick: 집계/예산 재평가 → 구독 컴포넌트 갱신. getUsageEntries 길이로 즉시성 보강.
@@ -48,7 +57,6 @@ export function UsageProvider({ children }: { children: ReactNode }) {
   const now = Date.now();
   const usage = aggregate(now, settings.priceTable);
   const budget = budgetStatus(now, { dailyUsd: settings.budgetDailyUsd, hourlyUsd: settings.budgetHourlyUsd }, settings.priceTable);
-  void getUsageEntries; // 적립 즉시 반영은 taskSig 변화/렌더로 자연 갱신
 
   return <UsageCtx.Provider value={{ usage, budget, krwPerUsd: settings.currencyKrwPerUsd ?? 0 }}>{children}</UsageCtx.Provider>;
 }
