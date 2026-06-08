@@ -334,6 +334,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
                     dragging={dragId === t.id}
                     onDragStart={e => { setDragId(t.id); e.dataTransfer.setData(DRAG_MIME, t.id); e.dataTransfer.effectAllowed = 'move'; }}
                     onDragEnd={() => { setDragId(null); setDragOver(null); }}
+                    agentMode={settings.llmBackend === 'agent'}
                   />
                 ))}
                 {colTasks.length > COL_RENDER_LIMIT && (
@@ -354,10 +355,11 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   );
 }
 
-function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, onResume, onDiscard, onPublish, dragging, onDragStart, onDragEnd }: {
+function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, onResume, onDiscard, onPublish, dragging, onDragStart, onDragEnd, agentMode }: {
   task: Task; onOpen: () => void; onDelete: () => void; onRetry: () => void;
   onTogglePriority: () => void; onPause: () => void; onResume: () => void; onDiscard: () => void; onPublish: () => void;
   dragging?: boolean; onDragStart?: (e: React.DragEvent) => void; onDragEnd?: (e: React.DragEvent) => void;
+  agentMode?: boolean;
 }) {
   const fullTextCount = task.sources.filter(s => s.hasFullText).length;
   const mediaCount = new Set(task.sources.map(s => s.source)).size;
@@ -369,9 +371,9 @@ function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, 
   const inProgress = taskActive(task);
   const progressLabel =
     task.status === 'searching' ? '처리 대기'
-    : task.status === 'topic_review' ? '주제 검수 중'
+    : task.status === 'topic_review' ? (agentMode ? '에이전트 검수 중' : '주제 검수 중')
     : retrying ? `재시도 ${attempts + 1}/3`
-    : '작성 중';
+    : (agentMode ? '에이전트 작성 중' : '작성 중');
 
   return (
     <div

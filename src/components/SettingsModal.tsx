@@ -11,7 +11,7 @@ type Props = { open: boolean; onClose: () => void };
 export function SettingsModal({ open, onClose }: Props) {
   const {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
-    setModel, setFastModel,
+    setModel, setFastModel, setLlmBackend, setAgentInboxCode, setKhalaInboxCode,
     addCategory, updateCategory, removeCategory, setArticleWindow,
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold,
     setSimulatorEnabled, setSimulatorIntervalSec,
@@ -188,6 +188,46 @@ export function SettingsModal({ open, onClose }: Props) {
                   className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs font-mono"
                 />
               </label>
+
+              {/* LLM 백엔드(NIE 1cd009a) — API 직접 호출 vs 내 LLM 에이전트에 위임(테스트용) */}
+              <div className="mt-3 border-t border-slate-100 pt-2">
+                <span className="text-xs font-semibold text-slate-600">LLM 백엔드</span>
+                <div className="mt-1.5 flex gap-2">
+                  <label className={`flex flex-1 cursor-pointer items-center gap-1.5 rounded border px-2 py-1 text-xs ${(settings.llmBackend ?? 'api') === 'api' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-slate-300 text-slate-500'}`}>
+                    <input type="radio" name="llmBackend" checked={(settings.llmBackend ?? 'api') === 'api'} onChange={() => setLlmBackend('api')} />
+                    완전 자동(API)
+                  </label>
+                  <label className={`flex flex-1 cursor-pointer items-center gap-1.5 rounded border px-2 py-1 text-xs ${settings.llmBackend === 'agent' ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-slate-300 text-slate-500'}`}>
+                    <input type="radio" name="llmBackend" checked={settings.llmBackend === 'agent'} onChange={() => setLlmBackend('agent')} />
+                    테스트: 내 LLM 위임
+                  </label>
+                </div>
+                {settings.llmBackend === 'agent' && (
+                  <div className="mt-2 space-y-2">
+                    <label className="flex items-center gap-2">
+                      <span className="whitespace-nowrap text-xs text-slate-500">위임 에이전트 inbox:</span>
+                      <input
+                        type="text"
+                        placeholder="구독 LLM 에이전트 inbox code"
+                        value={settings.agentInboxCode ?? ''}
+                        onChange={e => setAgentInboxCode(e.target.value)}
+                        className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs font-mono"
+                      />
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <span className="whitespace-nowrap text-xs text-slate-500">수신(NIE) inbox:</span>
+                      <input
+                        type="text"
+                        placeholder="응답 수신용 inbox code"
+                        value={settings.khalaInboxCode ?? ''}
+                        onChange={e => setKhalaInboxCode(e.target.value)}
+                        className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs font-mono"
+                      />
+                    </label>
+                    <p className="text-[11px] text-slate-400">위임 모드: 작성·검수를 내 LLM 에이전트에 Khala로 보내 응답 대기(최대 180s). dev 서버에 KHALA_API_KEY 필요. 스펙: docs/agent-llm-protocol.md</p>
+                  </div>
+                )}
+              </div>
             </div>
           </section>
         </div>
