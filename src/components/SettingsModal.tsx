@@ -4,6 +4,7 @@ import { useSettings } from '../state/SettingsContext';
 import { useHistory } from '../state/HistoryContext';
 import { PROVIDERS, type ProviderId, type ArticleWindow, type PromptConfig } from '../types';
 import { extractArticleText } from '../lib/scraper';
+import { llmCall, llmBackendFrom } from '../lib/llmBackend';
 import { ProjectProfileTab } from './ProjectProfileTab';
 
 type Props = { open: boolean; onClose: () => void };
@@ -33,6 +34,22 @@ export function SettingsModal({ open, onClose }: Props) {
   const [categoryOpen, setCategoryOpen] = useState<Record<string, boolean>>({});
   const [refUrl, setRefUrl] = useState('');
   const [refFetching, setRefFetching] = useState(false);
+  // B 모드 연결 테스트(PM 8f870827, 선택) — agent에 ping 1회. dev+KHALA_API_KEY 필요.
+  const [agentTest, setAgentTest] = useState<{ state: 'idle' | 'testing' | 'ok' | 'fail'; msg?: string }>({ state: 'idle' });
+  const testAgentConnection = async () => {
+    setAgentTest({ state: 'testing' });
+    try {
+      const res = await llmCall<{ ok?: boolean }>({
+        apiKey: settings.apiKey, model: settings.model,
+        system: 'You are a connectivity probe. Reply ONLY with compact JSON.',
+        user: 'Return exactly {"ok":true}',
+        backend: llmBackendFrom(settings), stage: 'ping',
+      });
+      setAgentTest({ state: 'ok', msg: `응답 수신: ${JSON.stringify(res).slice(0, 80)}` });
+    } catch (e) {
+      setAgentTest({ state: 'fail', msg: (e as Error)?.message?.slice(0, 120) || '실패' });
+    }
+  };
   const [refError, setRefError] = useState('');
 
   if (!open) return null;
@@ -224,7 +241,19 @@ export function SettingsModal({ open, onClose }: Props) {
                         className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs font-mono"
                       />
                     </label>
-                    <p className="text-[11px] text-slate-400">위임 모드: 작성·검수를 내 LLM 에이전트에 Khala로 보내 응답 대기(최대 180s). dev 서버에 KHALA_API_KEY 필요. 스펙: docs/agent-llm-protocol.md</p>
+                    <p className="text-[11px] text-slate-400">위임 모드: 작성·검수를 내 LLM 에이전트에 Khala로 보내 응답 대기(최대 180s). dev 서버에 KHALA_API_KEY 필요(없으면 프록시 401). 스펙: docs/agent-llm-protocol.md</p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={testAgentConnection}
+                        disabled={agentTest.state === 'testing' || !settings.agentInboxCode}
+                        className="inline-flex items-center gap-1.5 rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        {agentTest.state === 'testing' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                        연결 테스트 (ping)
+                      </button>
+                      {agentTest.state === 'ok' && <span className="text-xs text-green-600">✓ 연결됨 — {agentTest.msg}</span>}
+                      {agentTest.state === 'fail' && <span className="text-xs text-red-600">✗ {agentTest.msg}</span>}
+                    </div>
                   </div>
                 )}
               </div>

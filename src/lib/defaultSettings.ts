@@ -76,8 +76,8 @@ export const DEFAULT_SETTINGS: Settings = {
   model: 'gpt-4o-mini',
   fastModel: 'gemini-2.5-flash',   // ②④ 경량 기본(gemini 프로젝트). 사용자 변경 가능, 비면 model 폴백
   llmBackend: 'api',               // 본선 = API 직결. 'agent'=Khala 위임(dev/test)
-  agentInboxCode: '',
-  khalaInboxCode: '',
+  agentInboxCode: 'akp-rw',        // 데모 기본 위임 대상(PM 확정). 사용자 변경 가능
+  khalaInboxCode: '',              // 응답 수신용 NIE inbox — 사용자/NIE가 입력
 
   categories: DEFAULT_CATEGORIES,
   activeCategoryId: 'music',
