@@ -81,8 +81,14 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
     // 폐기/거부 원장 인덱스 — 이미 폐기·거부된 사건(title/url/articleId) ① 재유입 차단
     const discardIdx = buildDiscardIndex(loadDiscarded(now));
-    // 점진화: 한 사이클에 클러스터 전부 생성 금지(흰화면/프리즈 방지). 상한만큼 모아 1회 벌크 setState.
-    const MAX_NEW_PER_CYCLE = 8;  // 점진적 — 사이클당 소량씩 자연스럽게 쌓이게(와르르 방지)
+    // 페이싱(PM 5fdac5c1): ① 1개씩 트리클 + 총상한. 와르르 방지 + 통제된 순차 흐름.
+    // - 사이클당 신규 1개(MAX_NEW_PER_CYCLE=1) → 한 장씩 자연스럽게 올라옴.
+    // - 총상한 maxSearchingQueue(기본20): searching(미폐기·미발행) 수 ≤ 상한. 점유는 두되 카드 생성만 멈춤.
+    //   한 개가 ②로 빠지면 빈자리만큼 다음 사이클에 채움. (types 필드 NIE 조율 중 — 인라인 캐스트로 의존 회피)
+    const SEARCHING_CAP = (searchingCfg as { maxSearchingQueue?: number }).maxSearchingQueue ?? 20;
+    const searchingNow = working.filter(t => t.status === 'searching' && !t.discardReason && !t.published).length;
+    const room = Math.max(0, SEARCHING_CAP - searchingNow);
+    const MAX_NEW_PER_CYCLE = Math.min(1, room);  // 트리클(1) + 상한 도달 시 0
     const batch: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>[] = [];
     for (const cluster of clusters) {
       if (batch.length >= MAX_NEW_PER_CYCLE) break;
@@ -153,9 +159,16 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     if (campaign.autoProcess?.enabled === false) return;  // 자동 진행 OFF = ②③④ LLM 정지
     const excludeTopics = (searchingCfg.excludeTopics ?? []).filter(x => x.trim());
 
-    for (const t of myTasks) {
-      if (t.status !== 'topic_review' || t.error || t.paused) continue;
+    // 페이싱(PM 5fdac5c1): ② 동시 1건만 — 상단(우선→골든임박→오래된) 1건만 판정 진행.
+    // 그 1건이 ②를 떠나면(통과→③ or 폐기) 다음 1건. 동시 다발(gemini 버스트) 차단.
+    const reviewQueue = myTasks
+      .filter(t => t.status === 'topic_review' && !t.error && !t.paused)
+      .sort((a, b) =>
+        (b.priority ? 1 : 0) - (a.priority ? 1 : 0) ||
+        expiresAtOf(a) - expiresAtOf(b) ||
+        a.createdAt - b.createdAt);
 
+    for (const t of reviewQueue.slice(0, 1)) {
       const srcArts = articles.filter(a => t.sources.some(s => s.articleId === a.id));
       const refreshed = t.sources.map(s => {
         const a = articles.find(x => x.id === s.articleId);
@@ -241,8 +254,12 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
   // ── 4. ③ 제작: LLM 생성 → 결과물 검수 전환 ──
   useEffect(() => {
     if (campaign.autoProcess?.enabled === false) return;  // 자동 진행 OFF = ②③④ LLM 정지
-    for (const t of myTasks) {
-      if (t.status !== 'producing' || t.draft || t.error || t.paused) continue;
+    // 페이싱(PM 5fdac5c1): ③ 동시 1건만 generateStory. 완료/실패로 빠지면 다음 1건.
+    if (producingRef.current.size >= 1) return;
+    const produceQueue = myTasks
+      .filter(t => t.status === 'producing' && !t.draft && !t.error && !t.paused)
+      .sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || a.createdAt - b.createdAt);
+    for (const t of produceQueue.slice(0, 1)) {
       if (producingRef.current.has(t.id)) continue;
       producingRef.current.add(t.id);
 

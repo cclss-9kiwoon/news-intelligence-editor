@@ -13,6 +13,10 @@ import type { Task, TaskStatus } from '../../types';
 
 const HOUR = 3600_000;
 const COL_RENDER_LIMIT = 50; // 컬럼당 렌더 상한 — 대량 대기 시 프리즈 방지(나머지는 "외 N건")
+// 단계 정방향 순서 — 드래그앤드롭 수동 진행(정방향만 허용). 인덱스 비교로 방향 판정.
+const STATUS_ORDER: TaskStatus[] = ['searching', 'topic_review', 'producing', 'final_review'];
+const statusIdx = (s: TaskStatus) => STATUS_ORDER.indexOf(s);
+const DRAG_MIME = 'application/x-pasta-task';
 
 // 골든타임 파생값 (저장 안 함, 렌더 계산). gt 없으면 null.
 export type GoldenView = { remainingMs: number; percent: number; state: 'ok' | 'warning' | 'expired' };
@@ -71,6 +75,26 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   );
   const retryTask = (id: string) => updateTask(id, { error: undefined, produceAttempts: 0, status: 'producing' });
   const publishTask = (id: string) => updateTask(id, { published: true, publishedAt: Date.now() });
+
+  // ── 수동 진행: 드래그앤드롭으로 카드를 다음 칸으로 이동(PM 476f8d66) ──
+  // 정방향만 허용(역방향/같은칸 무시). 건너뛰면 후속 AI 게이트가 막지 않도록 "수동 통과" 플래그 세팅.
+  // 자동진행 ON이면 드롭한 단계의 처리(판정/작성)가 이어짐(페이싱=1건씩). OFF여도 단계 이동은 됨.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<TaskStatus | null>(null);
+  const draggedTask = dragId ? allTasks.find(t => t.id === dragId) ?? null : null;
+  const canDrop = (to: TaskStatus) => !!draggedTask && statusIdx(to) > statusIdx(draggedTask.status);
+  const manualMove = (taskId: string, to: TaskStatus) => {
+    const t = allTasks.find(x => x.id === taskId);
+    if (!t || statusIdx(to) <= statusIdx(t.status)) return;  // 정방향만
+    // 단계 건너뛰며 ② AI 게이트를 사람이 대신 통과시킴 → 플래그 세팅(재게이트 방지).
+    const patch: Partial<Task> = { status: to };
+    if (statusIdx(to) >= statusIdx('producing')) {
+      patch.intentChecked = true;
+      patch.topicChecked = true;
+      patch.producibleChecked = true;
+    }
+    updateTask(taskId, patch);
+  };
 
   // 오래된(stuck) 태스크 정리 — 단계(컬럼)별로 N시간+ 머문 건 일괄 삭제.
   // staleHours select는 전역 공유, 삭제는 컬럼별 status 한정. tasks는 이미 발행·폐기 제외분.
@@ -256,8 +280,20 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
               </button>
             );
           }
+          const dropOk = dragOver === col.status && canDrop(col.status);
           return (
-            <div key={col.status} className="flex min-h-0 min-w-[260px] flex-1 flex-col overflow-hidden rounded-2xl border border-white/60 bg-white/55 backdrop-blur-md shadow-sm">
+            <div key={col.status}
+              onDragOver={e => { if (canDrop(col.status)) { e.preventDefault(); if (dragOver !== col.status) setDragOver(col.status); } }}
+              onDragLeave={e => { if (e.currentTarget === e.target && dragOver === col.status) setDragOver(null); }}
+              onDrop={e => {
+                e.preventDefault();
+                const id = e.dataTransfer.getData(DRAG_MIME) || dragId;
+                if (id) manualMove(id, col.status);
+                setDragOver(null); setDragId(null);
+              }}
+              className={`flex min-h-0 min-w-[260px] flex-1 flex-col overflow-hidden rounded-2xl border bg-white/55 backdrop-blur-md shadow-sm transition-colors ${
+                dropOk ? 'border-blue-400 ring-2 ring-blue-300/60 bg-blue-50/40' : 'border-white/60'
+              }`}>
               <div className={`h-1.5 w-full ${col.bar}`} />
               <div className="flex items-center justify-between px-4 py-3.5">
                 <button onClick={() => toggleCollapse(col.status)} title="접기" className="text-[15px] font-bold text-slate-800 hover:text-slate-500">⌄ {col.label}</button>
@@ -293,6 +329,9 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
                     onResume={() => resumeTask(t.id)}
                     onDiscard={() => discardTask(t.id, 'other')}
                     onPublish={() => publishTask(t.id)}
+                    dragging={dragId === t.id}
+                    onDragStart={e => { setDragId(t.id); e.dataTransfer.setData(DRAG_MIME, t.id); e.dataTransfer.effectAllowed = 'move'; }}
+                    onDragEnd={() => { setDragId(null); setDragOver(null); }}
                   />
                 ))}
                 {colTasks.length > COL_RENDER_LIMIT && (
@@ -313,9 +352,10 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   );
 }
 
-function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, onResume, onDiscard, onPublish }: {
+function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, onResume, onDiscard, onPublish, dragging, onDragStart, onDragEnd }: {
   task: Task; onOpen: () => void; onDelete: () => void; onRetry: () => void;
   onTogglePriority: () => void; onPause: () => void; onResume: () => void; onDiscard: () => void; onPublish: () => void;
+  dragging?: boolean; onDragStart?: (e: React.DragEvent) => void; onDragEnd?: (e: React.DragEvent) => void;
 }) {
   const fullTextCount = task.sources.filter(s => s.hasFullText).length;
   const mediaCount = new Set(task.sources.map(s => s.source)).size;
@@ -333,8 +373,12 @@ function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, 
 
   return (
     <div
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       onClick={onOpen}
-      className={`pasta-card-in pasta-springy group cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 hover:shadow-md ${task.paused ? 'opacity-60' : ''}`}
+      title="다음 칸으로 드래그해 수동 진행"
+      className={`pasta-card-in pasta-springy group cursor-grab rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 hover:shadow-md active:cursor-grabbing ${task.paused ? 'opacity-60' : ''} ${dragging ? 'opacity-40 ring-2 ring-blue-300' : ''}`}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-semibold leading-snug text-slate-800 line-clamp-2">
