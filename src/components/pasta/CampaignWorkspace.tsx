@@ -137,6 +137,11 @@ export function CampaignWorkspace({ taskId, onBack }: { taskId: string; onBack: 
             {task.review.passed ? '✓ 검수 통과' : `검수 ${task.review.findings.filter(f => f.severity === 'block').length}건 차단`}
           </span>
         )}
+        {task.draft?.summaryBased && (
+          <span title="전문 추출 실패로 RSS 요약 기반 작성 — 사실 보수적" className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-mono font-semibold text-amber-700">
+            ⚠ 요약 기반
+          </span>
+        )}
       </div>
 
       {/* 3분할 — 좁은 화면은 세로 스택, lg↑ 3분할 고정폭 */}
