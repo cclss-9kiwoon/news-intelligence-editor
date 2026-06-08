@@ -203,6 +203,8 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     // agent(위임)=비용0이라 넉넉히, api=비용 고려해 적당히. 큐가 짧으면 어차피 큐 길이로 자연 제한.
     const backend = settings.llmBackend ?? 'api';
     let llmBudget = backend === 'agent' ? 12 : 4;  // 이번 사이클 새 LLM 콜 허용 수
+    // 진단(PM 7ab6683e): ② effect 실제 구동/큐/백엔드 가시화. 0건이면 effect 미실행, queue>0인데 judge 안뜨면 in-flight hang.
+    console.log(`[②effect] run auto=${auto} backend=${backend} queue=${reviewQueue.length} inFlight=${intentJudgeRef.current.size} budget=${llmBudget}`);
     for (const t of reviewQueue) {
       if (!auto && !isManualRun(t)) continue;
       const srcArts = articles.filter(a => t.sources.some(s => s.articleId === a.id));
@@ -242,6 +244,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         {
           llmBudget--;
           intentJudgeRef.current.add(t.id);
+          console.log(`[②judge→송신] "${t.title.slice(0, 30)}" (${backend}) 판정 요청…`);  // 송신 시점(응답 전). 응답은 [②judge]
           judgeTopic({ title: t.title, snippets }, intent, excludeTopics, stageSettings(campaign.settings.topicReview.llm, 'fast'))
             .then(r => {
               if (!mountedRef.current) return;
