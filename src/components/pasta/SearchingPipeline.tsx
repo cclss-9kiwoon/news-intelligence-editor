@@ -16,6 +16,10 @@ import { resolveStageLLM } from '../../lib/stageLLM';
 import { useCampaigns } from '../../state/CampaignContext';
 import type { Campaign, Category, Task, StageLLMConfig } from '../../types';
 
+// 수동실행 마커(PM b129d4a0) — 자동진행 OFF여도 사용자가 드래그/선택한 1건만 ②/③ 처리.
+// types.ts Task.manualRun?:boolean NIE 조율 중 — 인라인 캐스트로 의존 회피.
+const isManualRun = (t: Task) => (t as { manualRun?: boolean }).manualRun === true;
+
 const SOURCE_REVIEW_TIMEOUT_MS = 90_000; // 전문 수집 대기 상한
 const MIN_MEDIA_FOR_WRITE = 2; // ③ 작성 전 교차검증 최소 매체 수(단일소스 차단). TODO: campaign 설정값화(minMediaForWrite)
 const HOUR_MS = 3600_000;
@@ -156,19 +160,23 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
   // ── 3. ② 검수: 전문 수집 대기 + 제외 주제 AI 판단 → 제작 전환 / 탈락 ──
   useEffect(() => {
-    if (campaign.autoProcess?.enabled === false) return;  // 자동 진행 OFF = ②③④ LLM 정지
+    const auto = campaign.autoProcess?.enabled !== false;  // 자동 진행
     const excludeTopics = (searchingCfg.excludeTopics ?? []).filter(x => x.trim());
 
     // 페이싱(PM 5fdac5c1): ② 동시 1건만 — 상단(우선→골든임박→오래된) 1건만 판정 진행.
     // 그 1건이 ②를 떠나면(통과→③ or 폐기) 다음 1건. 동시 다발(gemini 버스트) 차단.
+    // 수동실행(PM b129d4a0): 자동 OFF여도 manualRun 마커 카드는 1건 처리(드래그/선택분).
     const reviewQueue = myTasks
       .filter(t => t.status === 'topic_review' && !t.error && !t.paused)
       .sort((a, b) =>
         (b.priority ? 1 : 0) - (a.priority ? 1 : 0) ||
         expiresAtOf(a) - expiresAtOf(b) ||
         a.createdAt - b.createdAt);
+    // 자동 ON: 상단 1건 / 자동 OFF: 수동실행 마커 1건만
+    const target = auto ? reviewQueue[0] : reviewQueue.find(isManualRun);
+    if (!target) return;
 
-    for (const t of reviewQueue.slice(0, 1)) {
+    for (const t of [target]) {
       const srcArts = articles.filter(a => t.sources.some(s => s.articleId === a.id));
       const refreshed = t.sources.map(s => {
         const a = articles.find(x => x.id === s.articleId);
@@ -253,13 +261,16 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
   // ── 4. ③ 제작: LLM 생성 → 결과물 검수 전환 ──
   useEffect(() => {
-    if (campaign.autoProcess?.enabled === false) return;  // 자동 진행 OFF = ②③④ LLM 정지
+    const auto = campaign.autoProcess?.enabled !== false;  // 자동 진행
     // 페이싱(PM 5fdac5c1): ③ 동시 1건만 generateStory. 완료/실패로 빠지면 다음 1건.
+    // 수동실행(PM b129d4a0): 자동 OFF여도 manualRun 마커 1건은 작성.
     if (producingRef.current.size >= 1) return;
     const produceQueue = myTasks
       .filter(t => t.status === 'producing' && !t.draft && !t.error && !t.paused)
       .sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || a.createdAt - b.createdAt);
-    for (const t of produceQueue.slice(0, 1)) {
+    const pTarget = auto ? produceQueue[0] : produceQueue.find(isManualRun);
+    if (!pTarget) return;
+    for (const t of [pTarget]) {
       if (producingRef.current.has(t.id)) continue;
       producingRef.current.add(t.id);
 
@@ -284,7 +295,8 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
             images: srcArticles.flatMap(a => (a.images ?? []).map(im => ({ url: im.url }))),
           };
           try { review = await reviewDraft(draft, stageSettings(campaign.settings.finalReview.llm, 'fast'), reviewCtx); } catch { review = undefined; }
-          if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review', produceAttempts: attempt });
+          // manualRun:false — ④(사람) 도달 = 수동실행 1건 완료, 마커 해제.
+          if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review', produceAttempts: attempt, manualRun: false } as Partial<Task>);
         })
         .catch((err: unknown) => {
           if (!mountedRef.current) return;

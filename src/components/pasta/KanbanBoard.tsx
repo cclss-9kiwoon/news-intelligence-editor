@@ -87,13 +87,15 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
     const t = allTasks.find(x => x.id === taskId);
     if (!t || statusIdx(to) <= statusIdx(t.status)) return;  // 정방향만
     // 단계 건너뛰며 ② AI 게이트를 사람이 대신 통과시킴 → 플래그 세팅(재게이트 방지).
-    const patch: Partial<Task> = { status: to };
+    const patch: Partial<Task> & { manualRun?: boolean } = { status: to };
     if (statusIdx(to) >= statusIdx('producing')) {
       patch.intentChecked = true;
       patch.topicChecked = true;
       patch.producibleChecked = true;
     }
-    updateTask(taskId, patch);
+    // 수동실행 마커: ②/③로 떨군 카드는 자동진행 OFF여도 그 1건만 즉시 처리(PM b129d4a0).
+    if (to === 'topic_review' || to === 'producing') patch.manualRun = true;
+    updateTask(taskId, patch as Partial<Task>);
   };
 
   // 오래된(stuck) 태스크 정리 — 단계(컬럼)별로 N시간+ 머문 건 일괄 삭제.
