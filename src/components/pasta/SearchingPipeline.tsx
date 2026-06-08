@@ -7,7 +7,7 @@ import { generateStory } from '../../lib/promptChain';
 import { judgeTopic } from '../../lib/topicJudge';
 import { assessProducibility } from '../../lib/producibility';
 import { reviewDraft } from '../../lib/review';
-import { shouldClaimCluster, normalizeTitle } from '../../lib/searchFilter';
+import { shouldClaimCluster, normalizeTitle, isCivicNoise } from '../../lib/searchFilter';
 import { getMediaPriorityLists } from '../../lib/scraper';
 import { loadDiscarded, buildDiscardIndex } from '../../lib/discardLedger';
 import { promotionBudget } from '../../lib/promotion';
@@ -218,6 +218,13 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
       // ── ② 컬링 순서: ①무료필터(claim)→주제판단(intent+제외 1콜)→단일소스 차단→추출+producibility→③ ──
       // 주제판단을 단일소스 차단 '앞'에: 무관 단일소스도 off_topic 먼저 컷해야 ②에 안 쌓임.
+
+      // 0) 지자체/행정 노이즈 소급 컷(NIE 7e8fe4b isCivicNoise) — judge LLM 콜 전에 레거시 노이즈 제거(토큰 0).
+      //    ①에서 막혀야 정상이나 이미 ②에 쌓인 레거시분을 RW 도달 전 정리.
+      if (searchingCfg.filterCivicNoise !== false) {
+        const snip = srcArts.map(a => `${a.title} ${a.description}`).join(' ');
+        if (isCivicNoise(snip, searchingCfg.entityAllowlist ?? [])) { discardTask(t.id, 'off_topic'); continue; }
+      }
 
       // 1) 주제 판단 — intent 적합성 + 제외 주제를 judgeTopic 단일 콜로(콜 절반). 요약 기반. fail-CLOSED.
       const intent = (campaign.settings.topicReview.intent ?? '').trim();

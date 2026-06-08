@@ -277,6 +277,12 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
               (b.isBreaking ? 1 : 0) - (a.isBreaking ? 1 : 0) ||
               (b.priority ? 1 : 0) - (a.priority ? 1 : 0) ||
               (a.goldenTime?.expiresAt ?? Infinity) - (b.goldenTime?.expiresAt ?? Infinity));
+          } else if (col.status === 'topic_review' || col.status === 'producing') {
+            // ②③ UI 순서 = 파이프라인 처리 순서(우선→골든임박→오래된). "위에서부터 하나씩" 체감(PM d761b9e3)
+            colTasks.sort((a, b) =>
+              (b.priority ? 1 : 0) - (a.priority ? 1 : 0) ||
+              (a.goldenTime?.expiresAt ?? Infinity) - (b.goldenTime?.expiresAt ?? Infinity) ||
+              a.createdAt - b.createdAt);
           }
           const activeCount = colTasks.filter(taskActive).length;
           const colStale = staleCounts[col.status] ?? 0;  // 이 단계 N시간+ 경과 건수
@@ -392,7 +398,7 @@ function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, 
       onDragEnd={onDragEnd}
       onClick={onOpen}
       title="다음 칸으로 드래그해 수동 진행"
-      className={`pasta-card-in pasta-springy group cursor-grab rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 hover:shadow-md active:cursor-grabbing ${task.paused ? 'opacity-60' : ''} ${dragging ? 'opacity-40 ring-2 ring-blue-300' : ''}`}
+      className={`pasta-card-in pasta-springy group cursor-grab rounded-2xl border bg-white p-4 shadow-sm hover:border-slate-300 hover:shadow-md active:cursor-grabbing ${task.paused ? 'opacity-60' : ''} ${dragging ? 'opacity-40 ring-2 ring-blue-300' : ''} ${inProgress && !dragging ? 'border-blue-400 ring-2 ring-blue-300/70 shadow-[0_0_14px_rgba(96,165,250,0.55)] animate-pulse motion-reduce:animate-none' : 'border-slate-200'}`}
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-semibold leading-snug text-slate-800 line-clamp-2">
