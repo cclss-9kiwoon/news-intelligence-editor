@@ -37,8 +37,8 @@ describe('llmCall agent 모드 (Khala 위임)', () => {
         const body = JSON.parse(String(init?.body));
         const req = JSON.parse(body.body) as NieLlmRequest;
         sentCorrelationId = req.correlationId;
-        expect(body.sender_inbox_code).toBe('SELF');
-        expect(body.recipient_inbox_code).toBe('AGENT');
+        expect(body.sender_session_code).toBe('SELF');
+        expect(body.recipient_session_code).toBe('AGENT');
         expect(req.type).toBe('nie_llm_request');
         expect(req.replyTo).toBe('SELF');
         return { ok: true, json: async () => ({ ok: true }) } as unknown as Response;

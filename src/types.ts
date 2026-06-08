@@ -424,6 +424,11 @@ export type Settings = {
   llmBackend?: LlmBackendMode;  // 기본 'api'
   agentInboxCode?: string;      // B 모드: 위임할 LLM 에이전트 inbox code (임의 — 사용자 구독 LLM)
   khalaInboxCode?: string;      // B 모드: 응답 수신용 우리(NIE) inbox code (recv session_code)
+  // ── 비용 추적 + 예산 가드 ──
+  budgetDailyUsd?: number;      // 일 예산 한도(USD). 0/미설정=무제한. 누적 소비 도달 시 자동진행 정지
+  budgetHourlyUsd?: number;     // 시간 예산 한도(USD, rolling 1h). 0/미설정=무제한
+  priceTable?: Record<string, { inputPer1M: number; outputPer1M: number }>; // 모델별 1M토큰 단가($)
+  currencyKrwPerUsd?: number;   // ₩ 병기 환율(0/미설정=USD만 표시)
 
   categories: Category[];
   activeCategoryId: string;

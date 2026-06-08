@@ -1,6 +1,7 @@
 import type { Settings, RssSource, PromptConfig, ProjectProfile } from '../types';
 import { DEFAULT_PROVIDER, PROVIDERS } from '../types';
 import { DEFAULT_CATEGORIES } from './defaultCategories';
+import { DEFAULT_PRICE_TABLE } from './usageLedger';
 
 export const DEFAULT_RSS_SOURCES: RssSource[] = [
   { id: 'yna-news', name: '연합뉴스 속보', url: 'https://www.yna.co.kr/rss/news.xml', enabled: true },
@@ -78,6 +79,10 @@ export const DEFAULT_SETTINGS: Settings = {
   llmBackend: 'api',               // 본선 = API 직결. 'agent'=Khala 위임(dev/test)
   agentInboxCode: 'akp-rw',        // 데모 기본 위임 대상(PM 확정). 사용자 변경 가능
   khalaInboxCode: '',              // 응답 수신용 NIE inbox — 사용자/NIE가 입력
+  budgetDailyUsd: 0,               // 0=무제한. 설정 시 누적 도달하면 자동진행 정지
+  budgetHourlyUsd: 0,
+  priceTable: DEFAULT_PRICE_TABLE, // gemini-2.5-flash/pro 공식 단가 시드(설정서 수정)
+  currencyKrwPerUsd: 0,
 
   categories: DEFAULT_CATEGORIES,
   activeCategoryId: 'music',

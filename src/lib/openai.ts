@@ -25,6 +25,19 @@ export type ChatJsonArgs = {
   baseUrl?: string;
 };
 
+/** LLM 토큰 사용량 (비용 추적용). gemini/OpenAI usage 필드에서 추출. */
+export type LlmUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+};
+
+/** chatJson 반환 — 파싱 결과 + 토큰 사용량(있으면). */
+export type ChatJsonResult<T> = {
+  data: T;
+  usage?: LlmUsage;
+};
+
 // ─── 글로벌 LLM 동시 호출 상한 (throughput vs 429) ──────────────────
 // 모든 LLM 호출(generateStory/reviewDraft/translate/judge…)이 chatJson을
 // 통과하므로, 여기 세마포어 하나로 전 파이프라인 동시성을 제한한다.
@@ -125,7 +138,7 @@ export function getLlmCircuitState(): { open: boolean; until: number; consecutiv
 }
 export function resetLlmCircuit(): void { resetCircuit(); } // 테스트/수동 해제용
 
-export async function chatJson<T = unknown>(args: ChatJsonArgs): Promise<T> {
+export async function chatJson<T = unknown>(args: ChatJsonArgs): Promise<ChatJsonResult<T>> {
   if (!args.apiKey) throw new OpenAIError('API key is empty', 0);
 
   // 서킷 차단 중이면 호출조차 안 함 (444 폭주 차단). 슬롯도 안 잡음.
@@ -172,14 +185,25 @@ export async function chatJson<T = unknown>(args: ChatJsonArgs): Promise<T> {
         throw new OpenAIError(body.error?.message || `HTTP ${res.status}`, res.status);
       }
 
-      const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+      const data = await res.json() as {
+        choices?: Array<{ message?: { content?: string } }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+      };
       const content = data.choices?.[0]?.message?.content ?? '';
       const parsed = parseJsonLoose<T>(content);
       if (parsed === undefined) {
         throw new OpenAIError('Response was not valid JSON: ' + content.slice(0, 200), 0);
       }
       resetCircuit();   // 성공 → 서킷 리셋
-      return parsed;
+      const u = data.usage;
+      const usage: LlmUsage | undefined = u
+        ? {
+            promptTokens: u.prompt_tokens ?? 0,
+            completionTokens: u.completion_tokens ?? 0,
+            totalTokens: u.total_tokens ?? ((u.prompt_tokens ?? 0) + (u.completion_tokens ?? 0)),
+          }
+        : undefined;
+      return { data: parsed, usage };
     }
   } finally {
     releaseLlmSlot();

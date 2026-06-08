@@ -33,7 +33,7 @@ describe('openai.chatJson', () => {
       user: 'usr',
     });
 
-    expect(result).toEqual({ hello: 'world' });
+    expect(result.data).toEqual({ hello: 'world' });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect((init.headers as Record<string, string>)['Authorization']).toBe('Bearer sk-test');
@@ -186,7 +186,7 @@ describe('chatJson 429 지수 백오프 재시도', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await chatJson({ apiKey: 'k', model: 'm', system: 's', user: 'u' });
-    expect(result).toEqual({ ok: 1 });
+    expect(result.data).toEqual({ ok: 1 });
     expect(fetchMock).toHaveBeenCalledTimes(3);          // 429,429,성공
     expect(getLlmCircuitState().open).toBe(false);       // 트립 안 함
     expect(getLlmCircuitState().consecutive429).toBe(0);

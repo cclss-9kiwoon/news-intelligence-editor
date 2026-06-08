@@ -105,7 +105,7 @@ describe('ensureParagraphs', () => {
 
 describe('generateStory', () => {
   it('returns the 5-key story object and injects category criteria+tone', async () => {
-    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce(STORY);
+    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({ data: STORY });
 
     const out = await generateStory([ARTICLE_A, ARTICLE_B], SETTINGS, CATEGORY);
     expect(spy).toHaveBeenCalledTimes(1);
@@ -122,9 +122,11 @@ describe('generateStory', () => {
 
   it('sanitizes leftover section labels in body and coerces tags to array', async () => {
     vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({
-      ...STORY,
-      body: '## 2. 스토리텔링형 본문\n깨끗해야 하는 본문.',
-      tags: undefined as unknown as string[],
+      data: {
+        ...STORY,
+        body: '## 2. 스토리텔링형 본문\n깨끗해야 하는 본문.',
+        tags: undefined as unknown as string[],
+      },
     });
     const out = await generateStory([ARTICLE_A], SETTINGS, CATEGORY);
     expect(out.body).toBe('<p>깨끗해야 하는 본문.</p>'); // ③ <p> 필수 후처리(ensureParagraphs)
@@ -132,7 +134,7 @@ describe('generateStory', () => {
   });
 
   it('전 source 요약뿐이면 summaryBased=true + 보수적 지침 주입', async () => {
-    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce(STORY);
+    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({ data: STORY });
     const out = await generateStory([ARTICLE_A, ARTICLE_B], SETTINGS, CATEGORY); // fullText 없음
     expect(out.summaryBased).toBe(true);
     const call = spy.mock.calls[0][0] as { system: string };
@@ -140,7 +142,7 @@ describe('generateStory', () => {
   });
 
   it('풀텍스트 있으면 summaryBased=false + 보수적 지침 없음', async () => {
-    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce(STORY);
+    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({ data: STORY });
     const withFull: Article = { ...ARTICLE_A, fullText: 'A방송 드라마 전문 본문 내용 충분히 길다.'.repeat(5) };
     const out = await generateStory([withFull], SETTINGS, CATEGORY);
     expect(out.summaryBased).toBe(false);

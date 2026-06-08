@@ -15,6 +15,7 @@
  * 전송은 dev proxy(/api/khala/*)를 경유 → 브라우저 CORS·키 노출 회피(Khala API키는 dev 서버 env).
  */
 import { chatJson, type ChatJsonArgs, OpenAIError } from './openai';
+import { recordUsage } from './usageLedger';
 
 export type LlmBackendMode = 'api' | 'agent';
 
@@ -42,12 +43,39 @@ export function llmBackendFrom(s: {
   };
 }
 
-/** 단일 LLM 진입점. 모드에 따라 API 직결 또는 에이전트 위임. */
+// 예산 가드 훅 — 앱이 settings(예산·단가표)+원장 기반 판정 함수를 주입.
+// true 반환 시 API 호출 차단(자동 LLM 소비 정지). 미설정 = 가드 없음.
+let budgetGuard: (() => boolean) | null = null;
+export function setBudgetGuard(fn: (() => boolean) | null): void {
+  budgetGuard = fn;
+}
+
+/** 단일 LLM 진입점. 모드에 따라 API 직결 또는 에이전트 위임 + 토큰 사용량 적립. */
 export async function llmCall<T>(args: LlmCallArgs): Promise<T> {
+  const stage = args.stage ?? 'unknown';
+
+  // B(agent) = 구독 사용 → 비용 0, 예산 가드 무관.
   if (args.backend?.mode === 'agent') {
-    return khalaAgentCall<T>(args);
+    const data = await khalaAgentCall<T>(args);
+    recordUsage({ ts: Date.now(), stage, model: args.model, promptTokens: 0, completionTokens: 0, totalTokens: 0, backend: 'agent' });
+    return data;
   }
-  return chatJson<T>(args);
+
+  // A(api) — 예산 한도 초과면 호출 차단(기존 fail 경로로 흘러 보류/재시도).
+  if (budgetGuard?.()) {
+    throw new OpenAIError('예산 한도 초과 — 자동 LLM 호출 정지(예산 가드)', 0);
+  }
+  const { data, usage } = await chatJson<T>(args);
+  recordUsage({
+    ts: Date.now(),
+    stage,
+    model: args.model,
+    promptTokens: usage?.promptTokens ?? 0,
+    completionTokens: usage?.completionTokens ?? 0,
+    totalTokens: usage?.totalTokens ?? 0,
+    backend: 'api',
+  });
+  return data;
 }
 
 // ─── B(agent) 경로 — 격리 구역 (상용 시 이 아래 전부 삭제 가능) ───────────────
@@ -163,9 +191,10 @@ async function khalaAgentCall<T>(args: LlmCallArgs): Promise<T> {
     replyTo: selfInboxCode,
   };
 
+  // Khala REST /api/send는 session_code 네이밍 요구(MCP 툴의 inbox_code와 다름).
   await khalaSend({
-    sender_inbox_code: selfInboxCode,
-    recipient_inbox_code: agentInboxCode,
+    sender_session_code: selfInboxCode,
+    recipient_session_code: agentInboxCode,
     body: JSON.stringify(request),
   });
 
