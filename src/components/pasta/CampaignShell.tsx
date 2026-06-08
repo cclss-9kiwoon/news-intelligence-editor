@@ -28,10 +28,11 @@ const NAV: { id: ShellView; Icon: (p: { className?: string }) => ReactElement; l
  * 캠페인 메인 셸 — 좌측 운영 레일 + 우측 뷰(보드/현황/발행함/폐기함).
  * 설정 끝난 캠페인 진입 시 메인 화면. 보드가 기본.
  */
-export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTask, onOpenWorkbench, onOpenGroup }: {
+export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenGlobalSettings, onOpenTask, onOpenWorkbench, onOpenGroup }: {
   campaign: Campaign;
   onBackToList: () => void;
   onOpenSettings: () => void;
+  onOpenGlobalSettings: () => void;
   onOpenTask: (taskId: string) => void;
   onOpenWorkbench: () => void;
   onOpenGroup: (groupId: string) => void;
@@ -137,6 +138,8 @@ export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTa
         {/* 하단 */}
         <div className="border-t border-slate-100 px-3 py-3">
           <button onClick={onOpenSettings} className="mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-slate-600 hover:bg-slate-100 transition-colors"><IconSettings className="h-4 w-4 shrink-0 text-slate-400" /> 캠페인 설정</button>
+          {/* 전역 설정(AI·LLM·예산) — B모드 토글/AI키가 여기 있음. 캠페인 설정과 별개(PM c97d0dc7) */}
+          <button onClick={onOpenGlobalSettings} className="mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"><IconSettings className="h-4 w-4 shrink-0 text-blue-500" /> 전역 설정 (AI·LLM·예산)</button>
           <button onClick={onOpenWorkbench} className="mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-slate-600 hover:bg-slate-100 transition-colors"><IconWrench className="h-4 w-4 shrink-0 text-slate-400" /> 수동 워크벤치</button>
           <button onClick={onBackToList} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-slate-500 hover:bg-slate-100 transition-colors"><IconArrowLeft className="h-4 w-4 shrink-0" /> 캠페인 목록</button>
         </div>

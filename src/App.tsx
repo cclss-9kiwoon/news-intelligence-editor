@@ -109,6 +109,7 @@ function PastaRouter() {
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [forceSettingsId, setForceSettingsId] = useState<string | null>(null);
   const [forceGroupId, setForceGroupId] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);  // 전역 설정(AI·LLM·예산) — 칸반/캠페인 화면서 진입(PM c97d0dc7)
   const { applyCampaignSettings } = useSettings();
   const { campaigns, groups, setActiveCampaign, activeCampaign, markCampaignConfigured } = useCampaigns();
 
@@ -165,6 +166,7 @@ function PastaRouter() {
                   campaign={activeCampaign}
                   onBackToList={() => setMode('pasta')}
                   onOpenSettings={() => { setForceSettingsId(activeCampaign.id); setMode('pasta'); }}
+                  onOpenGlobalSettings={() => setSettingsOpen(true)}
                   onOpenTask={(taskId) => { setOpenTaskId(taskId); setMode('workspace'); }}
                   onOpenWorkbench={() => setMode('workbench')}
                   onOpenGroup={(gid) => { setForceGroupId(gid); setMode('pasta'); }}
@@ -175,6 +177,7 @@ function PastaRouter() {
                   campaignName={activeCampaign?.name ?? '—'}
                 />
               )}
+              <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
             </BreakingProvider>
           </ConversionProvider>
         </ClustersProvider>
