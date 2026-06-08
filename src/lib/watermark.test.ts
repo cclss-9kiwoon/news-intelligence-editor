@@ -15,6 +15,18 @@ describe('watermark — 로고 매체 이미지 거름', () => {
     expect(isWatermarkedImage({})).toBe(false); // 판정 불가 → 통과(과차단 방지)
   });
 
+  it('akp-RW 추가 블랙 도메인 차단(starnewskorea/mt.co.kr/allkpop)', () => {
+    expect(isWatermarkedImage({ url: 'https://image.starnewskorea.com/2024/x.jpg' })).toBe(true);
+    expect(isWatermarkedImage({ url: 'https://photo.mt.co.kr/y.jpg' })).toBe(true);
+    expect(isWatermarkedImage({ url: 'https://cdn.allkpop.com/rehost.jpg' })).toBe(true);
+  });
+
+  it('화이트 도메인은 블랙 패턴 우연 일치해도 통과(공식 보도사진/소속사)', () => {
+    expect(isWatermarkedImage({ url: 'https://images.khan.co.kr/official.jpg' })).toBe(false);
+    expect(isWatermarkedImage({ url: 'https://weverse.io/poster.jpg' })).toBe(false);
+    expect(isWatermarkedImage({ url: 'https://ygfamily.com/artist.jpg' })).toBe(false);
+  });
+
   it('filterPublishableImages는 워터마크 의심만 제거', () => {
     const imgs = [
       { url: 'https://pstatic.net/ok.jpg', source: '연합뉴스' },
