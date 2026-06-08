@@ -156,100 +156,92 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     for (const t of myTasks) {
       if (t.status !== 'topic_review' || t.error || t.paused) continue;
 
-      // 전문 수집 대기 (승급 시각 기준 타임아웃)
+      const srcArts = articles.filter(a => t.sources.some(s => s.articleId === a.id));
       const refreshed = t.sources.map(s => {
         const a = articles.find(x => x.id === s.articleId);
         return a ? { ...s, hasFullText: !!a.fullText } : s;
       });
       const fullTextCount = refreshed.filter(s => s.hasFullText).length;
       const changed = refreshed.some((s, i) => s.hasFullText !== t.sources[i].hasFullText);
-      const imageCount = articles
-        .filter(a => t.sources.some(s => s.articleId === a.id))
-        .reduce((n, a) => n + (a.images?.length ?? 0), 0);
+      const imageCount = srcArts.reduce((n, a) => n + (a.images?.length ?? 0), 0);
+      // 요약 스니펫 — RSS description 우선, 없으면 fullText 앞부분. intent/제외 판단은 추출 전 요약만으로 가능.
+      const snippets = srcArts.map(a => a.description || a.fullText?.slice(0, 300) || '');
 
-      if (fullTextCount === 0) {
-        if (Date.now() - (t.promotedAt ?? t.createdAt) > SOURCE_REVIEW_TIMEOUT_MS) {
-          // 전 source 전문수집 실패 — N회 누적 시 자동 폐기(extract_failed), 아니면 재시도 대기.
-          // error는 설정 안 함: ② 루프 가드(t.error continue)에 걸려 재진입 못 하면 attempts가
-          // 1에서 정체해 자동폐기 안 됨. status=topic_review 유지로 다음 사이클 재평가→증가→임계 시 폐기.
-          const attempts = (t.extractAttempts ?? 0) + 1;
-          if (shouldDiscardAfterExtractFail(attempts)) {
-            discardTask(t.id, 'extract_failed');  // 폐기함 + recordDiscard + 예산 회복(promotionBudget 제외)
-          } else {
-            updateTask(t.id, { sources: refreshed, extractAttempts: attempts });
-          }
-        } else if (changed) {
-          updateTask(t.id, { sources: refreshed, imageCount });
+      // ── ② 토큰-최적 컬링 순서: ①무료필터(claim단계)→intent flash→제외 flash→추출+producibility→③ ──
+      // intent/제외를 추출 '앞'에: RSS 요약 기반이라 느린 Jina 추출 대기 없이 부적합 즉시 컷(②빠름·토큰절약).
+
+      // 1) 주제 정의(intent) 적합성 — 요약 기반. decided-부적합 즉시 폐기.
+      const intent = (campaign.settings.topicReview.intent ?? '').trim();
+      if (intent && !t.intentChecked) {
+        if (!intentJudgeRef.current.has(t.id)) {
+          intentJudgeRef.current.add(t.id);
+          judgeTopicAdequacy({ title: t.title, snippets }, intent, stageSettings(campaign.settings.topicReview.llm, 'fast'))
+            .then(r => {
+              if (!mountedRef.current) return;
+              // fail-CLOSED 3-state: 미결정(429/서킷/실패)→보류(재판단), 부적합→컷, 적합→통과
+              if (!r.decided) return;
+              if (!r.adequate) discardTask(t.id, 'off_topic');
+              else updateTask(t.id, { intentChecked: true });
+            })
+            .catch(() => { /* 예외=미결정=보류 */ })
+            .finally(() => { intentJudgeRef.current.delete(t.id); });
         }
         continue;
       }
 
-      // ②-B 제작 가능성 게이트 — intent/제외 LLM '앞'에 배치(fail-fast): 제작불가(이미지 없음) 건에
-      // LLM 낭비 안 하도록 먼저 컷. 통과=producibleChecked 영속, 미통과=보류(자동삭제 없음, 수동 정리).
+      // 2) 제외 주제 — 요약 기반.
+      if (excludeTopics.length > 0 && !t.topicChecked) {
+        if (!topicJudgeRef.current.has(t.id)) {
+          topicJudgeRef.current.add(t.id);
+          judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, stageSettings(campaign.settings.topicReview.llm, 'fast'))
+            .then(r => {
+              if (!mountedRef.current) return;
+              if (r.excluded) discardTask(t.id, 'off_topic');
+              else updateTask(t.id, { topicChecked: true });
+            })
+            .catch(() => { if (mountedRef.current) updateTask(t.id, { topicChecked: true }); }) // fail-open
+            .finally(() => { topicJudgeRef.current.delete(t.id); });
+        }
+        continue;
+      }
+
+      // 3) ②-B 제작 가능성(이미지) — intent/제외 통과분만.
       if (!t.producibleChecked) {
         if (!producibilityRef.current.has(t.id)) {
           producibilityRef.current.add(t.id);
-          const imgs = articles
-            .filter(a => t.sources.some(s => s.articleId === a.id))
-            .flatMap(a => (a.images ?? []).map(im => ({ url: im.url })));
+          const imgs = srcArts.flatMap(a => (a.images ?? []).map(im => ({ url: im.url })));
           const cluster = clusters.find(c => c.id === t.clusterId);
           assessProducibility({ images: imgs, entities: cluster?.entities, groupId: campaign.groupId })
             .then(prod => {
               if (!mountedRef.current) return;
               if (prod.producible) updateTask(t.id, { producibleChecked: true });
-              // 미통과: 보류 — producibleChecked 안 함 → 다음 사이클 재평가(이미지 생기면 통과).
             })
-            .catch(() => { if (mountedRef.current) updateTask(t.id, { producibleChecked: true }); }) // 실패 시 통과(막힘 방지)
+            .catch(() => { if (mountedRef.current) updateTask(t.id, { producibleChecked: true }); })
             .finally(() => { producibilityRef.current.delete(t.id); });
         }
-        continue; // 제작 가능성 판정 대기 (LLM 전)
+        continue;
       }
 
-      // 주제 정의(intent) 적합성 게이트 — 캠페인 주제정의에 맞는 기사만 통과.
-      const intent = (campaign.settings.topicReview.intent ?? '').trim();
-      if (intent && !t.intentChecked) {
-        if (!intentJudgeRef.current.has(t.id)) {
-          intentJudgeRef.current.add(t.id);
-          const snippets = articles
-            .filter(a => t.sources.some(s => s.articleId === a.id))
-            .map(a => a.description || a.fullText?.slice(0, 300) || '');
-          judgeTopicAdequacy({ title: t.title, snippets }, intent, stageSettings(campaign.settings.topicReview.llm, 'fast'))
-            .then(r => {
-              if (!mountedRef.current) return;
-              // fail-CLOSED 3-state: 미결정(429/서킷/실패)→보류(재판단), 부적합→컷, 적합→통과
-              if (!r.decided) return; // 보류 — intentChecked 안 함 → 다음 사이클 재판단(키/서킷 풀리면 결정)
-              // decided-부적합 = 확정 거부 → 폐기함 이동(②서 제거). 원장 기록은 discardTask 내부 처리.
-              // 미결정(!r.decided)은 위에서 return(보류) — 폐기 안 함(429/서킷 재시도 대상).
-              if (!r.adequate) discardTask(t.id, 'off_topic');
-              else updateTask(t.id, { intentChecked: true });
-            })
-            .catch(() => { /* 예외=미결정=보류. intentChecked 세팅 X → 재시도 */ })
-            .finally(() => { intentJudgeRef.current.delete(t.id); });
+      // 4) 전문 수집 — 풀텍스트 우선(품질). 타임아웃 전엔 Jina 대기.
+      //    타임아웃 후 fullText 0: 요약(description)도 전부 비면 extract_failed 폐기,
+      //    요약 있으면 ③ 진행(generateStory가 description 폴백 → dead-end 제거, ④ 도달).
+      if (fullTextCount === 0) {
+        const pastTimeout = Date.now() - (t.promotedAt ?? t.createdAt) > SOURCE_REVIEW_TIMEOUT_MS;
+        if (!pastTimeout) {
+          if (changed) updateTask(t.id, { sources: refreshed, imageCount });
+          continue; // 추출 대기(풀텍스트 우선)
         }
-        continue; // 판단 결과 대기
-      }
-
-      // 제외 주제 AI 판단 게이트 — 통과(topicChecked) 전엔 제작으로 안 넘김.
-      if (excludeTopics.length > 0 && !t.topicChecked) {
-        if (!topicJudgeRef.current.has(t.id)) {
-          topicJudgeRef.current.add(t.id);
-          const snippets = articles
-            .filter(a => t.sources.some(s => s.articleId === a.id))
-            .map(a => a.description || a.fullText?.slice(0, 300) || '');
-          judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, stageSettings(campaign.settings.topicReview.llm, 'fast'))
-            .then(r => {
-              if (!mountedRef.current) return;
-              // 제외주제 해당 = 확정 거부 → 폐기함 이동(원장 기록 내부 처리).
-              if (r.excluded) discardTask(t.id, 'off_topic');
-              else updateTask(t.id, { topicChecked: true });
-            })
-            .catch(() => { if (mountedRef.current) updateTask(t.id, { topicChecked: true }); }) // fail-open. PM ② 견고화에서 보류로 교체 예정
-            .finally(() => { topicJudgeRef.current.delete(t.id); });
+        const hasSummary = srcArts.some(a => (a.description || '').trim().length > 0);
+        if (!hasSummary) {
+          const attempts = (t.extractAttempts ?? 0) + 1;
+          if (shouldDiscardAfterExtractFail(attempts)) discardTask(t.id, 'extract_failed');
+          else updateTask(t.id, { sources: refreshed, extractAttempts: attempts });
+          continue;
         }
-        continue; // 판단 결과 대기
+        // 요약 있음 → 폐기 안 함. 아래 승급(요약 기반 작성).
       }
 
-      // 모든 게이트 통과(extract→producibility→intent→제외주제) → ③ 제작 승급
+      // 5) 모든 게이트 통과 → ③ 제작 승급 (풀텍스트 있으면 그걸로, 없으면 요약 폴백)
       updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -102,6 +102,23 @@ describe('generateStory', () => {
     expect(out.tags).toEqual([]);
   });
 
+  it('전 source 요약뿐이면 summaryBased=true + 보수적 지침 주입', async () => {
+    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce(STORY);
+    const out = await generateStory([ARTICLE_A, ARTICLE_B], SETTINGS, CATEGORY); // fullText 없음
+    expect(out.summaryBased).toBe(true);
+    const call = spy.mock.calls[0][0] as { system: string };
+    expect(call.system).toMatch(/요약\/발췌|부분 정보/);
+  });
+
+  it('풀텍스트 있으면 summaryBased=false + 보수적 지침 없음', async () => {
+    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce(STORY);
+    const withFull: Article = { ...ARTICLE_A, fullText: 'A방송 드라마 전문 본문 내용 충분히 길다.'.repeat(5) };
+    const out = await generateStory([withFull], SETTINGS, CATEGORY);
+    expect(out.summaryBased).toBe(false);
+    const call = spy.mock.calls[0][0] as { system: string };
+    expect(call.system).not.toMatch(/요약\/발췌/);
+  });
+
   it('throws on empty input', async () => {
     await expect(generateStory([], SETTINGS, CATEGORY)).rejects.toThrow(/at least one/i);
   });

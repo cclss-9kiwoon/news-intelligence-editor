@@ -191,6 +191,7 @@ export type StoryOutput = {
   tags: string[];
   imagePrompt: string; // 순수 영문(Midjourney)
   sourceFacts?: string[];  // key facts extracted from sources
+  summaryBased?: boolean;  // 전 source 전문추출 실패 → RSS 요약 기반 생성(품질 플래그). 풀텍스트 있으면 false
 };
 
 export const CONVERTED_RESULT_SCHEMA_VERSION = 3;
