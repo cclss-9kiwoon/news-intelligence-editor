@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { getLlmCircuitState } from '../../lib/openai';
+import { getLlmCircuitState, resetLlmCircuit } from '../../lib/openai';
 import { useTasks } from '../../state/TaskContext';
 import { useArticles } from '../../state/ArticlesContext';
 import { useClusters } from '../../state/ClustersContext';
@@ -56,6 +56,12 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   const overloaded = circuit.open || circuit.consecutive429 >= 3;
   // 빠른 전환 후보(현재 모델 제외). PM: gemini-2.0-flash / 2.5-pro
   const SWITCH_MODELS = ['gemini-2.0-flash', 'gemini-2.5-pro', 'gemini-2.5-flash'].filter(m => m !== settings.model);
+  // 모델 전환 = 모델 교체 + 서킷 즉시 해제(안 풀면 배너가 쿨다운까지 안 사라짐) + 상태 즉시 반영
+  const switchModel = (m: string) => {
+    setModel(m as typeof settings.model);
+    resetLlmCircuit();
+    setCircuit(getLlmCircuitState());
+  };
   const autoOff = campaigns.find(c => c.id === campaignId)?.autoCollect?.enabled === false;
   const noIntent = !(campaigns.find(c => c.id === campaignId)?.settings.topicReview.intent ?? '').trim();
   // 보드는 진행중 태스크만 — 발행됨(→발행함)·폐기됨(→폐기함)은 제외
@@ -179,11 +185,11 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
 
         {overloaded && (
           <span className="inline-flex items-center gap-2 rounded-full border border-orange-300 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
-            ⚡ AI 모델 과부하{circuit.open ? ' (일시 차단 중)' : ` (연속 ${circuit.consecutive429}회 한도초과)`} — 모델 변경하시겠습니까?
+            ⚡ AI 모델 과부하{circuit.open ? ' (일시 차단 중)' : ` (연속 ${circuit.consecutive429}회 한도초과)`} · 현재 <span className="font-mono">{settings.model}</span> — 변경:
             {SWITCH_MODELS.map(m => (
               <button
                 key={m}
-                onClick={() => setModel(m as typeof settings.model)}
+                onClick={() => switchModel(m)}
                 className="rounded-md border border-orange-300 bg-white px-2 py-0.5 font-mono text-[11px] text-orange-700 transition-colors hover:bg-orange-100"
               >→ {m}</button>
             ))}
