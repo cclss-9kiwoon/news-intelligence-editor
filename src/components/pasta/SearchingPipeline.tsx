@@ -16,8 +16,7 @@ import { useCampaigns } from '../../state/CampaignContext';
 import type { Campaign, Category, Task, StageLLMConfig } from '../../types';
 
 // 수동실행 마커(PM b129d4a0) — 자동진행 OFF여도 사용자가 드래그/선택한 1건만 ②/③ 처리.
-// types.ts Task.manualRun?:boolean NIE 조율 중 — 인라인 캐스트로 의존 회피.
-const isManualRun = (t: Task) => (t as { manualRun?: boolean }).manualRun === true;
+const isManualRun = (t: Task) => t.manualRun === true;
 
 const SOURCE_REVIEW_TIMEOUT_MS = 90_000; // 전문 수집 대기 상한
 const MIN_MEDIA_FOR_WRITE = 2; // ③ 작성 전 교차검증 최소 매체 수(단일소스 차단). TODO: campaign 설정값화(minMediaForWrite)
@@ -87,8 +86,8 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     // 페이싱(PM 5fdac5c1): ① 1개씩 트리클 + 총상한. 와르르 방지 + 통제된 순차 흐름.
     // - 사이클당 신규 1개(MAX_NEW_PER_CYCLE=1) → 한 장씩 자연스럽게 올라옴.
     // - 총상한 maxSearchingQueue(기본20): searching(미폐기·미발행) 수 ≤ 상한. 점유는 두되 카드 생성만 멈춤.
-    //   한 개가 ②로 빠지면 빈자리만큼 다음 사이클에 채움. (types 필드 NIE 조율 중 — 인라인 캐스트로 의존 회피)
-    const SEARCHING_CAP = (searchingCfg as { maxSearchingQueue?: number }).maxSearchingQueue ?? 20;
+    //   한 개가 ②로 빠지면 빈자리만큼 다음 사이클에 채움.
+    const SEARCHING_CAP = searchingCfg.maxSearchingQueue ?? 20;
     const searchingNow = working.filter(t => t.status === 'searching' && !t.discardReason && !t.published).length;
     const room = Math.max(0, SEARCHING_CAP - searchingNow);
     const MAX_NEW_PER_CYCLE = Math.min(1, room);  // 트리클(1) + 상한 도달 시 0
@@ -303,7 +302,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
           };
           try { review = await reviewDraft(draft, stageSettings(campaign.settings.finalReview.llm, 'fast'), reviewCtx); } catch { review = undefined; }
           // manualRun:false — ④(사람) 도달 = 수동실행 1건 완료, 마커 해제.
-          if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review', produceAttempts: attempt, manualRun: false } as Partial<Task>);
+          if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review', produceAttempts: attempt, manualRun: false });
         })
         .catch((err: unknown) => {
           if (!mountedRef.current) return;
