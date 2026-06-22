@@ -723,3 +723,18 @@ autosquad RSS → 벡터풀 대량수급
 - → ④에서 koo-dev가 만들 ★external_articles_search.php(읽기 EP) 완성 전까지는 ★수동 확인밖에 없음(allkpop 어드민 draft 큐 육안).
 - Hydra 측 간접 카운트는 가능: news_publish_log에서 platform="allkpop" status="success"를 title_sig/story_id로 group→count>1 추출(=Hydra가 보낸 중복분). 단 CMS 자체 큐 상태(타 경로 draft 포함)는 미반영 → 부분치.
 - ★이 제약(읽기EP 부재 → 수동확인/로그간접뿐)을 정본 기록. external_articles_search.php 완성 시 자동 중복대조로 전환.
+
+**4) ★해결됨 — 중복발행 다층 방어 완성 (2026-06-22, 라이브 SHA):**
+§10-14 설계 후 실수정 적용. Kiss of Life 근본원인 규명 = ★Oban race 아님, ★CMS timeout 재push였음.
+- 근본: Kiss of Life 4건 = ★같은 story_id 4회 push. CMS POST 타임아웃 3번 → CMS는 받아서 draft 생성했는데 Hydra는 실패로 보고 재push → 4번째 성공. (race가 아니라 timeout-재시도 중복.)
+- (a) ★9e95cb6: same_event 공유엔티티≥2 — SEVENTEEN CARAT LAND 앵글차 감지(produce 시점 same_event 정밀화).
+- (b) ★66cce96: publish-time 가드 — 발행 직전 ★org-wide 24h 기발행 same_event 체크(§10-14 설계 2-(b) 실구현).
+- (c) ★b185952: 근본수정 — CMS timeout 15s→60s + retry:false + ★타임아웃 시 published 마크(재push 차단). timeout-재push 0.
+- ★다층 방어 완성: ①타임아웃재push 0(b185952) ②같은 task 재push 0(already_published) ③같은 사건 다른 story = org-wide 24h 가드(66cce96) → 1건만. 설계(2)의 publish-time dedup이 실배선됨.
+
+**5) ★이미지 정책 변경 — 도메인블랙 폐기, 워터마크만 금지 (오너 확정 6/22):**
+docs/_house-style.md(오너 확정, akp-pm 전달): "유일 금지 = ★워터마크 박힌 이미지. 워터마크만 없으면 한국매체 보도컷도 통과. '매체컷이라서' 반려 금지 — 워터마크 유무만 본다."
+- → §10-12 B의 ★매체CDN 도메인 블랙(news1·osen·yna·jtbc·xportsnews 등)은 ★폐기. (require_image는 유지, usable 판정에서 도메인블랙 제거.)
+- ★유지 = 비전 LLM 워터마크 시각검출(4827d60, §1202). 이것만으로 판정.
+- ★효과: 연예지 보도컷 대부분이 매체CDN이라 도메인블랙이 draft 양 주범이었음(§10-12 트레이드오프) → 폐기로 draft 양 회복 예상.
+- ★코드 제거(usable 판정 도메인블랙 분기)는 ★엔지니어 작업(별도 발주). 본 절 = 정책 변경 정본 기록만.
