@@ -82,7 +82,7 @@ export function isCivicNoise(text: string, entityAllowlist: string[] = []): bool
 }
 
 export type ClaimDecision =
-  | { ok: true; sources: TaskSource[]; matchedEntity: string | null; imageCount: number }
+  | { ok: true; sources: TaskSource[]; matchedEntity: string | null; imageCount: number; thumbnailUrl?: string }
   | { ok: false; reason: ClaimReason };
 
 /**
@@ -214,6 +214,8 @@ export function shouldClaimCluster(
     articleId: a.id, title: a.title, source: a.source, hasFullText: !!a.fullText,
   }));
   const imageCount = clusterArticles.reduce((n, a) => n + (a.images?.length ?? 0), 0);
+  // #3 카드 썸네일 — 첫 소스기사의 대표/첫 이미지(있으면). 없으면 undefined.
+  const thumbnailUrl = clusterArticles.map(a => a.thumbnail || a.images?.[0]?.url).find(Boolean);
 
-  return { ok: true, sources, matchedEntity, imageCount };
+  return { ok: true, sources, matchedEntity, imageCount, thumbnailUrl };
 }

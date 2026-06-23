@@ -401,9 +401,21 @@ function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, 
       className={`pasta-card-in pasta-springy group cursor-grab rounded-2xl border bg-white p-4 shadow-sm hover:border-slate-300 hover:shadow-md active:cursor-grabbing ${task.paused ? 'opacity-60' : ''} ${dragging ? 'opacity-40 ring-2 ring-blue-300' : ''} ${inProgress && !dragging ? 'border-blue-400 ring-2 ring-blue-300/70 shadow-[0_0_14px_rgba(96,165,250,0.55)] animate-pulse motion-reduce:animate-none' : 'border-slate-200'}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold leading-snug text-slate-800 line-clamp-2">
-          {task.priority && <span title="우선" className="text-amber-500">★ </span>}📰 {task.title}
-        </p>
+        <div className="flex min-w-0 items-start gap-2">
+          {/* #3 카드 썸네일 — 첫 소스기사 이미지(있으면). 로드 실패 시 숨김. */}
+          {task.thumbnailUrl && (
+            <img
+              src={task.thumbnailUrl}
+              alt=""
+              loading="lazy"
+              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              className="h-10 w-10 shrink-0 rounded-lg border border-slate-200 bg-slate-100 object-cover"
+            />
+          )}
+          <p className="text-sm font-semibold leading-snug text-slate-800 line-clamp-2">
+            {task.priority && <span title="우선" className="text-amber-500">★ </span>}📰 {task.title}
+          </p>
+        </div>
         <span className="flex shrink-0 items-center gap-1.5">
           {/* [우선] 손잡이 — 활성 시 상시, 아니면 hover 노출(절제) */}
           <button onClick={stop(onTogglePriority)} aria-label="우선 처리 토글" title="우선"

@@ -122,6 +122,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         campaignId: campaign.id, status: 'searching' as const,
         title: cluster.representativeTitle, clusterId: cluster.id,
         sources: decision.sources, imageCount: decision.imageCount,
+        thumbnailUrl: decision.thumbnailUrl,
         isBreaking,
         goldenTime: { startsAt, expiresAt: startsAt + goldenSpan },
       };

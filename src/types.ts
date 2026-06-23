@@ -387,6 +387,7 @@ export type Task = {
   clusterId: string;         // 원본 클러스터
   sources: TaskSource[];     // 원문 + 서브 소스
   imageCount: number;        // 수집된 이미지 수
+  thumbnailUrl?: string;     // #3 칸반 카드 썸네일 — 첫 소스기사 대표/첫 이미지
   draft?: StoryOutput;       // 아티클 제작 결과
   review?: ReviewResult;     // 검수 결과
   error?: string;
