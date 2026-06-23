@@ -3,6 +3,7 @@ import { CONVERTED_RESULT_SCHEMA_VERSION } from '../types';
 import { llmCall, llmBackendFrom } from './llmBackend';
 import { extractArticleText } from './scraper';
 import { buildProjectRulesText } from './projectRules';
+import { scan, deAiSmell } from './bannedWords';
 
 // body에 남은 내부 섹션 라벨 줄("# 1. ...", "## 2. ...") 제거 + 빈 HTML 노드 정리.
 // 빈 <p></p>(렌더 시 빈 단락) / src 없는 <img>(깨진 이미지)가 생성물에 들어오므로 후처리.
@@ -138,9 +139,15 @@ function buildStorySystem(category: Category, settings: Settings, summaryBased =
     sections.push('- 출력 언어: summary·headline·body·tags를 자연스러운 영문으로 작성한다. 한국어 인명/작품명은 표준 로마자로 표기한다. sourceFacts는 한국어 유지(에디터 대조용).');
   }
 
-  // 7. 금지 표현
+  // 7. 금지 표현 (AI 냄새 제거 — 하드코딩)
+  sections.push('[NEVER USE — AI cliché blacklist]');
+  sections.push('The following words and phrases are BANNED. Using even one will cause the article to be rejected:');
+  sections.push('Words: showcased, captivated, demonstrated, resonated, heartfelt, solidified, cemented, underscored, garnered, leveraged, unveiled, spearheaded, navigated, embodied, delve, testament, furthermore, moreover');
+  sections.push('Phrases: "It is worth noting that", "In conclusion", "It remains to be seen", "fans were quick to", "the internet was abuzz", "It is known that", "It was revealed that", "According to reports", "It is important to note", "not only...but also"');
+  sections.push('Pattern: Never chain 3+ adjectives with commas (e.g. "stunning, breathtaking, and unforgettable").');
+  sections.push('Use plain, direct alternatives instead: showed, received, led, announced, highlighted, strengthened, established, used, connected, sincere.');
   if (promptConfig.bannedExpressions.trim()) {
-    sections.push(`- 영어 LLM 상투구 회피: ${promptConfig.bannedExpressions}`);
+    sections.push(`Additional banned: ${promptConfig.bannedExpressions}`);
   }
 
   sections.push('');
@@ -218,28 +225,54 @@ export async function generateStory(
   // 품질 플래그: 풀텍스트가 1건도 없으면 RSS 요약(description) 기반 생성 → 보수적 작성 + draft 배지.
   const summaryBased = enrichedArticles.every(a => !a.fullText?.trim());
 
-  const out = await llmCall<StoryOutput>({
+  const systemPrompt = buildStorySystem(category, settings, summaryBased);
+  const userPrompt = buildStoryUser(enrichedArticles);
+
+  let out = await llmCall<StoryOutput>({
     apiKey: settings.apiKey,
     baseUrl: settings.apiBaseUrl,
     model: settings.model,
-    system: buildStorySystem(category, settings, summaryBased),
-    user: buildStoryUser(enrichedArticles),
+    system: systemPrompt,
+    user: userPrompt,
     temperature: 0.5,
     backend: llmBackendFrom(settings),
     stage: 'generateStory',
   });
 
+  // ── AI smell retry loop: rescan → regenerate if ≥3 banned hits (max 2 retries) ──
+  const MAX_RETRIES = 2;
+  const RETRY_THRESHOLD = 3;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const combined = `${out.headline ?? ''} ${out.body ?? ''}`;
+    const { ok, hits } = scan(combined);
+    if (ok || hits.length < RETRY_THRESHOLD) break;
+    console.log(`[promptChain] AI smell retry ${attempt}/${MAX_RETRIES}: ${hits.length} banned words found (${hits.join(', ')})`);
+    out = await llmCall<StoryOutput>({
+      apiKey: settings.apiKey,
+      baseUrl: settings.apiBaseUrl,
+      model: settings.model,
+      system: systemPrompt,
+      user: `${userPrompt}\n\n[RETRY INSTRUCTION] Your previous draft contained banned AI clichés: ${hits.join(', ')}. Rewrite WITHOUT any of these words. Use plain, direct language.`,
+      temperature: 0.5,
+      backend: llmBackendFrom(settings),
+      stage: 'generateStory',
+    });
+  }
+
+  // ── Final safety net: force-replace any surviving banned words ──
+  let headline = deAiSmell(out.headline ?? '');
+  let body = deAiSmell(out.body ?? '');
+
   // ③ 포맷 후처리: 헤드라인 케이싱(영문) + 본문 <p> 보장
-  let headline = out.headline ?? '';
   const casing = settings.projectProfile.formatRules.headlineCasing;
   if (settings.projectProfile.outputLanguage === 'en' && (casing === 'title' || casing === 'lower-minor')) {
     headline = titleCaseHeadline(headline, casing === 'lower-minor');
   }
 
   return {
-    summary: out.summary ?? '',
+    summary: deAiSmell(out.summary ?? ''),
     headline,
-    body: ensureParagraphs(sanitizeBody(out.body ?? '')),
+    body: ensureParagraphs(sanitizeBody(body)),
     tags: Array.isArray(out.tags) ? out.tags : [],
     imagePrompt: out.imagePrompt ?? '',
     sourceFacts: Array.isArray(out.sourceFacts) ? out.sourceFacts : [],
@@ -279,9 +312,9 @@ export async function translateToEnglish(
   });
 
   return {
-    summary: out.summary ?? '',
-    headline: out.headline ?? '',
-    body: sanitizeBody(out.body ?? ''),
+    summary: deAiSmell(out.summary ?? ''),
+    headline: deAiSmell(out.headline ?? ''),
+    body: deAiSmell(sanitizeBody(out.body ?? '')),
     tags: Array.isArray(out.tags) ? out.tags : [],
   };
 }
