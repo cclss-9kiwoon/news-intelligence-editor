@@ -96,13 +96,13 @@ export function makeGroup(name: string, profile?: Partial<GroupProfile>): Group 
   };
 }
 
-export function makeCampaign(groupId: string, name: string): Campaign {
+export function makeCampaign(groupId: string, name: string, presetSettings?: CampaignSettings): Campaign {
   const now = Date.now();
   return {
     id: newId('cmp'),
     groupId,
     name: name || '새 캠페인',
-    settings: makeDefaultCampaignSettings(),
+    settings: presetSettings ?? makeDefaultCampaignSettings(),
     autoCollect: { enabled: true, intervalMin: 30 },
     autoProcess: { enabled: true },
     createdAt: now,

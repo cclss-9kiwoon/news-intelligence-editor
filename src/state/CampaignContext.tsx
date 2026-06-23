@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, ReactNode 
 import type { Group, Campaign, CampaignSettings } from '../types';
 import { loadJson, saveJson } from '../lib/storage';
 import { makeGroup, makeCampaign, migrateCampaign, migrateGroup } from '../lib/defaultCampaign';
+import { makeAllkpopCampaignSettings } from '../lib/allkpopPreset';
 
 const GROUPS_KEY = 'pasta:groups';
 const CAMPAIGNS_KEY = 'pasta:campaigns';
@@ -91,7 +92,8 @@ export function CampaignProvider({ children }: { children: ReactNode }) {
 
   // ── campaign CRUD ──
   const addCampaign = useCallback((groupId: string, name: string) => {
-    const c = makeCampaign(groupId, name);
+    const preset = /allkpop/i.test(name) ? makeAllkpopCampaignSettings() : undefined;
+    const c = makeCampaign(groupId, name, preset);
     setCampaigns(prev => [...prev, c]);
     return c;
   }, []);
