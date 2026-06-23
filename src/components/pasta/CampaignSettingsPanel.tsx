@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { useCampaigns } from '../../state/CampaignContext';
 import { useSettings } from '../../state/SettingsContext';
-import type { Campaign, SourceConfig, TopicReviewConfig, GenerationConfig, FinalReviewConfig, ArticleWindow, SearchProviderConfig, SearchProviderId } from '../../types';
+import type { Campaign, SourceConfig, TopicReviewConfig, GenerationConfig, FinalReviewConfig, ArticleWindow } from '../../types';
 import { DEFAULT_PROMPT_CONFIG } from '../../lib/defaultSettings';
 import { makeAllkpopCampaignSettings } from '../../lib/allkpopPreset';
 import { extractArticleText } from '../../lib/scraper';
 import { getRssBackoffUntil, RSS_BACKOFF_MS, RSS_CACHE_TTL_MS } from '../../lib/rss';
-import { testNaverConnection } from '../../lib/naver';
-import { testDaumConnection } from '../../lib/daum';
 import { HelpTip } from './HelpTip';
 import { TagInput } from './TagInput';
 import { StageLLMEditor } from './StageLLMEditor';
@@ -24,7 +22,6 @@ const WINDOWS: { value: ArticleWindow; label: string }[] = [
 ];
 
 type Step = 1 | 2 | 3 | 4;
-type ApiStatus = { state: 'idle' | 'testing' | 'ok' | 'error'; message: string };
 // 칸반 단계 컬러 체계와 1:1 — 자동(서칭/주제검수/생성)=블루, 결과물검수=앰버
 const STEPS: { n: Step; label: string; short: string; auto: boolean; active: string; dot: string }[] = [
   { n: 1, label: '기사 찾기',    short: '①', auto: true,  active: 'bg-blue-500',  dot: 'bg-blue-500' },
@@ -37,21 +34,12 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
   const { renameCampaign, updateCampaignSettings, groups } = useCampaigns();
   const {
     settings,
-    setNaverClientId,
-    setNaverClientSecret,
-    setNaverQueries,
-    setDaumRestApiKey,
-    setDaumQueries,
-    addQueryPreset,
-    removeQueryPreset,
     setRssPollMinutes,
   } = useSettings();
   const [step, setStep] = useState<Step>(1);
   const [savedSteps, setSavedSteps] = useState<Set<Step>>(new Set());
   const [refUrl, setRefUrl] = useState('');
   const [extracting, setExtracting] = useState(false);
-  const [naverStatus, setNaverStatus] = useState<ApiStatus>({ state: 'idle', message: '미확인' });
-  const [daumStatus, setDaumStatus] = useState<ApiStatus>({ state: 'idle', message: '미확인' });
   const s = campaign.settings;
   const group = groups.find(g => g.id === campaign.groupId);
 
@@ -79,18 +67,6 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
   const removeReference = (id: string) =>
     setGen({ referenceArticles: s.generation.referenceArticles.filter(r => r.id !== id) });
 
-  const testNaver = async () => {
-    setNaverStatus({ state: 'testing', message: '확인 중...' });
-    const result = await testNaverConnection(settings.naverClientId, settings.naverClientSecret);
-    setNaverStatus({ state: result.ok ? 'ok' : 'error', message: result.message });
-  };
-
-  const testDaum = async () => {
-    setDaumStatus({ state: 'testing', message: '확인 중...' });
-    const result = await testDaumConnection(settings.daumRestApiKey);
-    setDaumStatus({ state: result.ok ? 'ok' : 'error', message: result.message });
-  };
-
   // 설정은 onChange로 자동 저장됨. 신규(미설정) 캠페인은 순차 진행(다음 단계),
   // 기존 캠페인(configured)은 단계별 독립 저장(전환 없이 해당 단계만 확정).
   const isConfigured = campaign.configured ?? false;
@@ -101,44 +77,8 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
 
   const setSearching = (patch: Partial<SourceConfig>) =>
     updateCampaignSettings(campaign.id, { searching: { ...s.searching, ...patch } });
-  const searchProviders = s.searching.searchProviders ?? [
-    ...s.searching.naverQueries.map(query => ({ provider: 'naver' as const, enabled: true, query })),
-    ...((s.searching.daumQueries ?? []).map(query => ({ provider: 'daum' as const, enabled: false, query }))),
-  ];
-  const apiEnabled = s.searching.apiEnabled ?? true;
+  // 네이버/다음 검색 키·검색어·ON/OFF = 전역 설정(SettingsModal)으로 이동(#2). 캠페인엔 매체필터(허용/차단)만.
   const rssEnabled = s.searching.rssEnabled ?? true;
-  const setSearchProviders = (providers: SearchProviderConfig[]) => {
-    const naverQueries = providers.filter(p => p.provider === 'naver' && p.enabled).map(p => p.query).filter(Boolean);
-    const daumQueries = providers.filter(p => p.provider === 'daum' && p.enabled).map(p => p.query).filter(Boolean);
-    setSearching({
-      searchProviders: providers,
-      naverQueries,
-      daumQueries,
-    });
-    setNaverQueries(naverQueries);
-    setDaumQueries(daumQueries);
-  };
-  const updateSearchProvider = (idx: number, patch: Partial<SearchProviderConfig>) => {
-    setSearchProviders(searchProviders.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
-  };
-  const addSearchProvider = (provider: SearchProviderId) => {
-    setSearchProviders([...searchProviders, { provider, enabled: true, query: '' }]);
-  };
-  const removeSearchProvider = (idx: number) => {
-    setSearchProviders(searchProviders.filter((_, i) => i !== idx));
-  };
-  // 검색어 프리셋 (전역 Settings.queryPresets)
-  const saveQueryPreset = () => {
-    if (searchProviders.length === 0) { alert('저장할 검색어가 없습니다.'); return; }
-    const name = prompt('프리셋 이름:', `프리셋 ${settings.queryPresets.length + 1}`);
-    if (name === null) return;
-    addQueryPreset(name, searchProviders);
-  };
-  const applyQueryPreset = (id: string) => {
-    const preset = settings.queryPresets.find(p => p.id === id);
-    if (!preset) return;
-    setSearchProviders(preset.providers.map(p => ({ ...p })));
-  };
   const setTopic = (patch: Partial<TopicReviewConfig>) =>
     updateCampaignSettings(campaign.id, { topicReview: { ...s.topicReview, ...patch } });
   const setGen = (patch: Partial<GenerationConfig>) =>
@@ -211,153 +151,27 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
       {step === 1 && (
         <Section title="📌 기사 찾기" desc="어디서 어떤 기사를 가져올지" auto sequential={!isConfigured} onSave={() => saveAndNext(1)} saved={savedSteps.has(1)}>
           <div className="rounded-2xl border border-slate-200 bg-white/65 p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h4 className="font-semibold text-slate-800">① 검색 API 설정</h4>
-                <p className="text-xs text-slate-400">네이버/다음 검색 API로 넓게 찾습니다. <span className="text-slate-400">(API 키는 모든 캠페인 공통)</span></p>
-              </div>
-              <label className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={apiEnabled}
-                  onChange={e => setSearching({ apiEnabled: e.target.checked })}
-                />
-                검색 API 사용
-              </label>
+            <div className="mb-3">
+              <h4 className="font-semibold text-slate-800">① 검색 API 매체 필터</h4>
+              <p className="text-xs text-slate-400">
+                네이버/다음 검색 API 키·검색어·사용여부는 <span className="font-semibold text-slate-500">전역 설정</span>으로 이동했습니다(네이버=벡터 비상용, 모든 캠페인 공통). 여기선 검색으로 들어온 기사의 <span className="font-semibold text-slate-500">원문 매체</span>만 거릅니다.
+              </p>
             </div>
-            <div className={`space-y-3 rounded-xl border border-slate-200 bg-white/60 p-3 transition-opacity ${apiEnabled ? '' : 'pointer-events-none opacity-45'}`}>
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-500">
-                    <span>네이버 Client ID</span>
-                    <a href="https://developers.naver.com/apps/#/register" target="_blank" rel="noopener" className="font-normal text-slate-400 hover:text-indigo-600">발급받기 ↗</a>
-                  </label>
-                  <input
-                    className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm font-mono"
-                    value={settings.naverClientId}
-                    onChange={e => setNaverClientId(e.target.value)}
-                    placeholder="Naver Client ID"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-500">
-                    <span>네이버 Client Secret</span>
-                  </label>
-                  <input
-                    type="password"
-                    className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm font-mono"
-                    value={settings.naverClientSecret}
-                    onChange={e => setNaverClientSecret(e.target.value)}
-                    placeholder="Naver Client Secret"
-                  />
-                </div>
-                <div className="col-span-2 flex items-center gap-2">
-                  <button
-                    onClick={testNaver}
-                    disabled={naverStatus.state === 'testing'}
-                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-white disabled:opacity-50"
-                  >연결 테스트</button>
-                  <ApiStatusBadge status={naverStatus} />
-                </div>
-                <div className="col-span-2">
-                  <label className="mb-1 flex items-center justify-between text-xs font-semibold text-slate-500">
-                    <span>Kakao REST API Key (다음 검색)</span>
-                    <a href="https://developers.kakao.com/console/app" target="_blank" rel="noopener" className="font-normal text-slate-400 hover:text-indigo-600">발급받기 ↗</a>
-                  </label>
-                  <input
-                    type="password"
-                    className="w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm font-mono"
-                    value={settings.daumRestApiKey}
-                    onChange={e => setDaumRestApiKey(e.target.value)}
-                    placeholder="Kakao REST API Key"
-                  />
-                </div>
-                <div className="col-span-2 flex items-center gap-2">
-                  <button
-                    onClick={testDaum}
-                    disabled={daumStatus.state === 'testing'}
-                    className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-white disabled:opacity-50"
-                  >연결 테스트</button>
-                  <ApiStatusBadge status={daumStatus} />
-                </div>
-              </div>
-              <div className="space-y-2">
-                {searchProviders.map((provider, idx) => (
-                  <div key={`${provider.provider}-${idx}`} className="grid grid-cols-[auto_96px_1fr_auto] items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={provider.enabled}
-                      onChange={e => updateSearchProvider(idx, { enabled: e.target.checked })}
-                    />
-                    <select
-                      value={provider.provider}
-                      onChange={e => updateSearchProvider(idx, { provider: e.target.value as SearchProviderId })}
-                      className="rounded-lg border border-slate-200 bg-white/80 px-2 py-2 text-sm"
-                    >
-                      <option value="naver">네이버</option>
-                      <option value="daum">다음</option>
-                    </select>
-                    <input
-                      className="rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm"
-                      value={provider.query}
-                      onChange={e => updateSearchProvider(idx, { query: e.target.value })}
-                      placeholder="검색어"
-                    />
-                    <button
-                      onClick={() => removeSearchProvider(idx)}
-                      className="rounded-lg border border-slate-200 px-2 py-2 text-xs text-slate-500 hover:bg-slate-50"
-                    >삭제</button>
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => addSearchProvider('naver')} className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">+ 네이버 검색어</button>
-                <button onClick={() => addSearchProvider('daum')} className="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">+ 다음 검색어</button>
-              </div>
-
-              {/* 검색어 프리셋 — 전역 저장/불러오기 (캠페인 간 재사용) */}
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white/60 px-3 py-2">
-                <span className="text-xs font-semibold text-slate-500">검색어 프리셋</span>
-                <select
-                  value=""
-                  onChange={e => { if (e.target.value) applyQueryPreset(e.target.value); e.target.value = ''; }}
-                  className="rounded-lg border border-slate-200 bg-white/80 px-2 py-1 text-xs"
-                  disabled={settings.queryPresets.length === 0}
-                >
-                  <option value="">{settings.queryPresets.length === 0 ? '저장된 프리셋 없음' : '불러오기…'}</option>
-                  {settings.queryPresets.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} ({p.providers.length})</option>
-                  ))}
-                </select>
-                <button onClick={saveQueryPreset} className="rounded-full border border-indigo-300 px-3 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50">+ 현재 검색어 저장</button>
-                {settings.queryPresets.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => { if (confirm(`프리셋 "${p.name}" 삭제?`)) removeQueryPreset(p.id); }}
-                    className="rounded-full border border-slate-200 px-2 py-1 text-[10px] text-slate-400 hover:bg-red-50 hover:text-red-500"
-                    title={`${p.name} 삭제`}
-                  >✕ {p.name}</button>
-                ))}
-              </div>
-              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                <p className="mb-3 text-xs leading-relaxed text-slate-500">
-                  검색 API(네이버/다음)로 들어온 기사의 원문 매체를 거릅니다. 허용 목록이 있으면 그 매체만, 차단 목록은 항상 제외. RSS는 직접 선택한 피드라 대부분 통과됩니다.
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <Field label={<span>허용 매체 <HelpTip text="검색 API로 찾은 기사 중 이 매체 기사만 통과시킵니다. 비우면 모든 매체를 허용합니다." /></span>}>
-                    <TagInput
-                      values={s.searching.allowedSources ?? []}
-                      onChange={allowedSources => setSearching({ allowedSources })}
-                      placeholder="디스패치 입력 후 Enter" />
-                  </Field>
-                  <Field label={<span>차단 매체 <HelpTip text="검색 API로 찾은 기사 중 제외할 매체입니다. 허용 목록보다 우선 적용됩니다." /></span>}>
-                    <TagInput
-                      values={s.searching.bannedSources ?? []}
-                      onChange={bannedSources => setSearching({ bannedSources })}
-                      placeholder="Soompi 입력 후 Enter"
-                      tone="rose" />
-                  </Field>
-                </div>
+                <Field label={<span>허용 매체 <HelpTip text="검색 API로 찾은 기사 중 이 매체 기사만 통과시킵니다. 비우면 모든 매체를 허용합니다." /></span>}>
+                  <TagInput
+                    values={s.searching.allowedSources ?? []}
+                    onChange={allowedSources => setSearching({ allowedSources })}
+                    placeholder="디스패치 입력 후 Enter" />
+                </Field>
+                <Field label={<span>차단 매체 <HelpTip text="검색 API로 찾은 기사 중 제외할 매체입니다. 허용 목록보다 우선 적용됩니다." /></span>}>
+                  <TagInput
+                    values={s.searching.bannedSources ?? []}
+                    onChange={bannedSources => setSearching({ bannedSources })}
+                    placeholder="Soompi 입력 후 Enter"
+                    tone="rose" />
+                </Field>
               </div>
             </div>
           </div>
@@ -419,9 +233,9 @@ export function CampaignSettingsPanel({ campaign, onOpen }: { campaign: Campaign
               <h4 className="font-semibold text-slate-800">③ 공통 설정</h4>
               <p className="text-xs text-slate-400">API/RSS 어느 방식으로 들어와도 같이 적용됩니다.</p>
             </div>
-            {!apiEnabled && !rssEnabled && (
+            {!rssEnabled && (
               <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
-                API 수집과 RSS 수집이 모두 꺼져 있습니다. 이 캠페인은 새 기사를 수집하지 않습니다.
+                RSS 수집이 꺼져 있습니다. (검색 API는 전역 설정에서 켭니다.) 이 캠페인은 RSS로 새 기사를 수집하지 않습니다.
               </div>
             )}
             <div className="grid grid-cols-2 gap-4">
@@ -689,24 +503,6 @@ function Section({ title, desc, children, onSave, saved, isLast, auto, sequentia
         </div>
       )}
     </div>
-  );
-}
-
-function ApiStatusBadge({ status }: { status: ApiStatus }) {
-  const testing = status.state === 'testing';
-  // 무드 통일: ok=그린 / error=레드 / testing=앰버 펄스 / idle=뉴트럴
-  const icon = status.state === 'ok' ? '✅' : status.state === 'error' ? '❌' : testing ? '◌' : '⚪';
-  const tone = status.state === 'ok'
-    ? 'bg-green-50 text-green-700 border-green-200'
-    : status.state === 'error'
-      ? 'bg-red-50 text-red-700 border-red-200'
-      : testing
-        ? 'bg-amber-50 text-amber-700 border-amber-200 animate-pulse'
-        : 'bg-slate-50 text-slate-500 border-slate-200';
-  return (
-    <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${tone}`}>
-      {icon} {status.message}
-    </span>
   );
 }
 
