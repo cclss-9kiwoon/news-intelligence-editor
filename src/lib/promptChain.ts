@@ -1,4 +1,4 @@
-import type { Article, Settings, Category, ConvertedResult, StoryOutput, TranslatedFields, ReferenceArticle } from '../types';
+import type { Article, Settings, Category, ConvertedResult, StoryOutput, TranslatedFields, ReferenceArticle, FormatRules } from '../types';
 import { CONVERTED_RESULT_SCHEMA_VERSION } from '../types';
 import { llmCall, llmBackendFrom } from './llmBackend';
 import { extractArticleText } from './scraper';
@@ -256,6 +256,39 @@ async function enrichMissingFullText(articles: Article[]): Promise<Article[]> {
   });
 }
 
+/**
+ * Post-processing: enforce formatRules on body HTML.
+ * Best-effort — prompt is the primary mechanism, this catches what LLM missed.
+ */
+function enforceFormatRules(body: string, rules: FormatRules): string {
+  let result = body;
+
+  // artistMarkup: 'strong' — if <strong> is absent but body has text, skip (can't reliably detect artist names)
+  // artistMarkup: 'strong' — remove <a href> links in body (links banned when artistMarkup=strong)
+  if (rules.artistMarkup === 'strong') {
+    result = result.replace(/<a\s[^>]*href\s*=[^>]*>(.*?)<\/a>/gi, '$1');
+  }
+
+  // imageMarkup: 'img-direct' — unwrap <figure>/<figcaption> to bare <img>
+  if (rules.imageMarkup === 'img-direct') {
+    result = result.replace(/<figure[^>]*>\s*([\s\S]*?)\s*<\/figure>/gi, (_match, inner: string) => {
+      const imgMatch = inner.match(/<img\b[^>]*>/i);
+      return imgMatch ? imgMatch[0] : '';
+    });
+    result = result.replace(/<\/?figcaption[^>]*>/gi, '');
+  }
+
+  // noEditorialClosing — strip trailing question/encouragement sentences
+  if (rules.noEditorialClosing) {
+    result = result.replace(
+      /<p>([^<]*(?:응원|기대|축하|바란다|바랍니다|기원|주목된다|파이팅|화이팅|행보가 기대)[^<]*)<\/p>\s*$/i,
+      '',
+    );
+  }
+
+  return result;
+}
+
 export async function generateStory(
   articles: Article[],
   settings: Settings,
@@ -316,7 +349,7 @@ export async function generateStory(
   return {
     summary: deAiSmell(out.summary ?? ''),
     headline,
-    body: ensureParagraphs(sanitizeBody(body)),
+    body: enforceFormatRules(ensureParagraphs(sanitizeBody(body)), settings.projectProfile.formatRules),
     tags: Array.isArray(out.tags) ? out.tags : [],
     imagePrompt: out.imagePrompt ?? '',
     sourceFacts: Array.isArray(out.sourceFacts) ? out.sourceFacts : [],
