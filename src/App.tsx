@@ -173,6 +173,7 @@ function PastaRouter() {
                       onOpenTask={(taskId) => { setOpenTaskId(taskId); setMode('workspace'); }}
                       onOpenWorkbench={() => setMode('workbench')}
                       onOpenGroup={(gid) => { setForceGroupId(gid); setMode('pasta'); }}
+                      onSwitchCampaign={openCampaign}
                     />
                   ) : (
                     <AppShell

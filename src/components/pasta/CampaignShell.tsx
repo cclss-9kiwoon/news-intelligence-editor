@@ -28,7 +28,7 @@ const NAV: { id: ShellView; Icon: (p: { className?: string }) => ReactElement; l
  * 캠페인 메인 셸 — 좌측 운영 레일 + 우측 뷰(보드/현황/발행함/폐기함).
  * 설정 끝난 캠페인 진입 시 메인 화면. 보드가 기본.
  */
-export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenGlobalSettings, onOpenTask, onOpenWorkbench, onOpenGroup }: {
+export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenGlobalSettings, onOpenTask, onOpenWorkbench, onOpenGroup, onSwitchCampaign }: {
   campaign: Campaign;
   onBackToList: () => void;
   onOpenSettings: () => void;
@@ -36,11 +36,14 @@ export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenGl
   onOpenTask: (taskId: string) => void;
   onOpenWorkbench: () => void;
   onOpenGroup: (groupId: string) => void;
+  onSwitchCampaign: (campaignId: string) => void;
 }) {
   const [view, setView] = useState<ShellView>('board');
-  const { setCampaignAutoCollect, setCampaignAutoProcess, groups } = useCampaigns();
+  const { setCampaignAutoCollect, setCampaignAutoProcess, groups, campaigns } = useCampaigns();
   const { tasks } = useTasks();
   const group = groups.find(g => g.id === campaign.groupId);
+  // 같은 그룹 내 형제 캠페인 — 레일 헤더 드롭다운으로 빠른 전환(목록 왕복 제거).
+  const siblings = campaigns.filter(c => c.groupId === campaign.groupId);
   const { isRefreshing, refreshNow } = useArticles();
   const auto = campaign.autoCollect ?? { enabled: true, intervalMin: 30 as const };
   const autoProc = campaign.autoProcess ?? { enabled: true };
@@ -65,7 +68,20 @@ export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenGl
         <div className="border-b border-slate-100 px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900 text-xs">🍝</span>
-            <span className="truncate font-bold text-slate-900">{campaign.name}</span>
+            {siblings.length > 1 ? (
+              <select
+                value={campaign.id}
+                onChange={(e) => { if (e.target.value !== campaign.id) onSwitchCampaign(e.target.value); }}
+                title="같은 그룹 캠페인 전환"
+                className="min-w-0 flex-1 truncate rounded-md bg-transparent font-bold text-slate-900 outline-none hover:bg-slate-50 focus:bg-slate-50 cursor-pointer -ml-1 px-1 py-0.5"
+              >
+                {siblings.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="truncate font-bold text-slate-900">{campaign.name}</span>
+            )}
           </div>
           {group && (
             <button onClick={() => onOpenGroup(group.id)} title="그룹 메인으로"
