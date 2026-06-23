@@ -8,7 +8,7 @@ import { scan, deAiSmell } from './bannedWords';
 // body에 남은 내부 섹션 라벨 줄("# 1. ...", "## 2. ...") 제거 + 빈 HTML 노드 정리.
 // 빈 <p></p>(렌더 시 빈 단락) / src 없는 <img>(깨진 이미지)가 생성물에 들어오므로 후처리.
 export function sanitizeBody(body: string): string {
-  return body
+  let result = body
     .split('\n')
     .filter(line => !/^\s*#{1,6}\s*\d+\.\s/.test(line))
     .join('\n')
@@ -19,8 +19,43 @@ export function sanitizeBody(body: string): string {
     })
     // 빈 단락 <p></p>, <p> </p>, <p>&nbsp;</p> 제거
     .replace(/<p>\s*(?:&nbsp;|&#160;|\s)*<\/p>/gi, '')
+    // 연속 <br> 정리 — 2개 이상 연속 <br>을 단일 </p><p>로 변환 (단락 분리)
+    .replace(/(<br\s*\/?\s*>[\s]*){2,}/gi, '</p>\n<p>')
+    // 단독 <br>이 <p> 내부에서 단락 분리 역할을 하는 경우 정리
+    .replace(/<p>([^<]*)<br\s*\/?\s*>([^<]*)<\/p>/gi, '<p>$1 $2</p>')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+
+  // 마크다운→HTML 폴백: LLM이 마크다운으로 출력했을 때 HTML로 변환
+  if (!/<p[\s>]/i.test(result)) {
+    result = markdownToHtml(result);
+  }
+
+  return result;
+}
+
+/** Minimal markdown→HTML conversion fallback for LLM outputs that ignore HTML instructions. */
+function markdownToHtml(md: string): string {
+  let html = md
+    // Bold: **text** or __text__
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    // Italic: *text* or _text_ (but not inside words)
+    .replace(/(?<!\w)\*(.+?)\*(?!\w)/g, '<em>$1</em>')
+    .replace(/(?<!\w)_(.+?)_(?!\w)/g, '<em>$1</em>')
+    // Remove heading markers
+    .replace(/^#{1,6}\s+/gm, '')
+    // Remove horizontal rules
+    .replace(/^[-*_]{3,}\s*$/gm, '')
+    // Remove list markers (-, *, numbered)
+    .replace(/^\s*[-*]\s+/gm, '')
+    .replace(/^\s*\d+\.\s+/gm, '');
+
+  // Split into paragraphs by double newline
+  const blocks = html.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
+  return blocks
+    .map(b => (/^<(?:blockquote|img|figure|h[1-6]|ul|ol|table|div)\b/i.test(b) ? b : `<p>${b.replace(/\n/g, ' ')}</p>`))
+    .join('\n');
 }
 
 // 영문 헤드라인 케이싱 후처리 — 전치사/접속사/관사는 소문자(lowercaseMinor), 나머지 주요 단어는 첫 글자 대문자.
@@ -112,6 +147,15 @@ function buildStorySystem(category: Category, settings: Settings, summaryBased =
 
   // 6. 고정 지침
   sections.push('[작업] 발행 여부를 판단하지 마라. 위 기준과 말투로 기사들을 교차검증해 정리·종합만 한다.');
+  sections.push('');
+  // 기사 구조 규칙 (1-B 가독성)
+  sections.push('[기사 구조 — 반드시 준수]');
+  sections.push('- 도입(리드): 1~2문장으로 핵심 사실을 요약한다. 첫 <p>에 담는다.');
+  sections.push('- 본문: 3~6개 단락으로 구성한다. 각 단락은 2~4문장, 하나의 <p>에 담는다.');
+  sections.push('- 한 <p>에 여러 단락을 몰아넣지 마라. 단락마다 별도 <p>…</p>.');
+  sections.push('- 빈 단락(<p></p>, <p>&nbsp;</p>, <p> </p>) 절대 금지. 모든 <p>는 실제 텍스트를 포함해야 한다.');
+  sections.push('- <br> 태그로 단락을 나누지 마라. 단락 구분은 반드시 별도 <p> 사용.');
+  sections.push('- 마크다운(#, *, -, ```) 사용 금지. 출력은 순수 HTML만.');
   sections.push('');
   sections.push('[MUST]');
   sections.push('- summary: 무엇에 관한 기사인지 중립적으로 1~2줄(누가/무엇/핵심). 가치 평가나 발행 권고 금지.');
