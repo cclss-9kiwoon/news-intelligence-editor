@@ -141,44 +141,48 @@ function PastaRouter() {
     setMode('kanban');
   };
 
-  if (mode === 'pasta') {
-    return (
-      <PastaShell
-        onOpenCampaign={openCampaign}
-        forceSettingsId={forceSettingsId}
-        onConsumeForceSettings={() => setForceSettingsId(null)}
-        forceGroupId={forceGroupId}
-        onConsumeForceGroup={() => setForceGroupId(null)}
-      />
-    );
-  }
-
+  // ★Provider 트리를 mode 분기 위로 올린다 — pasta(목록)↔kanban 전환 때마다 5개 Provider
+  //   (History/Articles/Clusters/Conversion/Breaking)가 언마운트→리마운트되며 데이터를
+  //   재로드하던 병목 제거. pasta 일 때도 Provider 유지 → 캠페인 전환 = campaignId 교체만으로
+  //   즉시 반영(KanbanBoard 가 allTasks.filter(campaignId) 클라 필터링하므로).
   return (
     <HistoryProvider>
       <ArticlesProvider>
         <ClustersProvider>
           <ConversionProvider>
             <BreakingProvider>
-              {activeCampaign && <SearchingPipeline campaign={activeCampaign} />}
-              {mode === 'workspace' && openTaskId ? (
-                <CampaignWorkspace taskId={openTaskId} onBack={() => setMode('kanban')} />
-              ) : mode === 'kanban' && activeCampaign ? (
-                <CampaignShell
-                  campaign={activeCampaign}
-                  onBackToList={() => setMode('pasta')}
-                  onOpenSettings={() => { setForceSettingsId(activeCampaign.id); setMode('pasta'); }}
-                  onOpenGlobalSettings={() => setSettingsOpen(true)}
-                  onOpenTask={(taskId) => { setOpenTaskId(taskId); setMode('workspace'); }}
-                  onOpenWorkbench={() => setMode('workbench')}
-                  onOpenGroup={(gid) => { setForceGroupId(gid); setMode('pasta'); }}
+              {mode === 'pasta' ? (
+                <PastaShell
+                  onOpenCampaign={openCampaign}
+                  forceSettingsId={forceSettingsId}
+                  onConsumeForceSettings={() => setForceSettingsId(null)}
+                  forceGroupId={forceGroupId}
+                  onConsumeForceGroup={() => setForceGroupId(null)}
                 />
               ) : (
-                <AppShell
-                  onBackToPasta={() => setMode(activeCampaign ? 'kanban' : 'pasta')}
-                  campaignName={activeCampaign?.name ?? '—'}
-                />
+                <>
+                  {activeCampaign && <SearchingPipeline campaign={activeCampaign} />}
+                  {mode === 'workspace' && openTaskId ? (
+                    <CampaignWorkspace taskId={openTaskId} onBack={() => setMode('kanban')} />
+                  ) : mode === 'kanban' && activeCampaign ? (
+                    <CampaignShell
+                      campaign={activeCampaign}
+                      onBackToList={() => setMode('pasta')}
+                      onOpenSettings={() => { setForceSettingsId(activeCampaign.id); setMode('pasta'); }}
+                      onOpenGlobalSettings={() => setSettingsOpen(true)}
+                      onOpenTask={(taskId) => { setOpenTaskId(taskId); setMode('workspace'); }}
+                      onOpenWorkbench={() => setMode('workbench')}
+                      onOpenGroup={(gid) => { setForceGroupId(gid); setMode('pasta'); }}
+                    />
+                  ) : (
+                    <AppShell
+                      onBackToPasta={() => setMode(activeCampaign ? 'kanban' : 'pasta')}
+                      campaignName={activeCampaign?.name ?? '—'}
+                    />
+                  )}
+                  <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+                </>
               )}
-              <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
             </BreakingProvider>
           </ConversionProvider>
         </ClustersProvider>
