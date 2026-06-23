@@ -184,6 +184,8 @@ export type Category = {
 };
 
 // LLM이 반환하는 정확히 6개 키 (구조화 발행 드래프트)
+export type Urgency = 'breaking' | 'timely' | 'evergreen';
+
 export type StoryOutput = {
   summary: string;     // 중립 요약 1~2줄 (판단 X)
   headline: string;
@@ -192,6 +194,7 @@ export type StoryOutput = {
   imagePrompt: string; // 순수 영문(Midjourney)
   sourceFacts?: string[];  // key facts extracted from sources
   summaryBased?: boolean;  // 전 source 전문추출 실패 → RSS 요약 기반 생성(품질 플래그). 풀텍스트 있으면 false
+  urgency?: Urgency;       // 발행 긴급도 — 페이싱 스케줄러가 사용
 };
 
 export const CONVERTED_RESULT_SCHEMA_VERSION = 3;

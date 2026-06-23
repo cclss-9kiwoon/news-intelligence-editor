@@ -1,4 +1,4 @@
-import type { Article, Settings, Category, ConvertedResult, StoryOutput, TranslatedFields, ReferenceArticle, FormatRules } from '../types';
+import type { Article, Settings, Category, ConvertedResult, StoryOutput, TranslatedFields, ReferenceArticle, FormatRules, Urgency } from '../types';
 import { CONVERTED_RESULT_SCHEMA_VERSION } from '../types';
 import { llmCall, llmBackendFrom } from './llmBackend';
 import { extractArticleText } from './scraper';
@@ -289,6 +289,25 @@ function enforceFormatRules(body: string, rules: FormatRules): string {
   return result;
 }
 
+/** Classify urgency based on how recent the source articles are. */
+function classifyUrgency(articles: Article[]): Urgency {
+  const now = Date.now();
+  const ONE_HOUR = 60 * 60 * 1000;
+  const ONE_DAY = 24 * ONE_HOUR;
+
+  const newestPubDate = articles.reduce((latest, a) => {
+    if (!a.pubDate) return latest;
+    const t = new Date(a.pubDate).getTime();
+    return Number.isNaN(t) ? latest : Math.max(latest, t);
+  }, 0);
+
+  if (newestPubDate === 0) return 'timely';
+  const age = now - newestPubDate;
+  if (age <= ONE_HOUR) return 'breaking';
+  if (age <= ONE_DAY) return 'timely';
+  return 'evergreen';
+}
+
 export async function generateStory(
   articles: Article[],
   settings: Settings,
@@ -354,6 +373,7 @@ export async function generateStory(
     imagePrompt: out.imagePrompt ?? '',
     sourceFacts: Array.isArray(out.sourceFacts) ? out.sourceFacts : [],
     summaryBased,
+    urgency: classifyUrgency(enrichedArticles),
   };
 }
 
