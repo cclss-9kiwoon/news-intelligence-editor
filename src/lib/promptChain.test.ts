@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { generateStory, sanitizeBody, buildInitialResult } from './promptChain';
+import { generateStory, sanitizeBody, buildInitialResult, titleCaseHeadline, ensureParagraphs } from './promptChain';
 import * as openai from './openai';
 import type { Settings, Article, Category, StoryOutput } from '../types';
 import { DEFAULT_CATEGORIES } from './defaultCategories';
@@ -74,9 +74,38 @@ describe('sanitizeBody', () => {
   });
 });
 
+describe('titleCaseHeadline', () => {
+  it('lowercaseMinor: 전치사/접속사/관사만 소문자, 나머지 첫글자 대문자', () => {
+    expect(titleCaseHeadline('aespa returns with a new single in march', true))
+      .toBe('Aespa Returns with a New Single in March');
+  });
+  it('첫·끝 단어는 minor라도 대문자', () => {
+    expect(titleCaseHeadline('the show goes on', true)).toBe('The Show Goes On');
+  });
+  it('약어(ALLCAPS)는 원형 보존', () => {
+    expect(titleCaseHeadline('BTS and NCT to perform', true)).toBe('BTS and NCT to Perform');
+  });
+  it('title 모드(lowercaseMinor=false): 모든 단어 대문자', () => {
+    expect(titleCaseHeadline('a new era of k-pop', false)).toBe('A New Era Of K-pop');
+  });
+});
+
+describe('ensureParagraphs', () => {
+  it('<p> 없으면 빈 줄 단위로 <p> 감싸기', () => {
+    expect(ensureParagraphs('첫 단락.\n\n둘째 단락.')).toBe('<p>첫 단락.</p>\n<p>둘째 단락.</p>');
+  });
+  it('이미 <p> 있으면 그대로', () => {
+    expect(ensureParagraphs('<p>본문</p>')).toBe('<p>본문</p>');
+  });
+  it('블록 태그(blockquote/img)는 감싸지 않음', () => {
+    expect(ensureParagraphs('본문.\n\n<blockquote>가사</blockquote>'))
+      .toBe('<p>본문.</p>\n<blockquote>가사</blockquote>');
+  });
+});
+
 describe('generateStory', () => {
   it('returns the 5-key story object and injects category criteria+tone', async () => {
-    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce(STORY);
+    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({ data: STORY });
 
     const out = await generateStory([ARTICLE_A, ARTICLE_B], SETTINGS, CATEGORY);
     expect(spy).toHaveBeenCalledTimes(1);
@@ -93,17 +122,19 @@ describe('generateStory', () => {
 
   it('sanitizes leftover section labels in body and coerces tags to array', async () => {
     vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({
-      ...STORY,
-      body: '## 2. 스토리텔링형 본문\n깨끗해야 하는 본문.',
-      tags: undefined as unknown as string[],
+      data: {
+        ...STORY,
+        body: '## 2. 스토리텔링형 본문\n깨끗해야 하는 본문.',
+        tags: undefined as unknown as string[],
+      },
     });
     const out = await generateStory([ARTICLE_A], SETTINGS, CATEGORY);
-    expect(out.body).toBe('깨끗해야 하는 본문.');
+    expect(out.body).toBe('<p>깨끗해야 하는 본문.</p>'); // ③ <p> 필수 후처리(ensureParagraphs)
     expect(out.tags).toEqual([]);
   });
 
   it('전 source 요약뿐이면 summaryBased=true + 보수적 지침 주입', async () => {
-    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce(STORY);
+    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({ data: STORY });
     const out = await generateStory([ARTICLE_A, ARTICLE_B], SETTINGS, CATEGORY); // fullText 없음
     expect(out.summaryBased).toBe(true);
     const call = spy.mock.calls[0][0] as { system: string };
@@ -111,7 +142,7 @@ describe('generateStory', () => {
   });
 
   it('풀텍스트 있으면 summaryBased=false + 보수적 지침 없음', async () => {
-    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce(STORY);
+    const spy = vi.spyOn(openai, 'chatJson').mockResolvedValueOnce({ data: STORY });
     const withFull: Article = { ...ARTICLE_A, fullText: 'A방송 드라마 전문 본문 내용 충분히 길다.'.repeat(5) };
     const out = await generateStory([withFull], SETTINGS, CATEGORY);
     expect(out.summaryBased).toBe(false);

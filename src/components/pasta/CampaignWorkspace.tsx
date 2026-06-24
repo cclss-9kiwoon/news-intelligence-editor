@@ -5,6 +5,7 @@ import { useSettings } from '../../state/SettingsContext';
 import { useCampaigns } from '../../state/CampaignContext';
 import { generateStory } from '../../lib/promptChain';
 import { sanitizeHtml } from '../../lib/sanitizeHtml';
+import { isWatermarkedImage } from '../../lib/watermark';
 import { TagInput } from './TagInput';
 import { TaskSourcePanel } from './TaskSourcePanel';
 import type { DiscardReason, Category, StoryOutput, ChannelType } from '../../types';
@@ -338,12 +339,13 @@ function stripEmptyImg(html: string): string {
   return html.replace(/<img(?![^>]*\bsrc=["'][^"']+["'])[^>]*>/gi, '');
 }
 /** 히어로 선택 — 인라인 첫 유효 img → 전체 원문 이미지 → 썸네일. 핫링크 잦은 도메인 후순위. */
-function pickHero(body: string, srcArticles: { images?: { url: string }[]; thumbnail?: string }[]): string | undefined {
+function pickHero(body: string, srcArticles: { images?: { url: string; source?: string }[]; thumbnail?: string; source?: string }[]): string | undefined {
   const inline = firstImgSrc(body);
   if (inline) return inline;
+  // 워터마크/로고 매체 이미지 제외(발행 부적합). 인라인 본문 이미지는 sanitizeHtml이 살림.
   const candidates = [
-    ...srcArticles.flatMap(a => (a.images ?? []).map(i => i.url)),
-    ...srcArticles.map(a => a.thumbnail),
+    ...srcArticles.flatMap(a => (a.images ?? []).filter(i => !isWatermarkedImage({ url: i.url, source: i.source })).map(i => i.url)),
+    ...srcArticles.filter(a => !isWatermarkedImage({ url: a.thumbnail, source: a.source })).map(a => a.thumbnail),
   ].filter(isValidImg);
   return candidates.find(u => !isFlakyImg(u)) ?? candidates[0];
 }

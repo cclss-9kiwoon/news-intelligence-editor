@@ -111,17 +111,72 @@ describe('groupIntoClusters', () => {
   });
 
   it('cluster id is stable for same article set (sorted)', () => {
-    const a = art({ id: 'a', title: '뉴스', fetchedAt: now });
-    const b = art({ id: 'b', title: '뉴스', fetchedAt: now });
+    const a = art({ id: 'a', title: '에스파 컴백', fetchedAt: now });
+    const b = art({ id: 'b', title: '에스파 컴백', fetchedAt: now });
     const c1 = groupIntoClusters([a, b], { threshold: 0.1 });
     const c2 = groupIntoClusters([b, a], { threshold: 0.1 });
+    expect(c1).toHaveLength(1); // 공유 엔티티(에스파) → 1클러스터
     expect(c1[0].id).toBe(c2[0].id);
   });
 
   it('representativeTitle is from the most recent article', () => {
-    const older = art({ id: '1', title: 'old title', fetchedAt: now - 1000 });
-    const newer = art({ id: '2', title: 'new title', fetchedAt: now });
+    const older = art({ id: '1', title: '에스파 옛 소식', fetchedAt: now - 1000 });
+    const newer = art({ id: '2', title: '에스파 새 소식', fetchedAt: now });
     const clusters = groupIntoClusters([older, newer], { threshold: 0.05 });
-    expect(clusters[0].representativeTitle).toBe('new title');
+    expect(clusters[0].representativeTitle).toBe('에스파 새 소식');
+  });
+});
+
+describe('멀티소스 클러스터링 (근본 P0)', () => {
+  const now = Date.now();
+  const distinctMedia = (ids: string[], arts: Article[]) =>
+    new Set(ids.map(id => arts.find(a => a.id === id)!.source)).size;
+
+  it('같은 사건 3매체(제목 제각각, 인물 공유) → 1클러스터 distinctMedia≥2', () => {
+    const arts = [
+      art({ id: 'y', source: '연합뉴스', title: '뉴진스, 새 미니앨범으로 컴백', description: '뉴진스가 신곡을 발표했다', fetchedAt: now }),
+      art({ id: 's', source: 'Soompi', title: 'NewJeans Returns With New Single', description: '뉴진스 컴백 소식', fetchedAt: now }),
+      art({ id: 'n', source: '뉴시스', title: '하이브 걸그룹 뉴진스 활동 재개', description: '뉴진스 음반 발매', fetchedAt: now }),
+    ];
+    const clusters = groupIntoClusters(arts, { now });
+    expect(clusters).toHaveLength(1);
+    expect(distinctMedia(clusters[0].articleIds, arts)).toBeGreaterThanOrEqual(2);
+  });
+
+  it('과병합 방지: 공유 엔티티 없으면 제목 토큰 겹쳐도 병합 안 함', () => {
+    // 둘 다 "컴백 발표"라는 흔한 토큰을 쓰지만 인물(아이브 vs 르세라핌)이 다름
+    const arts = [
+      art({ id: 'a', source: 'A', title: '아이브 컴백 발표', fetchedAt: now }),
+      art({ id: 'b', source: 'B', title: '르세라핌 컴백 발표', fetchedAt: now }),
+    ];
+    const clusters = groupIntoClusters(arts, { now, threshold: 0.2 });
+    expect(clusters).toHaveLength(2);
+  });
+
+  it('entityAllowlist로 그룹명 매칭 정밀화', () => {
+    const arts = [
+      art({ id: 'a', source: 'A', title: '에스파 신보 발매', fetchedAt: now }),
+      art({ id: 'b', source: 'B', title: 'aespa 컴백 무대', description: '에스파 활동', fetchedAt: now }),
+    ];
+    const clusters = groupIntoClusters(arts, { now, entityAllowlist: ['에스파'], threshold: 0.2 });
+    expect(clusters).toHaveLength(1);
+  });
+});
+
+describe('extractEntities 정밀화 (stoplist)', () => {
+  it('흔한 일반명사/부사는 엔티티에서 제외', () => {
+    const e = extractEntities('오늘 기자 회견에서 사진 공개 발표 활동 모습');
+    expect(e).not.toContain('오늘');
+    expect(e).not.toContain('기자');
+    expect(e).not.toContain('사진');
+    expect(e).not.toContain('발표');
+  });
+  it('영문 문장 첫 단어(The 등)는 제외', () => {
+    expect(extractEntities('The group BLACKPINK')).not.toContain('The');
+    expect(extractEntities('The group BLACKPINK')).toContain('BLACKPINK');
+  });
+  it('allowlist 항목은 stoplist 무관하게 포함', () => {
+    // '발표'는 stoplist지만 allowlist에 있으면 포함
+    expect(extractEntities('컴백 발표', ['발표'])).toContain('발표');
   });
 });

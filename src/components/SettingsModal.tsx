@@ -4,6 +4,7 @@ import { useSettings } from '../state/SettingsContext';
 import { useHistory } from '../state/HistoryContext';
 import { PROVIDERS, type ProviderId, type ArticleWindow, type PromptConfig } from '../types';
 import { extractArticleText } from '../lib/scraper';
+import { llmCall, llmBackendFrom } from '../lib/llmBackend';
 import { ProjectProfileTab } from './ProjectProfileTab';
 
 type Props = { open: boolean; onClose: () => void };
@@ -11,7 +12,8 @@ type Props = { open: boolean; onClose: () => void };
 export function SettingsModal({ open, onClose }: Props) {
   const {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
-    setModel, setFastModel,
+    setModel, setFastModel, setAgentInboxCode, setKhalaInboxCode,
+    setBudgetDailyUsd, setBudgetHourlyUsd, setCurrencyKrwPerUsd,
     addCategory, updateCategory, removeCategory, setArticleWindow,
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold,
     setSimulatorEnabled, setSimulatorIntervalSec,
@@ -33,6 +35,23 @@ export function SettingsModal({ open, onClose }: Props) {
   const [categoryOpen, setCategoryOpen] = useState<Record<string, boolean>>({});
   const [refUrl, setRefUrl] = useState('');
   const [refFetching, setRefFetching] = useState(false);
+  // B 모드 연결 테스트(PM 8f870827) — 프로토콜 stage(judgeTopic)로 1회 왕복.
+  // 'ping'은 스펙 stage가 아니라 RW 핸들러가 없어 항상 타임아웃 → judgeTopic으로 정렬(기존 핸들러 재사용).
+  const [agentTest, setAgentTest] = useState<{ state: 'idle' | 'testing' | 'ok' | 'fail'; msg?: string }>({ state: 'idle' });
+  const testAgentConnection = async () => {
+    setAgentTest({ state: 'testing' });
+    try {
+      const res = await llmCall<Record<string, unknown>>({
+        apiKey: settings.apiKey, model: settings.model,
+        system: 'You judge if a news topic fits. Reply ONLY compact JSON: {"adequate":boolean,"excluded":boolean}.',
+        user: 'title: "연결 테스트". intent: 아무거나 적합. Return {"adequate":true,"excluded":false}',
+        backend: llmBackendFrom(settings), stage: 'judgeTopic',
+      });
+      setAgentTest({ state: 'ok', msg: `응답 수신: ${JSON.stringify(res).slice(0, 80)}` });
+    } catch (e) {
+      setAgentTest({ state: 'fail', msg: (e as Error)?.message?.slice(0, 120) || '실패' });
+    }
+  };
   const [refError, setRefError] = useState('');
 
   if (!open) return null;
@@ -188,6 +207,74 @@ export function SettingsModal({ open, onClose }: Props) {
                   className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs font-mono"
                 />
               </label>
+
+              {/* 에이전트 위임 연결정보(전역) — 방식 선택(Gemini/OpenAI/에이전트)은 그룹 AI 설정에서.
+                  여기는 그룹에서 'LLM 에이전트' 선택 시 상속되는 접속 자격(inbox)만 둠(PM 7d8d280f). */}
+              <div className="mt-3 border-t border-slate-100 pt-2">
+                <span className="text-xs font-semibold text-slate-600">에이전트 위임 연결 <span className="font-normal text-slate-400">(방식 선택은 그룹 AI 설정)</span></span>
+                <div className="mt-2 space-y-2">
+                  <label className="flex items-center gap-2">
+                    <span className="whitespace-nowrap text-xs text-slate-500">위임 에이전트 inbox:</span>
+                    <input
+                      type="text"
+                      placeholder="구독 LLM 에이전트 inbox code (예: akp-rw)"
+                      value={settings.agentInboxCode ?? ''}
+                      onChange={e => setAgentInboxCode(e.target.value)}
+                      className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs font-mono"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <span className="whitespace-nowrap text-xs text-slate-500">수신(NIE) inbox:</span>
+                    <input
+                      type="text"
+                      placeholder="응답 수신용 inbox code"
+                      value={settings.khalaInboxCode ?? ''}
+                      onChange={e => setKhalaInboxCode(e.target.value)}
+                      className="flex-1 rounded border border-slate-300 px-2 py-1 text-xs font-mono"
+                    />
+                  </label>
+                  <p className="text-[11px] text-slate-400">그룹에서 'LLM 에이전트' 선택 시 사용. 작성·검수를 Khala로 위임(최대 180s 대기). dev 서버에 KHALA_API_KEY 필요(없으면 프록시 401). 스펙: docs/agent-llm-protocol.md</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={testAgentConnection}
+                      disabled={agentTest.state === 'testing' || !settings.agentInboxCode}
+                      className="inline-flex items-center gap-1.5 rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                    >
+                      {agentTest.state === 'testing' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      연결 테스트 (ping)
+                    </button>
+                    {agentTest.state === 'ok' && <span className="text-xs text-green-600">✓ 연결됨 — {agentTest.msg}</span>}
+                    {agentTest.state === 'fail' && <span className="text-xs text-red-600">✗ {agentTest.msg}</span>}
+                  </div>
+                </div>
+              </div>
+
+              {/* 예산 가드(NIE 비용추적) — 누적 소비 도달 시 API 자동 호출 정지(하드 스톱). 0=무제한 */}
+              <div className="mt-3 border-t border-slate-100 pt-2">
+                <span className="text-xs font-semibold text-slate-600">예산 가드 (0 = 무제한)</span>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  <label className="flex items-center gap-1.5">
+                    <span className="whitespace-nowrap text-xs text-slate-500">일 한도 $</span>
+                    <input type="number" min={0} step="0.5" value={settings.budgetDailyUsd || 0}
+                      onChange={e => setBudgetDailyUsd(Number(e.target.value))}
+                      className="w-20 rounded border border-slate-300 px-2 py-1 text-xs font-mono" />
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <span className="whitespace-nowrap text-xs text-slate-500">시간 한도 $</span>
+                    <input type="number" min={0} step="0.5" value={settings.budgetHourlyUsd || 0}
+                      onChange={e => setBudgetHourlyUsd(Number(e.target.value))}
+                      className="w-20 rounded border border-slate-300 px-2 py-1 text-xs font-mono" />
+                  </label>
+                  <label className="flex items-center gap-1.5">
+                    <span className="whitespace-nowrap text-xs text-slate-500">₩/$ 환율</span>
+                    <input type="number" min={0} step="10" value={settings.currencyKrwPerUsd || 0}
+                      onChange={e => setCurrencyKrwPerUsd(Number(e.target.value))}
+                      placeholder="0=병기안함"
+                      className="w-24 rounded border border-slate-300 px-2 py-1 text-xs font-mono" />
+                  </label>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">도달 시 칸반 배너 + API 자동 호출 정지. B(위임) 호출은 비용 0이라 가드 비대상.</p>
+              </div>
             </div>
           </section>
         </div>

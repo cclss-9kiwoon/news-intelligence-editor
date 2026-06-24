@@ -3,20 +3,40 @@ import { useClusters } from '../../state/ClustersContext';
 import { useArticles } from '../../state/ArticlesContext';
 import { useSettings } from '../../state/SettingsContext';
 import { useTasks } from '../../state/TaskContext';
-import { generateStory, judgeExcludedTopic } from '../../lib/promptChain';
-import { judgeTopicAdequacy } from '../../lib/topicJudge';
+import { generateStory } from '../../lib/promptChain';
+import { judgeTopic } from '../../lib/topicJudge';
 import { assessProducibility } from '../../lib/producibility';
 import { reviewDraft } from '../../lib/review';
-import { shouldClaimCluster } from '../../lib/searchFilter';
+import { shouldClaimCluster, normalizeTitle, isCivicNoise } from '../../lib/searchFilter';
+import { getMediaPriorityLists } from '../../lib/scraper';
 import { loadDiscarded, buildDiscardIndex } from '../../lib/discardLedger';
-import { shouldDiscardAfterExtractFail } from '../../lib/extractRetry';
 import { promotionBudget } from '../../lib/promotion';
 import { judgeBreaking } from '../../lib/breakingDetector';
 import { resolveStageLLM } from '../../lib/stageLLM';
 import { useCampaigns } from '../../state/CampaignContext';
 import type { Campaign, Category, Task, StageLLMConfig } from '../../types';
 
+// 수동실행 마커(PM b129d4a0) — 자동진행 OFF여도 사용자가 드래그/선택한 1건만 ②/③ 처리.
+const isManualRun = (t: Task) => t.manualRun === true;
+
+// ② 주제판단 결과 캐시(PM 7d8d280f) — titleSig별 직전 verdict 재사용.
+// 동일 토픽이 여러 태스크/재렌더로 judgeTopic LLM콜 중복(1분내 3회 관측) → 비용 낭비.
+// 차단(excluded)·적합 둘 다 캐시. 세션 메모리(재유입은 discardLedger가 별도 차단).
+const topicVerdictCache = new Map<string, { adequate: boolean; excluded: boolean }>();
+
+// 봇차단/후순위(Jina/proxy 추출 영구실패·소규모·교차미달) 도메인 — 단일소스면 ②서 무한
+// 추출재시도/head-of-line 유발. 즉시 폐기(클러스터 보강용으로만 가치).
+// 목록은 scraper의 단일 출처(getMediaPriorityLists().deprioritize, akp-RW 091403c2)에서 읽음 — 중복 정의 방지.
+const SEED_BOT_BLOCKED = ['topstarnews', 'bizwnews', 'gukjenews', 'mhnse', 'enews.imbc', 'jndn'];
+const isBotBlockedSource = (s: string) => {
+  const x = s.toLowerCase();
+  const list = getMediaPriorityLists().deprioritize;
+  const pats = list.length > 0 ? list : SEED_BOT_BLOCKED;
+  return pats.some(b => x.includes(b.toLowerCase()));
+};
+
 const SOURCE_REVIEW_TIMEOUT_MS = 90_000; // 전문 수집 대기 상한
+const MIN_MEDIA_FOR_WRITE = 2; // ③ 작성 전 교차검증 최소 매체 수(단일소스 차단). TODO: campaign 설정값화(minMediaForWrite)
 const HOUR_MS = 3600_000;
 const WINDOW_MS: Record<string, number> = {
   '1h': HOUR_MS, '24h': 24 * HOUR_MS, '7d': 7 * 24 * HOUR_MS, '30d': 30 * 24 * HOUR_MS, breaking: 30 * 24 * HOUR_MS,
@@ -41,8 +61,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
     return { ...settings, provider: r.provider, apiKey: r.apiKey, model: r.model, apiBaseUrl: r.baseUrl };
   };
   const producingRef = useRef<Set<string>>(new Set());
-  const topicJudgeRef = useRef<Set<string>>(new Set()); // 제외 주제 AI 판단 진행 중 가드
-  const intentJudgeRef = useRef<Set<string>>(new Set()); // 주제 적합성 AI 판단 진행 중 가드
+  const intentJudgeRef = useRef<Set<string>>(new Set()); // 주제 판단(intent+제외 통합) 진행 중 가드
   const producibilityRef = useRef<Set<string>>(new Set()); // 제작 가능성 판정 진행 중 가드
   const mountedRef = useRef(true);
 
@@ -81,8 +100,14 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
     // 폐기/거부 원장 인덱스 — 이미 폐기·거부된 사건(title/url/articleId) ① 재유입 차단
     const discardIdx = buildDiscardIndex(loadDiscarded(now));
-    // 점진화: 한 사이클에 클러스터 전부 생성 금지(흰화면/프리즈 방지). 상한만큼 모아 1회 벌크 setState.
-    const MAX_NEW_PER_CYCLE = 8;  // 점진적 — 사이클당 소량씩 자연스럽게 쌓이게(와르르 방지)
+    // 페이싱(PM 5fdac5c1): ① 1개씩 트리클 + 총상한. 와르르 방지 + 통제된 순차 흐름.
+    // - 사이클당 신규 1개(MAX_NEW_PER_CYCLE=1) → 한 장씩 자연스럽게 올라옴.
+    // - 총상한 maxSearchingQueue(기본20): searching(미폐기·미발행) 수 ≤ 상한. 점유는 두되 카드 생성만 멈춤.
+    //   한 개가 ②로 빠지면 빈자리만큼 다음 사이클에 채움.
+    const SEARCHING_CAP = searchingCfg.maxSearchingQueue ?? 20;
+    const searchingNow = working.filter(t => t.status === 'searching' && !t.discardReason && !t.published).length;
+    const room = Math.max(0, SEARCHING_CAP - searchingNow);
+    const MAX_NEW_PER_CYCLE = Math.min(1, room);  // 트리클(1) + 상한 도달 시 0
     const batch: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>[] = [];
     for (const cluster of clusters) {
       if (batch.length >= MAX_NEW_PER_CYCLE) break;
@@ -97,6 +122,7 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         campaignId: campaign.id, status: 'searching' as const,
         title: cluster.representativeTitle, clusterId: cluster.id,
         sources: decision.sources, imageCount: decision.imageCount,
+        thumbnailUrl: decision.thumbnailUrl,
         isBreaking,
         goldenTime: { startsAt, expiresAt: startsAt + goldenSpan },
       };
@@ -150,12 +176,40 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
   // ── 3. ② 검수: 전문 수집 대기 + 제외 주제 AI 판단 → 제작 전환 / 탈락 ──
   useEffect(() => {
-    if (campaign.autoProcess?.enabled === false) return;  // 자동 진행 OFF = ②③④ LLM 정지
+    const auto = campaign.autoProcess?.enabled !== false;  // 자동 진행
     const excludeTopics = (searchingCfg.excludeTopics ?? []).filter(x => x.trim());
 
+    // 추출실패 error 잔류 즉시 폐기(PM bb39398a): 아래 reviewQueue가 !t.error로 거르기 때문에
+    // 옛 코드가 error를 박은 레거시 건(예: "전문 수집 실패 (출처 0건)")이 ②에 영구 잔류(16h)하던 버그.
+    // 추출실패류 error는 처리 대상이 아니라 폐기 대상 — 가드 전에 먼저 정리(LLM 0콜, 자동 OFF여도 실행).
+    const extractFailRe = /전문\s*수집\s*실패|출처\s*0건|추출\s*실패|extract[_\s]?fail/i;
     for (const t of myTasks) {
-      if (t.status !== 'topic_review' || t.error || t.paused) continue;
+      if (t.status === 'topic_review' && t.error && extractFailRe.test(t.error)) discardTask(t.id, 'extract_failed');
+    }
 
+    // 페이싱(PM 5fdac5c1): ② 동시 1건만 — 상단(우선→골든임박→오래된) 1건만 판정 진행.
+    // 그 1건이 ②를 떠나면(통과→③ or 폐기) 다음 1건. 동시 다발(gemini 버스트) 차단.
+    // 수동실행(PM b129d4a0): 자동 OFF여도 manualRun 마커 카드는 1건 처리(드래그/선택분).
+    const reviewQueue = myTasks
+      .filter(t => t.status === 'topic_review' && !t.error && !t.paused)
+      .sort((a, b) =>
+        (b.priority ? 1 : 0) - (a.priority ? 1 : 0) ||
+        expiresAtOf(a) - expiresAtOf(b) ||
+        a.createdAt - b.createdAt);
+    // head-of-line 방지(PM 40a06df1): 막힌 1건(단일소스/추출대기)이 큐 head면 전체 정지하던 버그.
+    // → 전체 큐를 순회하되 LLM 콜(judge/producibility)만 사이클당 1건으로 캡(비용 페이싱 유지).
+    //   패시브 게이트(추출 대기·단일소스 보류·승급)는 막힌 건을 skip하고 다음 건으로 계속 진행.
+    // 자동 OFF: manualRun 마커 건만 대상.
+    // 사이클당 LLM 콜 캡(PM 308f0416): 1콜은 백로그에 너무 느림 → 상향.
+    // agent(위임)=비용0이라 넉넉히, api=비용 고려해 적당히. 큐가 짧으면 어차피 큐 길이로 자연 제한.
+    const backend = settings.llmBackend ?? 'api';
+    // agent는 턴기반(직렬) 에이전트 — 동시 다발 전송 시 과부하/적체로 RW 오류·타임아웃. 소수만.
+    // api는 동시성 서킷이 별도 관리하므로 사이클당 약간 넉넉히.
+    let llmBudget = backend === 'agent' ? 3 : 4;  // 이번 사이클 새 LLM 콜 허용 수
+    // 진단(PM 7ab6683e): ② effect 실제 구동/큐/백엔드 가시화. 0건이면 effect 미실행, queue>0인데 judge 안뜨면 in-flight hang.
+    console.log(`[②effect] run auto=${auto} backend=${backend} queue=${reviewQueue.length} inFlight=${intentJudgeRef.current.size} budget=${llmBudget}`);
+    for (const t of reviewQueue) {
+      if (!auto && !isManualRun(t)) continue;
       const srcArts = articles.filter(a => t.sources.some(s => s.articleId === a.id));
       const refreshed = t.sources.map(s => {
         const a = articles.find(x => x.id === s.articleId);
@@ -167,21 +221,43 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
       // 요약 스니펫 — RSS description 우선, 없으면 fullText 앞부분. intent/제외 판단은 추출 전 요약만으로 가능.
       const snippets = srcArts.map(a => a.description || a.fullText?.slice(0, 300) || '');
 
-      // ── ② 토큰-최적 컬링 순서: ①무료필터(claim단계)→intent flash→제외 flash→추출+producibility→③ ──
-      // intent/제외를 추출 '앞'에: RSS 요약 기반이라 느린 Jina 추출 대기 없이 부적합 즉시 컷(②빠름·토큰절약).
+      // ── ② 컬링 순서: ①무료필터(claim)→주제판단(intent+제외 1콜)→단일소스 차단→추출+producibility→③ ──
+      // 주제판단을 단일소스 차단 '앞'에: 무관 단일소스도 off_topic 먼저 컷해야 ②에 안 쌓임.
 
-      // 1) 주제 정의(intent) 적합성 — 요약 기반. decided-부적합 즉시 폐기.
+      // 0) 지자체/행정 노이즈 소급 컷(NIE 7e8fe4b isCivicNoise) — judge LLM 콜 전에 레거시 노이즈 제거(토큰 0).
+      //    ①에서 막혀야 정상이나 이미 ②에 쌓인 레거시분을 RW 도달 전 정리.
+      if (searchingCfg.filterCivicNoise !== false) {
+        const snip = srcArts.map(a => `${a.title} ${a.description}`).join(' ');
+        if (isCivicNoise(snip, searchingCfg.entityAllowlist ?? [])) { discardTask(t.id, 'off_topic'); continue; }
+      }
+
+      // 1) 주제 판단 — intent 적합성 + 제외 주제를 judgeTopic 단일 콜로(콜 절반). 요약 기반. fail-CLOSED.
       const intent = (campaign.settings.topicReview.intent ?? '').trim();
-      if (intent && !t.intentChecked) {
-        if (!intentJudgeRef.current.has(t.id)) {
+      if (!t.intentChecked || !t.topicChecked) {
+        // 중복 판정 차단: 같은 titleSig를 이미 판정했으면 LLM콜 없이 직전 verdict 재사용.
+        const sig = normalizeTitle(t.title);
+        const cached = topicVerdictCache.get(sig);
+        if (cached) {
+          if (!cached.adequate || cached.excluded) discardTask(t.id, 'off_topic');
+          else updateTask(t.id, { intentChecked: true, topicChecked: true });
+          continue;
+        }
+        if (intentJudgeRef.current.has(t.id)) continue;   // 이미 판정 진행중 → 다음 건
+        if (llmBudget <= 0) continue;                     // 이번 사이클 LLM 소진 → skip(head-of-line 방지)
+        {
+          llmBudget--;
           intentJudgeRef.current.add(t.id);
-          judgeTopicAdequacy({ title: t.title, snippets }, intent, stageSettings(campaign.settings.topicReview.llm, 'fast'))
+          console.log(`[②judge→송신] "${t.title.slice(0, 30)}" (${backend}) 판정 요청…`);  // 송신 시점(응답 전). 응답은 [②judge]
+          judgeTopic({ title: t.title, snippets }, intent, excludeTopics, stageSettings(campaign.settings.topicReview.llm, 'fast'))
             .then(r => {
               if (!mountedRef.current) return;
-              // fail-CLOSED 3-state: 미결정(429/서킷/실패)→보류(재판단), 부적합→컷, 적합→통과
-              if (!r.decided) return;
-              if (!r.adequate) discardTask(t.id, 'off_topic');
-              else updateTask(t.id, { intentChecked: true });
+              // 미결정(429/서킷/실패)→보류(재판단). 부적합 or 제외 해당→off_topic 컷. 적합&미제외→양 플래그 동시 set.
+              if (!r.decided) { console.log(`[②judge] "${t.title.slice(0, 30)}" 미결정(429/서킷) → 보류`); return; }
+              topicVerdictCache.set(sig, { adequate: r.adequate, excluded: r.excluded });  // verdict 캐시(중복 LLM콜 차단)
+              const verdict = (!r.adequate || r.excluded) ? '폐기(off_topic)' : '통과';
+              console.log(`[②judge] "${t.title.slice(0, 30)}" → ${verdict} (adequate=${r.adequate} excluded=${r.excluded})`);
+              if (!r.adequate || r.excluded) discardTask(t.id, 'off_topic');
+              else updateTask(t.id, { intentChecked: true, topicChecked: true });
             })
             .catch(() => { /* 예외=미결정=보류 */ })
             .finally(() => { intentJudgeRef.current.delete(t.id); });
@@ -189,25 +265,25 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         continue;
       }
 
-      // 2) 제외 주제 — 요약 기반.
-      if (excludeTopics.length > 0 && !t.topicChecked) {
-        if (!topicJudgeRef.current.has(t.id)) {
-          topicJudgeRef.current.add(t.id);
-          judgeExcludedTopic({ title: t.title, snippets }, excludeTopics, stageSettings(campaign.settings.topicReview.llm, 'fast'))
-            .then(r => {
-              if (!mountedRef.current) return;
-              if (r.excluded) discardTask(t.id, 'off_topic');
-              else updateTask(t.id, { topicChecked: true });
-            })
-            .catch(() => { if (mountedRef.current) updateTask(t.id, { topicChecked: true }); }) // fail-open
-            .finally(() => { topicJudgeRef.current.delete(t.id); });
-        }
-        continue;
+      // 2) 단일소스 차단 — 주제 적합(통과)한데 교차검증(distinct 매체) 부족하면 ③ 작성 안 함
+      //    (allkpop 신뢰도 원칙). 보류(2번째 소스 대기), 미충족 지속 시 staleTaskIds 정리.
+      //    minMediaForWrite: campaign 설정값(없으면 기본 2). 임시 1로 흐름 확인 가능.
+      const minMediaForWrite = searchingCfg.minMediaForWrite ?? MIN_MEDIA_FOR_WRITE;
+      const distinctMedia = new Set(refreshed.map(s => s.source)).size;
+      if (distinctMedia < minMediaForWrite) {
+        // 단일소스 교차검증 미달. 봇차단 단일소스는 추출도 영구실패 → 즉시 폐기(무한 재시도/적체 방지).
+        const allBotBlocked = refreshed.every(s => isBotBlockedSource(s.source));
+        const pastTimeout = Date.now() - (t.promotedAt ?? t.createdAt) > SOURCE_REVIEW_TIMEOUT_MS;
+        if (allBotBlocked || pastTimeout) discardTask(t.id, 'low_quality');  // 2번째 소스 안 붙음 → 정리
+        continue;  // 막혀도 다음 건 진행(head-of-line 방지)
       }
 
-      // 3) ②-B 제작 가능성(이미지) — intent/제외 통과분만.
+      // 4) ②-B 제작 가능성(이미지) — intent/제외/교차검증 통과분만.
       if (!t.producibleChecked) {
-        if (!producibilityRef.current.has(t.id)) {
+        if (producibilityRef.current.has(t.id)) continue;
+        if (llmBudget <= 0) continue;  // 사이클당 LLM 캡 — 막혀도 다음 건 진행
+        {
+          llmBudget--;
           producibilityRef.current.add(t.id);
           const imgs = srcArts.flatMap(a => (a.images ?? []).map(im => ({ url: im.url })));
           const cluster = clusters.find(c => c.id === t.clusterId);
@@ -233,15 +309,16 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
         }
         const hasSummary = srcArts.some(a => (a.description || '').trim().length > 0);
         if (!hasSummary) {
-          const attempts = (t.extractAttempts ?? 0) + 1;
-          if (shouldDiscardAfterExtractFail(attempts)) discardTask(t.id, 'extract_failed');
-          else updateTask(t.id, { sources: refreshed, extractAttempts: attempts });
+          // 즉시성(PM bb39398a): 타임아웃 경과 + fullText 0 + 요약도 0 = 데드엔드.
+          // 90s 대기창이 이미 일시 429/timeout을 흡수했으므로 추가 3회 대기 없이 즉시 폐기("바로 삭제").
+          discardTask(t.id, 'extract_failed');
           continue;
         }
         // 요약 있음 → 폐기 안 함. 아래 승급(요약 기반 작성).
       }
 
       // 5) 모든 게이트 통과 → ③ 제작 승급 (풀텍스트 있으면 그걸로, 없으면 요약 폴백)
+      console.log(`[②→③] "${t.title.slice(0, 30)}" 승급 (매체 ${distinctMedia} · 전문 ${fullTextCount}/${refreshed.length})`);
       updateTask(t.id, { sources: refreshed, imageCount, status: 'producing' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -249,13 +326,23 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
 
   // ── 4. ③ 제작: LLM 생성 → 결과물 검수 전환 ──
   useEffect(() => {
-    if (campaign.autoProcess?.enabled === false) return;  // 자동 진행 OFF = ②③④ LLM 정지
-    for (const t of myTasks) {
-      if (t.status !== 'producing' || t.draft || t.error || t.paused) continue;
+    const auto = campaign.autoProcess?.enabled !== false;  // 자동 진행
+    // 페이싱(PM 5fdac5c1): ③ 동시 1건만 generateStory. 완료/실패로 빠지면 다음 1건.
+    // 수동실행(PM b129d4a0): 자동 OFF여도 manualRun 마커 1건은 작성.
+    if (producingRef.current.size >= 1) return;
+    const produceQueue = myTasks
+      .filter(t => t.status === 'producing' && !t.draft && !t.error && !t.paused)
+      .sort((a, b) => (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || a.createdAt - b.createdAt);
+    const pTarget = auto ? produceQueue[0] : produceQueue.find(isManualRun);
+    if (!pTarget) return;
+    for (const t of [pTarget]) {
       if (producingRef.current.has(t.id)) continue;
       producingRef.current.add(t.id);
 
-      const srcArticles = articles.filter(a => t.sources.some(s => s.articleId === a.id));
+      // 풀텍스트 보유 source 우선 정렬 → generateStory 입력 품질↑(요약보다 본문 먼저).
+      const srcArticles = articles
+        .filter(a => t.sources.some(s => s.articleId === a.id))
+        .sort((a, b) => (b.fullText ? 1 : 0) - (a.fullText ? 1 : 0));
       const category: Category =
         settings.categories.find(c => c.id === settings.activeCategoryId)
         ?? settings.categories[0]
@@ -273,7 +360,8 @@ export function SearchingPipeline({ campaign }: { campaign: Campaign }) {
             images: srcArticles.flatMap(a => (a.images ?? []).map(im => ({ url: im.url }))),
           };
           try { review = await reviewDraft(draft, stageSettings(campaign.settings.finalReview.llm, 'fast'), reviewCtx); } catch { review = undefined; }
-          if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review', produceAttempts: attempt });
+          // manualRun:false — ④(사람) 도달 = 수동실행 1건 완료, 마커 해제.
+          if (mountedRef.current) updateTask(t.id, { draft, review, status: 'final_review', produceAttempts: attempt, manualRun: false });
         })
         .catch((err: unknown) => {
           if (!mountedRef.current) return;

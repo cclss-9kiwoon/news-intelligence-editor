@@ -22,6 +22,8 @@ export const STORAGE_KEYS = {
   history: 'nie:history.v2',
   // 폐기/거부 원장 — 재유입 차단(영속). 삭제된 task와 무관하게 잔존.
   discarded: 'nie:discarded.v1',
+  // LLM 사용량/비용 원장(영속) — 대시보드·예산 가드 근거.
+  usage: 'nie:usage.v1',
 } as const;
 
 // ─── File-based settings backup ─────────────────────────────────────

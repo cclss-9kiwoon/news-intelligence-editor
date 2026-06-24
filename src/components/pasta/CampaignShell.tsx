@@ -28,18 +28,22 @@ const NAV: { id: ShellView; Icon: (p: { className?: string }) => ReactElement; l
  * 캠페인 메인 셸 — 좌측 운영 레일 + 우측 뷰(보드/현황/발행함/폐기함).
  * 설정 끝난 캠페인 진입 시 메인 화면. 보드가 기본.
  */
-export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTask, onOpenWorkbench, onOpenGroup }: {
+export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenGlobalSettings, onOpenTask, onOpenWorkbench, onOpenGroup, onSwitchCampaign }: {
   campaign: Campaign;
   onBackToList: () => void;
   onOpenSettings: () => void;
+  onOpenGlobalSettings: () => void;
   onOpenTask: (taskId: string) => void;
   onOpenWorkbench: () => void;
   onOpenGroup: (groupId: string) => void;
+  onSwitchCampaign: (campaignId: string) => void;
 }) {
   const [view, setView] = useState<ShellView>('board');
-  const { setCampaignAutoCollect, setCampaignAutoProcess, groups } = useCampaigns();
+  const { setCampaignAutoCollect, setCampaignAutoProcess, groups, campaigns } = useCampaigns();
   const { tasks } = useTasks();
   const group = groups.find(g => g.id === campaign.groupId);
+  // 같은 그룹 내 형제 캠페인 — 레일 헤더 드롭다운으로 빠른 전환(목록 왕복 제거).
+  const siblings = campaigns.filter(c => c.groupId === campaign.groupId);
   const { isRefreshing, refreshNow } = useArticles();
   const auto = campaign.autoCollect ?? { enabled: true, intervalMin: 30 as const };
   const autoProc = campaign.autoProcess ?? { enabled: true };
@@ -64,7 +68,20 @@ export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTa
         <div className="border-b border-slate-100 px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-slate-900 text-xs">🍝</span>
-            <span className="truncate font-bold text-slate-900">{campaign.name}</span>
+            {siblings.length > 1 ? (
+              <select
+                value={campaign.id}
+                onChange={(e) => { if (e.target.value !== campaign.id) onSwitchCampaign(e.target.value); }}
+                title="같은 그룹 캠페인 전환"
+                className="min-w-0 flex-1 truncate rounded-md bg-transparent font-bold text-slate-900 outline-none hover:bg-slate-50 focus:bg-slate-50 cursor-pointer -ml-1 px-1 py-0.5"
+              >
+                {siblings.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="truncate font-bold text-slate-900">{campaign.name}</span>
+            )}
           </div>
           {group && (
             <button onClick={() => onOpenGroup(group.id)} title="그룹 메인으로"
@@ -137,6 +154,8 @@ export function CampaignShell({ campaign, onBackToList, onOpenSettings, onOpenTa
         {/* 하단 */}
         <div className="border-t border-slate-100 px-3 py-3">
           <button onClick={onOpenSettings} className="mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-slate-600 hover:bg-slate-100 transition-colors"><IconSettings className="h-4 w-4 shrink-0 text-slate-400" /> 캠페인 설정</button>
+          {/* 전역 설정(AI·LLM·예산) — B모드 토글/AI키가 여기 있음. 캠페인 설정과 별개(PM c97d0dc7) */}
+          <button onClick={onOpenGlobalSettings} className="mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-100 transition-colors"><IconSettings className="h-4 w-4 shrink-0 text-blue-500" /> 전역 설정 (AI·LLM·예산)</button>
           <button onClick={onOpenWorkbench} className="mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-slate-600 hover:bg-slate-100 transition-colors"><IconWrench className="h-4 w-4 shrink-0 text-slate-400" /> 수동 워크벤치</button>
           <button onClick={onBackToList} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-slate-500 hover:bg-slate-100 transition-colors"><IconArrowLeft className="h-4 w-4 shrink-0" /> 캠페인 목록</button>
         </div>

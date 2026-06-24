@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { getLlmCircuitState, resetLlmCircuit } from '../../lib/openai';
 import { useTasks } from '../../state/TaskContext';
 import { useArticles } from '../../state/ArticlesContext';
 import { useClusters } from '../../state/ClustersContext';
 import { useCampaigns } from '../../state/CampaignContext';
 import { useSettings } from '../../state/SettingsContext';
+import { useUsage } from '../../state/UsageContext';
 import { shouldClaimCluster } from '../../lib/searchFilter';
 import { staleTaskIds, staleCountByStatus, hoursToMs } from '../../lib/taskCleanup';
 import { IconTrash, IconRefresh } from './icons';
@@ -12,6 +14,10 @@ import type { Task, TaskStatus } from '../../types';
 
 const HOUR = 3600_000;
 const COL_RENDER_LIMIT = 50; // 컬럼당 렌더 상한 — 대량 대기 시 프리즈 방지(나머지는 "외 N건")
+// 단계 정방향 순서 — 드래그앤드롭 수동 진행(정방향만 허용). 인덱스 비교로 방향 판정.
+const STATUS_ORDER: TaskStatus[] = ['searching', 'topic_review', 'producing', 'final_review'];
+const statusIdx = (s: TaskStatus) => STATUS_ORDER.indexOf(s);
+const DRAG_MIME = 'application/x-pasta-task';
 
 // 골든타임 파생값 (저장 안 함, 렌더 계산). gt 없으면 null.
 export type GoldenView = { remainingMs: number; percent: number; state: 'ok' | 'warning' | 'expired' };
@@ -43,8 +49,27 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   const { isRefreshing, loadingStatus, lastRefreshedAt, articles, refreshNow, collectError } = useArticles();
   const { clusters } = useClusters();
   const { campaigns } = useCampaigns();
-  const { settings } = useSettings();
+  const { settings, setModel } = useSettings();
+  const { usage, budget, krwPerUsd } = useUsage();
+  const usd = (n: number) => `$${n.toFixed(n < 1 ? 4 : 2)}`;
+  const won = (n: number) => krwPerUsd > 0 ? ` (₩${Math.round(n * krwPerUsd).toLocaleString()})` : '';
   const noLlmKey = !settings.apiKey;  // 그룹 LLM 키는 브리지로 settings.apiKey에 주입됨 → 비면 미설정
+
+  // LLM 서킷 상태 폴링 — 과부하(503/429 연속·서킷 open) 시 모델 변경 배너 노출.
+  const [circuit, setCircuit] = useState(() => getLlmCircuitState());
+  useEffect(() => {
+    const id = setInterval(() => setCircuit(getLlmCircuitState()), 4000);
+    return () => clearInterval(id);
+  }, []);
+  const overloaded = circuit.open || circuit.consecutive429 >= 3;
+  // 빠른 전환 후보(현재 모델 제외). PM: gemini-2.0-flash / 2.5-pro
+  const SWITCH_MODELS = ['gemini-2.0-flash', 'gemini-2.5-pro', 'gemini-2.5-flash'].filter(m => m !== settings.model);
+  // 모델 전환 = 모델 교체 + 서킷 즉시 해제(안 풀면 배너가 쿨다운까지 안 사라짐) + 상태 즉시 반영
+  const switchModel = (m: string) => {
+    setModel(m as typeof settings.model);
+    resetLlmCircuit();
+    setCircuit(getLlmCircuitState());
+  };
   const autoOff = campaigns.find(c => c.id === campaignId)?.autoCollect?.enabled === false;
   const noIntent = !(campaigns.find(c => c.id === campaignId)?.settings.topicReview.intent ?? '').trim();
   // 보드는 진행중 태스크만 — 발행됨(→발행함)·폐기됨(→폐기함)은 제외
@@ -54,6 +79,28 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   );
   const retryTask = (id: string) => updateTask(id, { error: undefined, produceAttempts: 0, status: 'producing' });
   const publishTask = (id: string) => updateTask(id, { published: true, publishedAt: Date.now() });
+
+  // ── 수동 진행: 드래그앤드롭으로 카드를 다음 칸으로 이동(PM 476f8d66) ──
+  // 정방향만 허용(역방향/같은칸 무시). 건너뛰면 후속 AI 게이트가 막지 않도록 "수동 통과" 플래그 세팅.
+  // 자동진행 ON이면 드롭한 단계의 처리(판정/작성)가 이어짐(페이싱=1건씩). OFF여도 단계 이동은 됨.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<TaskStatus | null>(null);
+  const draggedTask = dragId ? allTasks.find(t => t.id === dragId) ?? null : null;
+  const canDrop = (to: TaskStatus) => !!draggedTask && statusIdx(to) > statusIdx(draggedTask.status);
+  const manualMove = (taskId: string, to: TaskStatus) => {
+    const t = allTasks.find(x => x.id === taskId);
+    if (!t || statusIdx(to) <= statusIdx(t.status)) return;  // 정방향만
+    // 단계 건너뛰며 ② AI 게이트를 사람이 대신 통과시킴 → 플래그 세팅(재게이트 방지).
+    const patch: Partial<Task> = { status: to };
+    if (statusIdx(to) >= statusIdx('producing')) {
+      patch.intentChecked = true;
+      patch.topicChecked = true;
+      patch.producibleChecked = true;
+    }
+    // 수동실행 마커: ②/③로 떨군 카드는 자동진행 OFF여도 그 1건만 즉시 처리(PM b129d4a0).
+    if (to === 'topic_review' || to === 'producing') patch.manualRun = true;
+    updateTask(taskId, patch);
+  };
 
   // 오래된(stuck) 태스크 정리 — 단계(컬럼)별로 N시간+ 머문 건 일괄 삭제.
   // staleHours select는 전역 공유, 삭제는 컬럼별 status 한정. tasks는 이미 발행·폐기 제외분.
@@ -166,6 +213,24 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
           </span>
         )}
 
+        {budget.tripped && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
+            🛑 예산 초과({budget.scope === 'day' ? '일' : '시간'} 한도) — API 자동 호출 정지됨. {budget.scope === 'day' ? `오늘 ${usd(budget.daySpentUsd)}/${usd(budget.dayLimitUsd)}` : `시간 ${usd(budget.hourSpentUsd)}/${usd(budget.hourLimitUsd)}`}. 한도 상향(설정) 또는 B 모드(위임) 전환
+          </span>
+        )}
+        {overloaded && (
+          <span className="inline-flex items-center gap-2 rounded-full border border-orange-300 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
+            ⚡ AI 모델 과부하{circuit.open ? ' (일시 차단 중)' : ` (연속 ${circuit.consecutive429}회 한도초과)`} · 현재 <span className="font-mono">{settings.model}</span> — 변경:
+            {SWITCH_MODELS.map(m => (
+              <button
+                key={m}
+                onClick={() => switchModel(m)}
+                className="rounded-md border border-orange-300 bg-white px-2 py-0.5 font-mono text-[11px] text-orange-700 transition-colors hover:bg-orange-100"
+              >→ {m}</button>
+            ))}
+          </span>
+        )}
+
         {noTaskHint && (
           <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200/80 bg-amber-50/80 px-3 py-1 text-xs text-amber-700 backdrop-blur-md">
             ⚠ 묶음 {noTaskHint.clusterCount}개 · 생성 0 — {noTaskHint.text}
@@ -179,6 +244,7 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
             : <InfoChip tone={rhythm.atCap ? 'amber' : 'neutral'}>시간당 처리 {rhythm.promotedLastHour} · 무제한</InfoChip>}
           <InfoChip tone="blue">① 대기 {rhythm.queueCount}</InfoChip>
           <InfoChip>수집 {rhythm.collected}</InfoChip>
+          <InfoChip tone={budget.tripped ? 'amber' : 'neutral'}>오늘 {usd(usage.today.usd)}{won(usage.today.usd)} · 시간 {usd(usage.hourlyUsd)}</InfoChip>
           {rhythm.atCap && rhythm.nextPromotionMs > 0 && (
             <InfoChip tone="amber">다음 처리 {formatRemaining(rhythm.nextPromotionMs)} 뒤 (멈춤 아님)</InfoChip>
           )}
@@ -193,6 +259,8 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
             aria-label="오래된 태스크 정리 기준 시간"
             className="rounded-md bg-transparent py-0.5 pr-1 font-mono font-semibold text-slate-600 outline-none"
           >
+            <option value={1}>1시간+</option>
+            <option value={3}>3시간+</option>
             <option value={6}>6시간+</option>
             <option value={12}>12시간+</option>
             <option value={24}>24시간+</option>
@@ -209,6 +277,12 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
               (b.isBreaking ? 1 : 0) - (a.isBreaking ? 1 : 0) ||
               (b.priority ? 1 : 0) - (a.priority ? 1 : 0) ||
               (a.goldenTime?.expiresAt ?? Infinity) - (b.goldenTime?.expiresAt ?? Infinity));
+          } else if (col.status === 'topic_review' || col.status === 'producing') {
+            // ②③ UI 순서 = 파이프라인 처리 순서(우선→골든임박→오래된). "위에서부터 하나씩" 체감(PM d761b9e3)
+            colTasks.sort((a, b) =>
+              (b.priority ? 1 : 0) - (a.priority ? 1 : 0) ||
+              (a.goldenTime?.expiresAt ?? Infinity) - (b.goldenTime?.expiresAt ?? Infinity) ||
+              a.createdAt - b.createdAt);
           }
           const activeCount = colTasks.filter(taskActive).length;
           const colStale = staleCounts[col.status] ?? 0;  // 이 단계 N시간+ 경과 건수
@@ -224,8 +298,20 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
               </button>
             );
           }
+          const dropOk = dragOver === col.status && canDrop(col.status);
           return (
-            <div key={col.status} className="flex min-h-0 min-w-[260px] flex-1 flex-col overflow-hidden rounded-2xl border border-white/60 bg-white/55 backdrop-blur-md shadow-sm">
+            <div key={col.status}
+              onDragOver={e => { if (canDrop(col.status)) { e.preventDefault(); if (dragOver !== col.status) setDragOver(col.status); } }}
+              onDragLeave={e => { if (e.currentTarget === e.target && dragOver === col.status) setDragOver(null); }}
+              onDrop={e => {
+                e.preventDefault();
+                const id = e.dataTransfer.getData(DRAG_MIME) || dragId;
+                if (id) manualMove(id, col.status);
+                setDragOver(null); setDragId(null);
+              }}
+              className={`flex min-h-0 min-w-[260px] flex-1 flex-col overflow-hidden rounded-2xl border bg-white/55 backdrop-blur-md shadow-sm transition-colors ${
+                dropOk ? 'border-blue-400 ring-2 ring-blue-300/60 bg-blue-50/40' : 'border-white/60'
+              }`}>
               <div className={`h-1.5 w-full ${col.bar}`} />
               <div className="flex items-center justify-between px-4 py-3.5">
                 <button onClick={() => toggleCollapse(col.status)} title="접기" className="text-[15px] font-bold text-slate-800 hover:text-slate-500">⌄ {col.label}</button>
@@ -261,6 +347,10 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
                     onResume={() => resumeTask(t.id)}
                     onDiscard={() => discardTask(t.id, 'other')}
                     onPublish={() => publishTask(t.id)}
+                    dragging={dragId === t.id}
+                    onDragStart={e => { setDragId(t.id); e.dataTransfer.setData(DRAG_MIME, t.id); e.dataTransfer.effectAllowed = 'move'; }}
+                    onDragEnd={() => { setDragId(null); setDragOver(null); }}
+                    agentMode={settings.llmBackend === 'agent'}
                   />
                 ))}
                 {colTasks.length > COL_RENDER_LIMIT && (
@@ -281,9 +371,11 @@ export function KanbanBoard({ campaignId, onOpenTask }: { campaignId: string; on
   );
 }
 
-function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, onResume, onDiscard, onPublish }: {
+function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, onResume, onDiscard, onPublish, dragging, onDragStart, onDragEnd, agentMode }: {
   task: Task; onOpen: () => void; onDelete: () => void; onRetry: () => void;
   onTogglePriority: () => void; onPause: () => void; onResume: () => void; onDiscard: () => void; onPublish: () => void;
+  dragging?: boolean; onDragStart?: (e: React.DragEvent) => void; onDragEnd?: (e: React.DragEvent) => void;
+  agentMode?: boolean;
 }) {
   const fullTextCount = task.sources.filter(s => s.hasFullText).length;
   const mediaCount = new Set(task.sources.map(s => s.source)).size;
@@ -295,19 +387,35 @@ function TaskCard({ task, onOpen, onDelete, onRetry, onTogglePriority, onPause, 
   const inProgress = taskActive(task);
   const progressLabel =
     task.status === 'searching' ? '처리 대기'
-    : task.status === 'topic_review' ? '주제 검수 중'
+    : task.status === 'topic_review' ? (agentMode ? '에이전트 검수 중' : '주제 검수 중')
     : retrying ? `재시도 ${attempts + 1}/3`
-    : '작성 중';
+    : (agentMode ? '에이전트 작성 중' : '작성 중');
 
   return (
     <div
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       onClick={onOpen}
-      className={`pasta-card-in pasta-springy group cursor-pointer rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-slate-300 hover:shadow-md ${task.paused ? 'opacity-60' : ''}`}
+      title="다음 칸으로 드래그해 수동 진행"
+      className={`pasta-card-in pasta-springy group cursor-grab rounded-2xl border bg-white p-4 shadow-sm hover:border-slate-300 hover:shadow-md active:cursor-grabbing ${task.paused ? 'opacity-60' : ''} ${dragging ? 'opacity-40 ring-2 ring-blue-300' : ''} ${inProgress && !dragging ? 'border-blue-400 ring-2 ring-blue-300/70 shadow-[0_0_14px_rgba(96,165,250,0.55)] animate-pulse motion-reduce:animate-none' : 'border-slate-200'}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold leading-snug text-slate-800 line-clamp-2">
-          {task.priority && <span title="우선" className="text-amber-500">★ </span>}📰 {task.title}
-        </p>
+        <div className="flex min-w-0 items-start gap-2">
+          {/* #3 카드 썸네일 — 첫 소스기사 이미지(있으면). 로드 실패 시 숨김. */}
+          {task.thumbnailUrl && (
+            <img
+              src={task.thumbnailUrl}
+              alt=""
+              loading="lazy"
+              onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              className="h-10 w-10 shrink-0 rounded-lg border border-slate-200 bg-slate-100 object-cover"
+            />
+          )}
+          <p className="text-sm font-semibold leading-snug text-slate-800 line-clamp-2">
+            {task.priority && <span title="우선" className="text-amber-500">★ </span>}📰 {task.title}
+          </p>
+        </div>
         <span className="flex shrink-0 items-center gap-1.5">
           {/* [우선] 손잡이 — 활성 시 상시, 아니면 hover 노출(절제) */}
           <button onClick={stop(onTogglePriority)} aria-label="우선 처리 토글" title="우선"

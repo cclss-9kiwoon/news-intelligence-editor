@@ -184,6 +184,8 @@ export type Category = {
 };
 
 // LLM이 반환하는 정확히 6개 키 (구조화 발행 드래프트)
+export type Urgency = 'breaking' | 'timely' | 'evergreen';
+
 export type StoryOutput = {
   summary: string;     // 중립 요약 1~2줄 (판단 X)
   headline: string;
@@ -192,6 +194,7 @@ export type StoryOutput = {
   imagePrompt: string; // 순수 영문(Midjourney)
   sourceFacts?: string[];  // key facts extracted from sources
   summaryBased?: boolean;  // 전 source 전문추출 실패 → RSS 요약 기반 생성(품질 플래그). 풀텍스트 있으면 false
+  urgency?: Urgency;       // 발행 긴급도 — 페이싱 스케줄러가 사용
 };
 
 export const CONVERTED_RESULT_SCHEMA_VERSION = 3;
@@ -284,6 +287,9 @@ export type SourceConfig = {
   topicKeywords: string[];   // 포함 키워드 (비면 전체)
   excludeKeywords: string[]; // 제외 키워드
   minMediaCount: number;     // 태스크 생성 최소 매체 수
+  minMediaForWrite?: number; // ③ 작성 전 교차검증 최소 distinct 매체 수(단일소스 차단). 기본 2. 임시 1로 흐름 확인 가능
+  maxSearchingQueue?: number; // ① searching 큐 총상한(미폐기·미발행 태스크 최대). 도달 시 신규 claim 중단. 기본 20
+  filterCivicNoise?: boolean; // ① 지자체/행정 비-연예 노이즈 사전 컷(judge 토큰 절약). 기본 true
   // ── 중복·범위 보강 (범용 스키마) ──
   entityAllowlist: string[];   // 허용 엔티티(인물/브랜드). 비면 전체 허용
   excludeTopics: string[];     // 제외 주제(구문 단위, 대소문자 무시)
@@ -384,6 +390,7 @@ export type Task = {
   clusterId: string;         // 원본 클러스터
   sources: TaskSource[];     // 원문 + 서브 소스
   imageCount: number;        // 수집된 이미지 수
+  thumbnailUrl?: string;     // #3 칸반 카드 썸네일 — 첫 소스기사 대표/첫 이미지
   draft?: StoryOutput;       // 아티클 제작 결과
   review?: ReviewResult;     // 검수 결과
   error?: string;
@@ -402,9 +409,12 @@ export type Task = {
   promotedAt?: number;       // ①→② 승급 시각 (시간당 승급 상한 카운트용)
   goldenTime?: { startsAt: number; expiresAt: number };  // 후보 유효창(입력값만 저장, 잔여/비율은 렌더 시 계산)
   isBreaking?: boolean;      // 속보 — 최상단 정렬·자동발행 차단·알림. 판정은 검수 로직(NIE)이 채움
+  manualRun?: boolean;       // 수동 실행 마커 — 자동진행 OFF여도 이 카드 1건만 ②/③ 즉시 처리. 처리 완료 시 해제
   createdAt: number;
   updatedAt: number;
 };
+
+export type LlmBackendMode = 'api' | 'agent';
 
 export type Settings = {
   provider: ProviderId;
@@ -413,6 +423,17 @@ export type Settings = {
   rss2jsonApiKey: string;
   model: ModelId;
   fastModel?: string;          // ②판단·④검수용 경량 모델(throughput·비용). 비면 model로 폴백
+  // ── LLM 백엔드 모드 (B = 테스트/dev 전용, 격리·제거 용이) ──
+  // 'api'=gemini API 직결(본선). 'agent'=Khala LLM 에이전트 위임(크레딧 0 가동, dev proxy /api/khala 경유).
+  // 추상화 지점은 llmCall 한 곳 — 파이프라인/게이트/카드는 모드 무관 동일.
+  llmBackend?: LlmBackendMode;  // 기본 'api'
+  agentInboxCode?: string;      // B 모드: 위임할 LLM 에이전트 inbox code (임의 — 사용자 구독 LLM)
+  khalaInboxCode?: string;      // B 모드: 응답 수신용 우리(NIE) inbox code (recv session_code)
+  // ── 비용 추적 + 예산 가드 ──
+  budgetDailyUsd?: number;      // 일 예산 한도(USD). 0/미설정=무제한. 누적 소비 도달 시 자동진행 정지
+  budgetHourlyUsd?: number;     // 시간 예산 한도(USD, rolling 1h). 0/미설정=무제한
+  priceTable?: Record<string, { inputPer1M: number; outputPer1M: number }>; // 모델별 1M토큰 단가($)
+  currencyKrwPerUsd?: number;   // ₩ 병기 환율(0/미설정=USD만 표시)
 
   categories: Category[];
   activeCategoryId: string;

@@ -21,6 +21,18 @@ npm run dev
 2. **API 키** 입력 (https://aistudio.google.com 에서 무료 발급)
 3. **모델** 선택 (`gemini-2.5-flash` 권장)
 
+### LLM 백엔드 — API 직결 / 에이전트 위임(B 모드, 테스트용)
+
+설정 ▸ AI에서 **LLM 백엔드**를 고를 수 있습니다.
+- **완전 자동(API)**: 위 API 키로 직접 호출 (기본).
+- **테스트: 내 LLM 위임**: 작성·검수를 내 LLM 에이전트에 Khala로 위임 → API 크레딧 0으로 e2e 테스트. 위임 대상 inbox(예: `akp-rw`)와 응답 수신 inbox를 입력.
+  - dev 서버 env **`KHALA_API_KEY`** 필요(`/api/khala` 프록시 인증 주입, 브라우저 비노출). 없으면 프록시 401.
+  - 규약: [`docs/agent-llm-protocol.md`](./docs/agent-llm-protocol.md)
+
+```bash
+KHALA_API_KEY=<키> npm run dev   # 에이전트 위임(B) 모드 사용 시
+```
+
 ## 핵심 흐름
 
 ```

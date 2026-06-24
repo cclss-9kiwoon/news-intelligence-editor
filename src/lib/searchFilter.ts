@@ -9,6 +9,7 @@
  */
 import type { SourceConfig, Task, TaskSource, Cluster, Article } from '../types';
 import { normalizeLink } from './rss';
+import { mediaPriorityRank } from './scraper';
 
 const DAY_MS = 86_400_000;
 
@@ -48,10 +49,40 @@ export type ClaimReason =
   | 'excluded_topic'         // 제외 주제 등장
   | 'no_allowed_entity'      // 허용 엔티티 미등장
   | 'entity_daily_limit'     // 엔티티 일일 상한 초과
+  | 'civic_noise'            // 지자체/행정 등 비-연예 노이즈 (① 사전 컷, judge 토큰 절약)
+  | 'bot_blocked_single'     // 봇차단/후순위 도메인 단일소스 (교차검증 불가 — ① 프로모션 제외)
   | 'own_site_dup';          // 자체 기보도 제목과 중복
 
+/**
+ * 비-연예 노이즈 키워드 — 지자체/행정/공공 뉴스가 일반 RSS·검색으로 ①에 유입돼
+ * ② judge가 비싸게 off_topic 처리하는 토큰 낭비를 막기 위한 ① 사전 컷(LLM 0).
+ * 연예 엔티티(entityAllowlist)가 함께 등장하면 컷하지 않음(오컷 방지).
+ * NIE = K-pop/연예 제품이라 기본 활성. searching.filterCivicNoise=false로 끌 수 있음.
+ */
+const CIVIC_NOISE_KEYWORDS: readonly string[] = [
+  '시청', '군청', '구청', '도청', '시의회', '군의회', '구의회', '도의회', '조례', '예산안', '의정',
+  '시장 당선', '당선인', '당선자', '군수', '구청장', '도지사', '시의원', '군의원',
+  '추념식', '현충일', '기념식', '위령제',
+  '보건소', '주민센터', '행정복지센터', '치매안심센터', '복지관', '경로당', '보건지소',
+  '특강', '영양교육', '평생학습', '문해교실', '민원', '주민설명회',
+  '관광객 유치', '농업박물관', '농업기술센터', '읍면동',
+];
+
+/**
+ * 텍스트(제목+요약)가 지자체/행정 비-연예 노이즈인지 판정.
+ * 연예 엔티티(entityAllowlist)가 함께 등장하면 노이즈 아님(오컷 방지).
+ * ① claim 게이트 + ② 백로그 소급 재검(judge 전 discard)에 공용.
+ */
+export function isCivicNoise(text: string, entityAllowlist: string[] = []): boolean {
+  const h = text.toLowerCase();
+  if (!CIVIC_NOISE_KEYWORDS.some(k => h.includes(k))) return false;
+  const allow = entityAllowlist.map(e => e.toLowerCase()).filter(Boolean);
+  if (allow.length > 0 && allow.some(e => h.includes(e))) return false; // 엔티티 동반 → 보존
+  return true;
+}
+
 export type ClaimDecision =
-  | { ok: true; sources: TaskSource[]; matchedEntity: string | null; imageCount: number }
+  | { ok: true; sources: TaskSource[]; matchedEntity: string | null; imageCount: number; thumbnailUrl?: string }
   | { ok: false; reason: ClaimReason };
 
 /**
@@ -124,8 +155,24 @@ export function shouldClaimCluster(
     clusterArticles = clusterArticles.filter(a => { const h = artHay(a); return !kws.some(k => h.includes(k)); });
     if (clusterArticles.length === 0) return { ok: false, reason: 'excluded_keyword' };
   }
+  // 지자체/행정 노이즈 ① 사전 컷 (기본 활성, filterCivicNoise=false로 해제).
+  // 연예 엔티티가 함께 있으면 보존(오컷 방지) — 순수 행정 기사만 제거 → ② judge 토큰 절약.
+  if ((searching as { filterCivicNoise?: boolean }).filterCivicNoise !== false) {
+    clusterArticles = clusterArticles.filter(a => !isCivicNoise(artHay(a), entityAllowlist));
+    if (clusterArticles.length === 0) return { ok: false, reason: 'civic_noise' };
+  }
   // excludeTopics는 의미 판단(AI)이라 동기 필터에서 처리하지 않음.
-  // 주제 검수 단계(SearchingPipeline)에서 judgeExcludedTopic으로 게이트.
+  // 주제 검수 단계(SearchingPipeline)에서 judgeTopic(적합+제외 통합)으로 게이트.
+
+  // 봇차단/후순위 단일소스 ① 프로모션 제외 — 단일 출처가 deprioritize(rank 2) 도메인이면
+  // 교차검증 불가 + 환각/저품질 위험 → claim 스킵(원천 차단). 다매체 클러스터 보강용으로는 유지.
+  // Engineer ② 안전망(즉시 discard)과 2중 방어. scraper의 우선순위 목록을 단일 출처로 재사용.
+  {
+    const distinctSources = new Set(clusterArticles.map(a => a.source)).size;
+    if (distinctSources < 2 && clusterArticles.every(a => mediaPriorityRank(a.link) === 2)) {
+      return { ok: false, reason: 'bot_blocked_single' };
+    }
+  }
 
   // 매체 수 하한 (키워드 필터 후 남은 기사 기준 — 무관 기사는 매체 다양성에 안 셈)
   const distinctOriginalCount = new Set(clusterArticles.map(a => originalKey(a.link))).size;
@@ -167,6 +214,8 @@ export function shouldClaimCluster(
     articleId: a.id, title: a.title, source: a.source, hasFullText: !!a.fullText,
   }));
   const imageCount = clusterArticles.reduce((n, a) => n + (a.images?.length ?? 0), 0);
+  // #3 카드 썸네일 — 첫 소스기사의 대표/첫 이미지(있으면). 없으면 undefined.
+  const thumbnailUrl = clusterArticles.map(a => a.thumbnail || a.images?.[0]?.url).find(Boolean);
 
-  return { ok: true, sources, matchedEntity, imageCount };
+  return { ok: true, sources, matchedEntity, imageCount, thumbnailUrl };
 }

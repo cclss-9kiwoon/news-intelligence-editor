@@ -26,10 +26,13 @@ export const DEFAULT_SOURCE_CONFIG: SourceConfig = {
   allowedSources: [],
   bannedSources: [],
   articleWindow: '24h',
-  clusterThreshold: 0.35,
+  clusterThreshold: 0.3,
   topicKeywords: [],
   excludeKeywords: [],
   minMediaCount: 1,   // 1=기사 1건이면 후보 생성(수집 잘 됨). 2+=교차검증(같은 사건 다매체 묶일 때만)
+  minMediaForWrite: 1,// ③ 작성 전 교차검증 매체 수. 1=단일소스 허용(적합·추출완료면 작성), 2+=교차검증 강제. PM 308f0416: 기본1로 흐름 확보
+  maxSearchingQueue: 20, // ① searching 큐 총상한 — 도달 시 신규 claim 중단(페이싱)
+  filterCivicNoise: true, // ① 지자체/행정 노이즈 사전 컷(judge 토큰 절약)
   entityAllowlist: [],
   excludeTopics: [],
   maxPerEntityPerDay: 0,
@@ -93,13 +96,13 @@ export function makeGroup(name: string, profile?: Partial<GroupProfile>): Group 
   };
 }
 
-export function makeCampaign(groupId: string, name: string): Campaign {
+export function makeCampaign(groupId: string, name: string, presetSettings?: CampaignSettings): Campaign {
   const now = Date.now();
   return {
     id: newId('cmp'),
     groupId,
     name: name || '새 캠페인',
-    settings: makeDefaultCampaignSettings(),
+    settings: presetSettings ?? makeDefaultCampaignSettings(),
     autoCollect: { enabled: true, intervalMin: 30 },
     autoProcess: { enabled: true },
     createdAt: now,

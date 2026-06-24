@@ -154,6 +154,7 @@ export default defineConfig({
   server: {
     port: 5180,
     strictPort: true,
+    allowedHosts: true,
     proxy: {
       // Dev proxy: /api/extract?url=... → Jina Reader API (fallback + reference articles)
       '/api/extract': {
@@ -193,6 +194,15 @@ export default defineConfig({
           params.set('sort', url.searchParams.get('sort') || 'recency');
           return `/v2/search/web?${params.toString()}`;
         },
+      },
+      // Dev proxy: Khala REST (B 모드 — LLM 에이전트 위임, dev/test 전용).
+      // /api/khala/send → /api/send, /api/khala/recv?session_code=X → /api/recv?...
+      // Auth는 dev 서버 env(KHALA_API_KEY)에서 주입 — 브라우저에 키 노출/CORS 회피.
+      '/api/khala': {
+        target: 'https://mcp.khala.to',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/khala/, '/api'),
+        headers: process.env.KHALA_API_KEY ? { Authorization: `Bearer ${process.env.KHALA_API_KEY}` } : {},
       },
     },
   },

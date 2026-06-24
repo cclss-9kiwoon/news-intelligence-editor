@@ -25,14 +25,29 @@ export type ChatJsonArgs = {
   baseUrl?: string;
 };
 
+/** LLM 토큰 사용량 (비용 추적용). gemini/OpenAI usage 필드에서 추출. */
+export type LlmUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+};
+
+/** chatJson 반환 — 파싱 결과 + 토큰 사용량(있으면). */
+export type ChatJsonResult<T> = {
+  data: T;
+  usage?: LlmUsage;
+};
+
 // ─── 글로벌 LLM 동시 호출 상한 (throughput vs 429) ──────────────────
 // 모든 LLM 호출(generateStory/reviewDraft/translate/judge…)이 chatJson을
 // 통과하므로, 여기 세마포어 하나로 전 파이프라인 동시성을 제한한다.
 // 동시 MAX_CONCURRENT_LLM개만 실행, 초과분은 FIFO 큐로 대기.
 //
-// 기본 8 (유료 키 RPM 여유 → ②판단·③작성·④검수 직렬화 병목 완화). 순간 429는
-// 위 429 지수백오프가 흡수. VITE_MAX_CONCURRENT_LLM로 빌드시 조정, setMaxConcurrentLlm로 런타임 조정.
-const DEFAULT_MAX_CONCURRENT_LLM = 8;
+// 기본 3 (gemini RPM/TPM 보호 + 비용효율). 단일 호출은 200이지만 8 동시 + 백로그 판정
+// 버스트가 RPM/TPM을 초과해 전건 429 → 처리 0이 실관측됨. 3이면 분당 호출이 한도 안쪽으로
+// 들어와 판정 흐름 유지 + 429 재시도 토큰 낭비↓. 순간 429는 위 429 지수백오프가, 모델 과부하는
+// 서킷브레이커가 백스톱. 상위 티어로 RPM 여유 크면 VITE_MAX_CONCURRENT_LLM 또는 setMaxConcurrentLlm로 상향.
+const DEFAULT_MAX_CONCURRENT_LLM = 3;
 function envMaxConcurrent(): number {
   try {
     const v = Number((import.meta as any)?.env?.VITE_MAX_CONCURRENT_LLM);
@@ -123,7 +138,7 @@ export function getLlmCircuitState(): { open: boolean; until: number; consecutiv
 }
 export function resetLlmCircuit(): void { resetCircuit(); } // 테스트/수동 해제용
 
-export async function chatJson<T = unknown>(args: ChatJsonArgs): Promise<T> {
+export async function chatJson<T = unknown>(args: ChatJsonArgs): Promise<ChatJsonResult<T>> {
   if (!args.apiKey) throw new OpenAIError('API key is empty', 0);
 
   // 서킷 차단 중이면 호출조차 안 함 (444 폭주 차단). 슬롯도 안 잡음.
@@ -170,14 +185,25 @@ export async function chatJson<T = unknown>(args: ChatJsonArgs): Promise<T> {
         throw new OpenAIError(body.error?.message || `HTTP ${res.status}`, res.status);
       }
 
-      const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
+      const data = await res.json() as {
+        choices?: Array<{ message?: { content?: string } }>;
+        usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
+      };
       const content = data.choices?.[0]?.message?.content ?? '';
       const parsed = parseJsonLoose<T>(content);
       if (parsed === undefined) {
         throw new OpenAIError('Response was not valid JSON: ' + content.slice(0, 200), 0);
       }
       resetCircuit();   // 성공 → 서킷 리셋
-      return parsed;
+      const u = data.usage;
+      const usage: LlmUsage | undefined = u
+        ? {
+            promptTokens: u.prompt_tokens ?? 0,
+            completionTokens: u.completion_tokens ?? 0,
+            totalTokens: u.total_tokens ?? ((u.prompt_tokens ?? 0) + (u.completion_tokens ?? 0)),
+          }
+        : undefined;
+      return { data: parsed, usage };
     }
   } finally {
     releaseLlmSlot();

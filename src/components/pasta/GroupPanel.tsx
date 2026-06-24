@@ -90,8 +90,9 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
 
   const groupCampaigns = campaigns.filter(c => c.groupId === group.id);
   const p = group.profile;
-  const { settings } = useSettings();
+  const { settings, setLlmBackend, setAgentInboxCode, setKhalaInboxCode } = useSettings();
   const llmInfo = describeStageLLM(settings, p); // 그룹 LLM 활성 상태(그룹키→전역 상속)
+  const backend = settings.llmBackend ?? 'api';  // 전역 백엔드(Gemini/OpenAI=api, 에이전트=agent). 캠페인/그룹서 선택(PM c69f967d)
   const inputCls = 'w-full rounded-lg border border-slate-200 bg-white/80 px-3 py-2 text-sm focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100';
 
   const createCampaign = () => {
@@ -217,37 +218,69 @@ export function GroupPanel({ group, onOpenCampaign }: { group: Group; onOpenCamp
           </span>
         </h3>
         <p className="mb-4 text-xs text-slate-400">기사 생성에 쓰는 AI. 키 미등록 시 ③ 생성이 안 됩니다.</p>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-600">제공자</label>
-            <select className={inputCls} value={p.llm?.provider ?? ''}
-              onChange={e => updateGroupProfile(group.id, { llm: { ...p.llm, provider: (e.target.value || undefined) as ProviderId | undefined, baseUrl: e.target.value ? PROVIDERS[e.target.value as ProviderId]?.baseUrl : p.llm?.baseUrl } })}>
-              <option value="">(글로벌 기본 사용)</option>
-              {Object.values(PROVIDERS).filter(pr => pr.id === 'openai' || pr.id === 'gemini').map(pr => <option key={pr.id} value={pr.id}>{pr.name}</option>)}
-            </select>
+
+        {/* LLM 백엔드 3택(PM c69f967d) — Gemini(API)/OpenAI(API)/에이전트. 에이전트=전역 위임 모드. */}
+        <div className="mb-4">
+          <label className="mb-1 block text-sm font-medium text-slate-600">LLM 백엔드</label>
+          <div className="flex flex-wrap gap-2">
+            {([
+              { k: 'gemini', label: 'Gemini (API)' },
+              { k: 'openai', label: 'OpenAI (API)' },
+              { k: 'agent', label: 'LLM 에이전트 (테스트용)' },
+            ] as const).map(opt => {
+              const active = opt.k === 'agent' ? backend === 'agent' : (backend === 'api' && p.llm?.provider === opt.k);
+              return (
+                <button key={opt.k} type="button"
+                  onClick={() => {
+                    if (opt.k === 'agent') { setLlmBackend('agent'); return; }
+                    setLlmBackend('api');
+                    updateGroupProfile(group.id, { llm: { ...p.llm, provider: opt.k as ProviderId, baseUrl: PROVIDERS[opt.k as ProviderId]?.baseUrl } });
+                  }}
+                  className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${active ? 'border-indigo-400 bg-indigo-50 font-semibold text-indigo-700' : 'border-slate-200 bg-white/80 text-slate-500 hover:bg-slate-50'}`}>
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-slate-600">모델</label>
-            <select className={inputCls} value={p.llm?.model ?? ''} disabled={!p.llm?.provider}
-              onChange={e => updateGroupProfile(group.id, { llm: { ...p.llm, model: e.target.value || undefined } })}>
-              <option value="">{p.llm?.provider ? '(제공자 기본)' : '제공자 먼저 선택'}</option>
-              {(p.llm?.provider ? PROVIDERS[p.llm.provider]?.models ?? [] : []).map(m => <option key={m.id} value={m.id}>{m.label}{m.note ? ` · ${m.note}` : ''}</option>)}
-            </select>
-          </div>
-          <div className="col-span-2">
-            <label className="mb-1 block text-sm font-medium text-slate-600">API 키 <span className="text-[11px] text-slate-400">(브라우저에만 저장)</span></label>
-            <input type="password" className={inputCls} value={p.llm?.apiKey ?? ''} placeholder={p.llm?.provider ? `${PROVIDERS[p.llm.provider]?.name} API 키 입력` : '제공자 먼저 선택'}
-              onChange={e => updateGroupProfile(group.id, { llm: { ...p.llm, apiKey: e.target.value || undefined } })} />
-            {p.llm?.provider && <p className="mt-1 text-[11px] text-slate-400">{PROVIDERS[p.llm.provider]?.keyHelp}</p>}
-          </div>
-          {p.llm?.provider === 'custom' && (
-            <div className="col-span-2">
-              <label className="mb-1 block text-sm font-medium text-slate-600">Base URL</label>
-              <input className={inputCls} value={p.llm?.baseUrl ?? ''} placeholder="https://... (OpenAI 호환 endpoint)"
-                onChange={e => updateGroupProfile(group.id, { llm: { ...p.llm, baseUrl: e.target.value || undefined } })} />
-            </div>
-          )}
         </div>
+
+        {backend === 'agent' ? (
+          /* 에이전트(위임) 모드 — 위임/응답 inbox(전역 설정과 동기) */
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">위임 에이전트 inbox</label>
+              <input className={inputCls} value={settings.agentInboxCode ?? ''} placeholder="구독 LLM 에이전트 inbox code (예: akp-rw)"
+                onChange={e => setAgentInboxCode(e.target.value)} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">응답 수신(NIE) inbox</label>
+              <input className={inputCls} value={settings.khalaInboxCode ?? ''} placeholder="응답 수신용 inbox code"
+                onChange={e => setKhalaInboxCode(e.target.value)} />
+            </div>
+            <p className="text-[11px] text-slate-400">작성·검수를 내 LLM 에이전트에 Khala로 위임(최대 180s 대기, 비용 0). dev 서버에 KHALA_API_KEY 필요. 스펙: docs/agent-llm-protocol.md</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">모델</label>
+              <select className={inputCls} value={p.llm?.model ?? ''} disabled={!p.llm?.provider}
+                onChange={e => updateGroupProfile(group.id, { llm: { ...p.llm, model: e.target.value || undefined } })}>
+                <option value="">{p.llm?.provider ? '(제공자 기본)' : '백엔드 먼저 선택'}</option>
+                {(p.llm?.provider ? PROVIDERS[p.llm.provider]?.models ?? [] : []).map(m => <option key={m.id} value={m.id}>{m.label}{m.note ? ` · ${m.note}` : ''}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-600">&nbsp;</label>
+              <span className="block py-2 text-xs text-slate-400">제공자별 키는 아래 입력(전역 키도 가능)</span>
+            </div>
+            <div className="col-span-2">
+              <label className="mb-1 block text-sm font-medium text-slate-600">API 키 <span className="text-[11px] text-slate-400">(브라우저에만 저장)</span></label>
+              <input type="password" className={inputCls} value={p.llm?.apiKey ?? ''} placeholder={p.llm?.provider ? `${PROVIDERS[p.llm.provider]?.name} API 키 입력` : '백엔드 먼저 선택'}
+                onChange={e => updateGroupProfile(group.id, { llm: { ...p.llm, apiKey: e.target.value || undefined } })} />
+              {p.llm?.provider && <p className="mt-1 text-[11px] text-slate-400">{PROVIDERS[p.llm.provider]?.keyHelp}</p>}
+            </div>
+          </div>
+        )}
         <div className="mt-4 flex items-center justify-end gap-3 border-t border-slate-100 pt-3">
           {llmSaved && <span className="text-xs font-mono text-green-600">✓ 저장됨</span>}
           <button

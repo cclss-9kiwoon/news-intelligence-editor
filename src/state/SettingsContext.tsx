@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import type { Settings, ModelId, RssSource, ProviderId, Category, ArticleWindow, PromptConfig, ReferenceArticle, ProjectProfile, FormatRules, ReviewRule, CampaignSettings, GroupProfile, QueryPreset, SearchProviderConfig } from '../types';
+import type { Settings, ModelId, RssSource, ProviderId, Category, ArticleWindow, PromptConfig, ReferenceArticle, ProjectProfile, FormatRules, ReviewRule, CampaignSettings, GroupProfile, QueryPreset, SearchProviderConfig, LlmBackendMode } from '../types';
 import { PROVIDERS } from '../types';
 import { DEFAULT_SETTINGS, DEFAULT_PROMPT_CONFIG, DEFAULT_PROJECT_PROFILE } from '../lib/defaultSettings';
 import { loadJson, saveJson, STORAGE_KEYS, backupSettingsToFile, restoreSettingsFromFile } from '../lib/storage';
@@ -12,6 +12,12 @@ type Ctx = {
   setApiBaseUrl: (u: string) => void;
   setModel: (m: ModelId) => void;
   setFastModel: (m: string) => void;
+  setLlmBackend: (b: LlmBackendMode) => void;
+  setAgentInboxCode: (c: string) => void;
+  setKhalaInboxCode: (c: string) => void;
+  setBudgetDailyUsd: (n: number) => void;
+  setBudgetHourlyUsd: (n: number) => void;
+  setCurrencyKrwPerUsd: (n: number) => void;
   setActiveCategoryId: (id: string) => void;
   addCategory: () => void;
   updateCategory: (id: string, patch: Partial<Category>) => void;
@@ -111,6 +117,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const setApiBaseUrl = useCallback((u: string) => setSettings(s => ({ ...s, apiBaseUrl: u })), []);
   const setModel = useCallback((m: ModelId) => setSettings(s => ({ ...s, model: m })), []);
   const setFastModel = useCallback((m: string) => setSettings(s => ({ ...s, fastModel: m })), []);
+  // B 모드(에이전트 LLM 위임, NIE 1cd009a) — 백엔드 토글 + 위임/수신 inbox code
+  const setLlmBackend = useCallback((b: LlmBackendMode) => setSettings(s => ({ ...s, llmBackend: b })), []);
+  const setAgentInboxCode = useCallback((c: string) => setSettings(s => ({ ...s, agentInboxCode: c })), []);
+  const setKhalaInboxCode = useCallback((c: string) => setSettings(s => ({ ...s, khalaInboxCode: c })), []);
+  const setBudgetDailyUsd = useCallback((n: number) => setSettings(s => ({ ...s, budgetDailyUsd: Number.isFinite(n) ? Math.max(0, n) : 0 })), []);
+  const setBudgetHourlyUsd = useCallback((n: number) => setSettings(s => ({ ...s, budgetHourlyUsd: Number.isFinite(n) ? Math.max(0, n) : 0 })), []);
+  const setCurrencyKrwPerUsd = useCallback((n: number) => setSettings(s => ({ ...s, currencyKrwPerUsd: Number.isFinite(n) ? Math.max(0, n) : 0 })), []);
   const setActiveCategoryId = useCallback((id: string) => setSettings(s => ({ ...s, activeCategoryId: id })), []);
   const addCategory = useCallback(() => setSettings(s => {
     const id = `cat-${Date.now()}`;
@@ -261,7 +274,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const value: Ctx = {
     settings, setApiKey, setRss2jsonApiKey, setProvider, setApiBaseUrl,
-    setModel, setFastModel, setActiveCategoryId, addCategory, updateCategory, removeCategory, setArticleWindow,
+    setModel, setFastModel, setLlmBackend, setAgentInboxCode, setKhalaInboxCode,
+    setBudgetDailyUsd, setBudgetHourlyUsd, setCurrencyKrwPerUsd,
+    setActiveCategoryId, addCategory, updateCategory, removeCategory, setArticleWindow,
     setRssSources, toggleRssSource, setRssPollMinutes, setClusterThreshold, setSimulatorEnabled, setSimulatorIntervalSec,
     setAlertSoundEnabled, setBrowserNotificationsEnabled,
     setNaverClientId, setNaverClientSecret, setNaverQueries, setDaumRestApiKey, setDaumQueries,
