@@ -154,6 +154,7 @@ export default defineConfig({
   server: {
     port: 5180,
     strictPort: true,
+    allowedHosts: true,
     proxy: {
       // Dev proxy: /api/extract?url=... → Jina Reader API (fallback + reference articles)
       '/api/extract': {
